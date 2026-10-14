@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
+	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
@@ -100,10 +101,7 @@
 				remove={removeKey}
 			/>
 			{#if fresh}
-				<code
-					class="rounded-px border border-cyan/40 bg-panel px-3 py-2.5 text-[13px] break-all text-cyan"
-					>{fresh}</code
-				>
+				<Code code={fresh} />
 				<Message>Copy this key now. It is shown only once.</Message>
 			{/if}
 			<Form action="create key" submit={addKey} inline>

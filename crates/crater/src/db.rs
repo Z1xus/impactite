@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, Write};
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -31,6 +31,7 @@ type Key = (u64, i32);
 enum Msg {
 	Event(Box<Event>),
 	Sync(SyncSender<io::Result<()>>),
+	Drop(u64, SyncSender<io::Result<()>>),
 	Stop(SyncSender<io::Result<()>>),
 }
 
@@ -77,6 +78,12 @@ impl Db {
 				| TrySendError::Disconnected(Msg::Event(event)) => event,
 				_ => Box::default(),
 			})
+	}
+
+	pub fn drop_site(&self, site: u64) -> io::Result<()> {
+		let (tx, rx) = mpsc::sync_channel(1);
+		self.tx.send(Msg::Drop(site, tx)).map_err(|_| stopped())?;
+		rx.recv().map_err(|_| stopped())?
 	}
 
 	pub fn sync(&self) -> io::Result<()> {
@@ -596,6 +603,7 @@ struct Writer {
 	offsets: HashMap<u64, i32>,
 	sealed: HashMap<Key, u64>,
 	published: u64,
+	dropped: HashSet<u64>,
 }
 
 impl Writer {
@@ -613,6 +621,11 @@ impl Writer {
 
 		let seq = seqs.last().map_or(0, |last| last + 1);
 		let (wal, _) = Wal::open(&wal_path(&wal_dir, seq))?;
+		let dropped = match fs::read_to_string(shared.dir.join("dropped")) {
+			Ok(text) => text.lines().filter_map(|line| line.parse().ok()).collect(),
+			Err(err) if err.kind() == ErrorKind::NotFound => HashSet::new(),
+			Err(err) => return Err(err),
+		};
 		let mut writer = Self {
 			shared,
 			wal,
@@ -624,12 +637,16 @@ impl Writer {
 			offsets: HashMap::new(),
 			sealed: HashMap::new(),
 			published: 0,
+			dropped,
 		};
 
 		for seq in seqs {
 			let (_, events) = Wal::open(&wal_path(&wal_dir, seq))?;
 			let mut keys = HashSet::new();
 			for event in events {
+				if writer.dropped.contains(&event.site) {
+					continue;
+				}
 				let key = (event.site, event.day());
 				keys.insert(key);
 				if writer.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq) {
@@ -652,6 +669,7 @@ impl Writer {
 		let mut batch = Vec::new();
 		let mut replies = Vec::new();
 		let mut stop = None;
+		let mut drops = Vec::new();
 		loop {
 			let first = match rx.recv_timeout(TICK) {
 				Ok(msg) => Some(msg),
@@ -662,8 +680,13 @@ impl Writer {
 				match msg {
 					Msg::Event(event) => batch.push(*event),
 					Msg::Sync(reply) => replies.push(reply),
+					Msg::Drop(site, reply) => drops.push((site, reply)),
 					Msg::Stop(reply) => stop = Some(reply),
 				}
+			}
+			for (site, reply) in drops.drain(..) {
+				batch.retain(|event| event.site != site);
+				let _ = reply.send(self.drop_site(site));
 			}
 
 			let stop_requested = stop.is_some();
@@ -683,6 +706,7 @@ impl Writer {
 	}
 
 	fn write(&mut self, batch: &mut Vec<Event>) -> io::Result<()> {
+		batch.retain(|event| !self.dropped.contains(&event.site));
 		if batch.is_empty() {
 			return Ok(());
 		}
@@ -839,6 +863,37 @@ impl Writer {
 		}
 	}
 
+	fn drop_site(&mut self, site: u64) -> io::Result<()> {
+		let mut file = fs::OpenOptions::new()
+			.create(true)
+			.append(true)
+			.open(self.shared.dir.join("dropped"))?;
+		writeln!(file, "{site}")?;
+		file.sync_data()?;
+		self.dropped.insert(site);
+		let keys: Vec<Key> = self
+			.memtable
+			.keys()
+			.copied()
+			.filter(|key| key.0 == site)
+			.collect();
+		for key in keys {
+			self.memtable.remove(&key);
+			self.shared.publish(key, None);
+		}
+		self.sealed.retain(|key, _| key.0 != site);
+		lock(&self.shared.versions).retain(|key, _| key.0 != site);
+		lock(&self.shared.dicts).remove(&site);
+		*lock(&self.shared.cache) = Cache::new(CACHE);
+		*lock(&self.shared.ranges) = Cache::new(CACHE);
+		*lock(&self.shared.imports) = Cache::new(CACHE);
+		match fs::remove_dir_all(self.shared.site_dir(site)) {
+			Err(err) if err.kind() != ErrorKind::NotFound => return Err(err),
+			_ => {}
+		}
+		self.drop_sealed_wals()
+	}
+
 	fn rotate(&mut self) -> io::Result<()> {
 		let seq = self.seq + 1;
 		let (wal, _) = Wal::open(&wal_path(&self.shared.dir.join("wal"), seq))?;
@@ -859,7 +914,8 @@ impl Writer {
 			let keys: Vec<Key> = self.wal_keys[&seq].iter().copied().collect();
 			let mut done = true;
 			for key in keys {
-				done &= self.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq);
+				done &= self.dropped.contains(&key.0)
+					|| self.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq);
 			}
 			if done {
 				match fs::remove_file(wal_path(&self.shared.dir.join("wal"), seq)) {

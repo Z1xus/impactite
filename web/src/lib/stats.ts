@@ -4,7 +4,10 @@ export type Metric =
 	"visitors" | "visits" | "pageviews" | "bounce_rate" | "visit_duration" | "views_per_visit";
 export type Filter = { op: "is" | "is_not" | "contains"; dim: string; value: string };
 export type Row = { dimensions: string[]; metrics: number[] };
-export type Result = { results: Row[] };
+export type Result = {
+	results: Row[];
+	meta?: { imports_included?: boolean; imports_skip_reason?: string };
+};
 
 export const METRICS: { key: Metric; label: string }[] = [
 	{ key: "visitors", label: "visitors" },
@@ -24,8 +27,8 @@ export const PERIODS = [
 ] as const;
 export type Period = (typeof PERIODS)[number]["key"];
 
-export function query(site: string, body: Record<string, unknown>) {
-	return api<Result>("/api/app/query", { site_id: site, include: { imports: true }, ...body });
+export function query(site: string, body: Record<string, unknown>, imports = true) {
+	return api<Result>("/api/app/query", { site_id: site, include: { imports }, ...body });
 }
 
 export function today(timezone: string) {

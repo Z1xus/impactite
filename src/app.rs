@@ -186,8 +186,9 @@ impl App {
 
 	pub fn sites(&self) -> rusqlite::Result<Vec<Site>> {
 		let conn = self.conn();
-		let mut stmt =
-			conn.prepare("select id, domain, timezone, created_at from sites order by id")?;
+		let mut stmt = conn.prepare(
+			"select id, domain, timezone, created_at from sites where team is not null order by id",
+		)?;
 		stmt.query_map([], site)?.collect()
 	}
 
@@ -268,6 +269,23 @@ impl App {
 				|row| Ok((row.get(0)?, row.get(1)?)),
 			)
 			.optional()
+	}
+
+	pub fn delete_site(&self, site: u64) -> rusqlite::Result<()> {
+		let mut conn = self.conn();
+		let tx = conn.transaction()?;
+		for table in ["goals", "imports", "salts"] {
+			tx.execute(
+				&format!("delete from {table} where site = ?1"),
+				[site as i64],
+			)?;
+		}
+		// the row stays so sqlite never hands its id, and crater's tombstone, to a new site
+		tx.execute(
+			"update sites set domain = '~' || id || '~' || domain, team = null where id = ?1",
+			[site as i64],
+		)?;
+		tx.commit()
 	}
 
 	pub fn set_timezone(&self, site: u64, timezone: &str) -> rusqlite::Result<()> {

@@ -23,7 +23,7 @@ const UPLOAD: usize = 1 << 30;
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
-		.route("/api/app/sites/{domain}", patch(update))
+		.route("/api/app/sites/{domain}", patch(update).delete(destroy))
 		.route(
 			"/api/app/sites/{domain}/imports",
 			get(list).post(upload).layer(DefaultBodyLimit::max(UPLOAD)),
@@ -58,6 +58,31 @@ async fn update(
 			web.ingest.forget(&site.domain);
 			StatusCode::NO_CONTENT.into_response()
 		}
+		Err(_) => broken(),
+	}
+}
+
+async fn destroy(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	let role = web.app.site_role(viewer.user, &domain).ok().flatten();
+	let site = web.app.site(&domain).ok().flatten();
+	let (Some("owner" | "admin"), Some(site)) = (role.as_deref(), site) else {
+		return fail(
+			StatusCode::FORBIDDEN,
+			"Only owners and admins can delete sites.",
+		);
+	};
+	let db = web.stats.db.clone();
+	let dropped = tokio::task::spawn_blocking(move || db.drop_site(site.id)).await;
+	if !matches!(dropped, Ok(Ok(()))) {
+		return broken();
+	}
+	web.ingest.forget(&site.domain);
+	match web.app.delete_site(site.id) {
+		Ok(()) => StatusCode::NO_CONTENT.into_response(),
 		Err(_) => broken(),
 	}
 }

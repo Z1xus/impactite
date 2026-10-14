@@ -243,3 +243,49 @@ fn serves_today_live_and_after_restart() {
 	assert_eq!(db.query(&today_query).unwrap().total, expected);
 	db.close().unwrap();
 }
+
+#[test]
+fn dropped_site_stays_gone_after_restart() {
+	let dir = TempDir::new("drop").unwrap();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs() as i64;
+	let today = now.div_euclid(86_400) as i32;
+	let live = |site: u64| {
+		let mut event = event(site, site, 0, "pageview", "/", "");
+		event.site = site;
+		event.ts = now - 10;
+		event.offset = 0;
+		event
+	};
+	let total = |db: &Db, site: u64| {
+		db.query(&Query {
+			site,
+			days: today..=today,
+			filters: Vec::new(),
+			breakdown: None,
+			limit: 10,
+			daily: false,
+			imports: false,
+		})
+		.unwrap()
+		.total
+	};
+
+	let db = Db::open(&dir.0).unwrap();
+	db.insert(Box::new(live(SITE))).unwrap();
+	db.insert(Box::new(live(8))).unwrap();
+	db.sync().unwrap();
+	db.drop_site(SITE).unwrap();
+	assert!(!dir.0.join("sites").join(SITE.to_string()).exists());
+	db.insert(Box::new(live(SITE))).unwrap();
+	db.sync().unwrap();
+	assert_eq!(total(&db, SITE), Metrics::default());
+	db.close().unwrap();
+
+	let db = Db::open(&dir.0).unwrap();
+	assert_eq!(total(&db, SITE), Metrics::default());
+	assert_eq!(total(&db, 8).visitors, 1);
+	db.close().unwrap();
+}

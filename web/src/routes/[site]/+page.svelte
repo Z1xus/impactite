@@ -23,10 +23,13 @@
 		type Metric,
 		type Period
 	} from "#lib/stats.ts";
+	import Snippet from "#lib/Snippet.svelte";
+	import Checks from "#lib/ui/Checks.svelte";
 	import Chip from "#lib/ui/Chip.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Kpi from "#lib/ui/Kpi.svelte";
 	import Live from "#lib/ui/Live.svelte";
+	import Message from "#lib/ui/Message.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
 	import Select from "#lib/ui/Select.svelte";
@@ -79,6 +82,32 @@
 			.filter((filter): filter is Filter => filter !== null)
 	);
 	const dates = $derived(site ? range(period, site.timezone) : null);
+	const withImports = $derived(page.url.searchParams.get("imports") !== "0");
+	const ask = (body: Record<string, unknown>) => query(domain, body, withImports);
+
+	let hasImports = $state(false);
+	let quiet = $state(false);
+	let empty = $state(false);
+	let version = $state(0);
+
+	$effect(() => {
+		if (!quiet) return;
+		const site = domain;
+		let timer = 0;
+		const check = () =>
+			query(site, { metrics: ["events"], date_range: "all" }).then((result) => {
+				if (!result.results[0]?.metrics[0]) {
+					empty = true;
+					timer = window.setTimeout(check, 3000);
+				} else if (empty) {
+					empty = false;
+					quiet = false;
+					version++;
+				}
+			});
+		check();
+		return () => clearTimeout(timer);
+	});
 
 	let totals = $state<number[] | null>(null);
 	let previousTotals = $state<number[] | null>(null);
@@ -151,6 +180,7 @@
 	});
 
 	$effect(() => {
+		void version;
 		if (!dates) return;
 		api<string[]>("/api/app/props", { site_id: domain, date_range: dates.current }).then(
 			(keys) => {
@@ -195,20 +225,21 @@
 	}
 
 	$effect(() => {
+		void version;
 		if (!dates) return;
 		const where = toQueryFilters(filters);
 		const keys = METRICS.map((item) => item.key);
 		let stale = false;
 		Promise.all([
-			query(domain, { metrics: keys, date_range: dates.current, filters: where }),
-			query(domain, { metrics: keys, date_range: dates.previous, filters: where }),
-			query(domain, {
+			ask({ metrics: keys, date_range: dates.current, filters: where }),
+			ask({ metrics: keys, date_range: dates.previous, filters: where }),
+			ask({
 				metrics: [metric],
 				date_range: dates.current,
 				dimensions: [dates.grain],
 				filters: where
 			}),
-			query(domain, {
+			ask({
 				metrics: [metric],
 				date_range: dates.previous,
 				dimensions: [dates.grain],
@@ -216,6 +247,9 @@
 			})
 		]).then(([now, before, line, previousLine]) => {
 			if (stale) return;
+			quiet = !now.results[0]?.metrics[0];
+			hasImports =
+				!withImports || (now.meta?.imports_skip_reason ?? "") !== "no_imported_data";
 			totals = now.results[0]?.metrics ?? null;
 			previousTotals = before.results[0]?.metrics ?? null;
 			series = line.results.map((row) => row.metrics[0]);
@@ -226,6 +260,7 @@
 	});
 
 	$effect(() => {
+		void version;
 		if (!dates) return;
 		const where = toQueryFilters(filters);
 		const cleanups: (() => void)[] = [];
@@ -234,7 +269,7 @@
 			const dim = tabs[panel.id] === "props" ? `event:props:${propKey}` : tabs[panel.id];
 			let stale = false;
 			loading[panel.id] = true;
-			query(domain, {
+			ask({
 				metrics: dim === "event:goal" ? ["visitors", "conversion_rate"] : ["visitors"],
 				date_range: dates.current,
 				dimensions: [dim],
@@ -311,57 +346,82 @@
 					remove={() => removeFilter(filter)}
 				/>
 			{/each}
+			{#if hasImports}
+				<div class="ml-auto">
+					<Checks
+						bind:value={
+							() => (withImports ? ["imports"] : []),
+							(value) =>
+								navigate((params) =>
+									value.length
+										? params.delete("imports")
+										: params.set("imports", "0")
+								)
+						}
+						options={[{ key: "imports", label: "imported data" }]}
+					/>
+				</div>
+			{/if}
 		</div>
 
-		<section class="rounded-px border border-line bg-panel">
-			<div class="grid grid-cols-2 border-b border-line sm:grid-cols-3 lg:grid-cols-6">
-				{#each METRICS as item, i (item.key)}
-					<Kpi
-						label={item.label}
-						value={totals?.[i] ?? null}
-						change={totals && previousTotals
-							? delta(item.key, totals[i], previousTotals[i])
-							: null}
-						unit={item.key === "bounce_rate" ? "pt" : "%"}
-						format={(value) => format(item.key, value)}
-						active={metric === item.key}
-						pick={() => navigate((params) => params.set("metric", item.key))}
+		{#if empty}
+			<section class="flex max-w-2xl flex-col gap-5">
+				<Snippet {domain} />
+				<Message
+					>Add this to your site's head. The dashboard opens with the first visit.</Message
+				>
+			</section>
+		{:else}
+			<section class="rounded-px border border-line bg-panel">
+				<div class="grid grid-cols-2 border-b border-line sm:grid-cols-3 lg:grid-cols-6">
+					{#each METRICS as item, i (item.key)}
+						<Kpi
+							label={item.label}
+							value={totals?.[i] ?? null}
+							change={totals && previousTotals
+								? delta(item.key, totals[i], previousTotals[i])
+								: null}
+							unit={item.key === "bounce_rate" ? "pt" : "%"}
+							format={(value) => format(item.key, value)}
+							active={metric === item.key}
+							pick={() => navigate((params) => params.set("metric", item.key))}
+						/>
+					{/each}
+				</div>
+				<div class="px-4 pt-8 pb-5">
+					<Chart
+						values={series}
+						previous={previousSeries}
+						{labels}
+						format={(value) => format(metric, value)}
 					/>
+				</div>
+			</section>
+
+			<div class="grid gap-6 md:grid-cols-2">
+				{#each panels.filter((panel) => panel.tabs.length) as panel (panel.id)}
+					<div class={panel.id === "goals" ? "md:col-span-2" : ""}>
+						<Panel
+							tabs={panel.tabs}
+							bind:tab={tabs[panel.id]}
+							actions={tabs[panel.id] === "props" ? picker : undefined}
+						>
+							<Rows
+								rows={ranked[panel.id] ?? null}
+								loading={loading[panel.id]}
+								format={(value) => format("visitors", value)}
+								pick={(key) =>
+									addFilter(
+										tabs[panel.id] === "props"
+											? `event:props:${propKey}`
+											: tabs[panel.id],
+										key
+									)}
+							/>
+						</Panel>
+					</div>
 				{/each}
 			</div>
-			<div class="px-4 pt-8 pb-5">
-				<Chart
-					values={series}
-					previous={previousSeries}
-					{labels}
-					format={(value) => format(metric, value)}
-				/>
-			</div>
-		</section>
-
-		<div class="grid gap-6 md:grid-cols-2">
-			{#each panels.filter((panel) => panel.tabs.length) as panel (panel.id)}
-				<div class={panel.id === "goals" ? "md:col-span-2" : ""}>
-					<Panel
-						tabs={panel.tabs}
-						bind:tab={tabs[panel.id]}
-						actions={tabs[panel.id] === "props" ? picker : undefined}
-					>
-						<Rows
-							rows={ranked[panel.id] ?? null}
-							loading={loading[panel.id]}
-							format={(value) => format("visitors", value)}
-							pick={(key) =>
-								addFilter(
-									tabs[panel.id] === "props"
-										? `event:props:${propKey}`
-										: tabs[panel.id],
-									key
-								)}
-						/>
-					</Panel>
-				</div>
-			{/each}
-		</div>
+		{/if}
 	</div>
 </Shell>

@@ -3,7 +3,9 @@
 	import { page } from "$app/state";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
+	import { goto } from "$app/navigation";
 	import { refresh, session } from "#lib/session.svelte.ts";
+	import Snippet from "#lib/Snippet.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
@@ -31,6 +33,13 @@
 	let source = $state<"plausible" | "goatcounter">("plausible");
 	let file = $state<File | null>(null);
 	let imported = $state("");
+	let confirm = $state("");
+	const owner = $derived(
+		["owner", "admin"].includes(
+			session.me?.teams.find((team) => team.sites.some((site) => site.domain === domain))
+				?.role ?? ""
+		)
+	);
 	let error = $state("");
 
 	$effect(() => {
@@ -88,6 +97,13 @@
 		imports = (await api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`)).imports;
 	}
 
+	async function destroy() {
+		if (confirm !== domain) throw new Error(`Type ${domain} to confirm.`);
+		await api(`/api/app/sites/${domain}`, undefined, "DELETE");
+		await refresh();
+		await goto(resolve("/"));
+	}
+
 	const removeImport = (id: string | number) =>
 		attempt(async () => {
 			imports = (
@@ -109,6 +125,10 @@
 			<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
 			{domain}
 		</a>
+
+		<Section label="tracking">
+			<Snippet {domain} />
+		</Section>
 
 		<Section label="timezone">
 			<div class="w-fit">
@@ -163,6 +183,17 @@
 			</Form>
 			<Message tone="cyan">{imported}</Message>
 		</Section>
+
+		{#if owner}
+			<Section label="delete site">
+				<Form action="delete" submit={destroy} inline>
+					<Field
+						label="type {domain} to delete it and all its data"
+						bind:value={confirm}
+					/>
+				</Form>
+			</Section>
+		{/if}
 
 		<Message tone="bad">{error}</Message>
 	</div>
