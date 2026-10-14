@@ -161,7 +161,7 @@
 					items={team.members.map((member) => ({
 						key: member.id,
 						title: member.name,
-						meta: editable(member) ? member.email : `${member.email} · ${member.role}`,
+						meta: editable(member) ? [member.email] : [member.email, member.role],
 						removable: editable(member)
 					}))}
 					remove={removeMember}
@@ -188,7 +188,7 @@
 							items={team.invites.map((invite) => ({
 								key: invite.id,
 								title: invite.email,
-								meta: invite.role
+								meta: [invite.role]
 							}))}
 							remove={revoke}
 						>

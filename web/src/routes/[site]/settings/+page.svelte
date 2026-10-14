@@ -51,6 +51,9 @@
 			.map((team) => ({ key: team.id, label: team.personal ? "personal" : team.name }))
 	);
 
+	type Segment = { id: number; name: string; shared: boolean; mine: boolean };
+	let segments = $state<Segment[] | null>(null);
+
 	let people = $state<People | null>(null);
 	let guestEmail = $state("");
 	let guestRole = $state<"viewer" | "editor">("viewer");
@@ -100,6 +103,9 @@
 
 	$effect(() => {
 		if (!site) return;
+		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
+			(r) => (segments = r.segments)
+		);
 		api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then((r) => (goals = r.goals));
 		api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`).then(
 			(r) => (imports = r.imports)
@@ -161,6 +167,17 @@
 		await goto(resolve("/"));
 	}
 
+	const removeSegment = (id: string | number) =>
+		attempt(async () => {
+			segments = (
+				await api<{ segments: Segment[] }>(
+					`/api/app/sites/${domain}/segments/${id}`,
+					undefined,
+					"DELETE"
+				)
+			).segments;
+		});
+
 	const removeImport = (id: string | number) =>
 		attempt(async () => {
 			imports = (
@@ -204,7 +221,7 @@
 					items={goals?.map((goal) => ({
 						key: goal.id,
 						title: goal.name,
-						meta: goal.page ? "page" : "event"
+						meta: [goal.page ? "page" : "event"]
 					})) ?? null}
 					remove={removeGoal}
 				/>
@@ -225,12 +242,26 @@
 				</Form>
 			</Section>
 
+			{#if segments?.length}
+				<Section label="segments">
+					<List
+						items={segments.map((segment) => ({
+							key: segment.id,
+							title: segment.name,
+							meta: [segment.shared ? "shared" : "personal"],
+							removable: segment.mine || owner
+						}))}
+						remove={removeSegment}
+					/>
+				</Section>
+			{/if}
+
 			<Section label="imports">
 				<List
 					items={imports?.map((item) => ({
 						key: item.id,
 						title: `${item.first} to ${item.last}`,
-						meta: item.source
+						meta: [item.source]
 					})) ?? null}
 					remove={removeImport}
 				/>
@@ -254,12 +285,12 @@
 							...people.guests.map((guest) => ({
 								key: `g${guest.id}`,
 								title: guest.name,
-								meta: `${guest.email} · ${guest.role}`
+								meta: [guest.email, guest.role]
 							})),
 							...people.invites.map((invite) => ({
 								key: `i${invite.id}`,
 								title: invite.email,
-								meta: `invited · ${invite.role}`
+								meta: ["invited", invite.role]
 							}))
 						]}
 						remove={(key) =>

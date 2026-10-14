@@ -99,7 +99,7 @@
 					items={info.users.map((user) => ({
 						key: user.id,
 						title: user.name,
-						meta: `${user.email} · ${user.sites} sites · since ${date(user.created)}`,
+						meta: [user.email, `${user.sites} sites`, `since ${date(user.created)}`],
 						removable: user.id !== session.me?.id
 					}))}
 					{remove}

@@ -166,8 +166,11 @@
 					key: item.id,
 					title: item.device || "Unknown device",
 					meta: item.current
-						? "this device"
-						: `seen ${date(item.seen || item.created)} · since ${date(item.created)}`,
+						? ["this device"]
+						: [
+								`seen ${date(item.seen || item.created)}`,
+								`since ${date(item.created)}`
+							],
 					removable: !item.current
 				})) ?? null}
 				remove={endSession}
@@ -184,7 +187,10 @@
 				items={passkeys?.map((passkey) => ({
 					key: passkey.id,
 					title: passkey.name,
-					meta: `added ${date(passkey.created_at)}${passkey.used_at ? ` · used ${date(passkey.used_at)}` : ""}`
+					meta: [
+						`added ${date(passkey.created_at)}`,
+						...(passkey.used_at ? [`used ${date(passkey.used_at)}`] : [])
+					]
 				})) ?? null}
 				{remove}
 			/>
@@ -198,7 +204,7 @@
 				items={keys?.map((key) => ({
 					key: key.id,
 					title: key.name,
-					meta: `${key.prefix}… · added ${date(key.created)}`
+					meta: [`${key.prefix}…`, `added ${date(key.created)}`]
 				})) ?? null}
 				remove={removeKey}
 			/>

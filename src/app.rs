@@ -123,6 +123,17 @@ const MIGRATIONS: &[&str] = &[
 		value text not null
 	);
 	",
+	"
+	create table segments (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		user integer not null references users (id) on delete cascade,
+		name text not null,
+		filters text not null,
+		shared integer not null,
+		created_at integer not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

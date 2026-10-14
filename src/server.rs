@@ -15,6 +15,7 @@ use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::keys;
 use crate::passkeys;
 use crate::profile;
+use crate::segments;
 use crate::sites;
 use crate::stats::{self, Stats};
 use crate::teams;
@@ -40,6 +41,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(teams::routes())
 				.merge(profile::routes())
 				.merge(admin::routes())
+				.merge(segments::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))

@@ -5,6 +5,7 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
+	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
@@ -28,6 +29,8 @@
 	import Snippet from "#lib/Snippet.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
+	import Field from "#lib/ui/Field.svelte";
+	import Form from "#lib/ui/Form.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
 	import Chip from "#lib/ui/Chip.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
@@ -228,6 +231,47 @@
 
 	let editing = $state<Filter | null | undefined>(undefined);
 
+	type Segment = { id: number; name: string; filters: string[]; shared: boolean; mine: boolean };
+	let segments = $state<Segment[]>([]);
+	let saving = $state(false);
+	let segmentName = $state("");
+	let segmentShared = $state<string[]>([]);
+	const active = $derived(
+		segments.find(
+			(segment) => segment.filters.join("\n") === page.url.searchParams.getAll("f").join("\n")
+		)
+	);
+
+	$effect(() => {
+		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`)
+			.then((result) => (segments = result.segments))
+			.catch(() => (segments = []));
+	});
+
+	function pickSegment(key: string) {
+		if (key === "save") {
+			saving = true;
+			return;
+		}
+		const segment = segments.find((item) => String(item.id) === key);
+		navigate((params) => {
+			params.delete("f");
+			for (const raw of segment?.filters ?? []) params.append("f", raw);
+		});
+	}
+
+	async function saveSegment() {
+		segments = (
+			await api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`, {
+				name: segmentName,
+				filters: page.url.searchParams.getAll("f"),
+				shared: segmentShared.length > 0
+			})
+		).segments;
+		saving = false;
+		segmentName = "";
+	}
+
 	function setFilter(filter: Filter) {
 		editing = undefined;
 		navigate((params) => {
@@ -361,6 +405,18 @@
 	{/if}
 </Dialog>
 
+<Dialog bind:open={saving}>
+	<Form action="save segment" submit={saveSegment}>
+		<Field label="segment name" bind:value={segmentName} required />
+		{#if editable}
+			<Checks
+				bind:value={segmentShared}
+				options={[{ key: "shared", label: "share with everyone on this site" }]}
+			/>
+		{/if}
+	</Form>
+</Dialog>
+
 {#snippet picker()}
 	<Select
 		value={propKey}
@@ -405,6 +461,24 @@
 					remove={() => removeFilter(filter.dim)}
 				/>
 			{/each}
+			{#if segments.length || filters.length}
+				<Select
+					value={active ? String(active.id) : ""}
+					text={active?.name ?? "segments"}
+					icon={bookmark}
+					data
+					options={[
+						...segments.map((segment) => ({
+							key: String(segment.id),
+							label: segment.name
+						})),
+						...(filters.length && !active
+							? [{ key: "save", label: "save as segment" }]
+							: [])
+					]}
+					pick={pickSegment}
+				/>
+			{/if}
 			<Button variant="plain" onclick={() => (editing = null)}>
 				<Icon svg={funnel} size={12} />
 				filter

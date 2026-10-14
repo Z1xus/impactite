@@ -14,6 +14,7 @@ mod mail;
 mod net;
 mod passkeys;
 mod profile;
+mod segments;
 mod server;
 mod sites;
 mod stats;
