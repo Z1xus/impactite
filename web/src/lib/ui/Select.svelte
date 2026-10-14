@@ -6,12 +6,14 @@
 		value,
 		options,
 		pick,
-		data = false
+		data = false,
+		icon
 	}: {
 		value: T;
 		options: { key: T; label: string }[];
 		pick: (key: T) => void;
 		data?: boolean;
+		icon?: string;
 	} = $props();
 
 	const text = $derived(data ? "normal-case tracking-normal" : "");
@@ -43,6 +45,9 @@
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
+		{#if icon}
+			<Icon svg={icon} size={12} class="text-dim" />
+		{/if}
 		{current?.label}
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>

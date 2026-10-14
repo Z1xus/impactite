@@ -3,6 +3,9 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import logout from "pixelarticons/svg/logout.svg?raw";
+	import user from "pixelarticons/svg/user.svg?raw";
+	import users from "pixelarticons/svg/users.svg?raw";
+	import { currentTeam } from "#lib/session.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { adopt, pickTeam, session } from "#lib/session.svelte.ts";
 	import Icon from "./Icon.svelte";
@@ -29,7 +32,12 @@
 		<div class="mx-auto flex h-14 max-w-6xl items-center gap-4 px-6">
 			<a href={resolve("/")} class="font-mono text-[15px] text-fg">impactite</a>
 			{#if session.team !== null}
-				<Select value={session.team} options={teams} pick={pickTeam} />
+				<Select
+					value={session.team}
+					options={teams}
+					pick={pickTeam}
+					icon={currentTeam()?.personal ? user : users}
+				/>
 			{/if}
 			<div class="ml-auto flex items-center gap-3">
 				{@render actions?.()}

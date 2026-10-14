@@ -3,6 +3,9 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import Chart from "#lib/dither/Chart.svelte";
+	import { icon } from "#lib/icons/resolve.ts";
+	import calendar from "pixelarticons/svg/calendar.svg?raw";
+	import globe from "pixelarticons/svg/globe.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
@@ -27,7 +30,26 @@
 	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
-	type Ranked = { key: string; label: string; value: number }[] | null;
+	type Ranked = Parameters<typeof Rows>[1]["rows"];
+
+	const ICONIC = new Set([
+		"visit:source",
+		"visit:referrer",
+		"visit:channel",
+		"event:hostname",
+		"visit:country",
+		"visit:region",
+		"visit:browser",
+		"visit:os",
+		"visit:device"
+	]);
+	const LETTERED = new Set([
+		"visit:source",
+		"visit:referrer",
+		"event:hostname",
+		"visit:browser",
+		"visit:os"
+	]);
 
 	const domain = $derived(page.params.site ?? "");
 	const site = $derived(
@@ -173,11 +195,19 @@
 				pagination: { limit: 9 }
 			}).then((result) => {
 				if (stale) return;
-				ranked[panel.id] = result.results.map((row) => ({
-					key: row.dimensions[0],
-					label: display(dim, row.dimensions[0]),
-					value: row.metrics[0]
-				}));
+				ranked[panel.id] = result.results.map((row) => {
+					const value = row.dimensions[0];
+					const label = display(dim, value);
+					return {
+						key: value,
+						label,
+						value: row.metrics[0],
+						...(ICONIC.has(dim) && {
+							icon: icon(dim, value),
+							fallback: LETTERED.has(dim) ? label : undefined
+						})
+					};
+				});
 				loading[panel.id] = false;
 			});
 			cleanups.push(() => (stale = true));
@@ -191,6 +221,7 @@
 		<Live site={domain} />
 		<Select
 			value={period}
+			icon={calendar}
 			options={PERIODS.map((item) => ({ key: item.key, label: item.label }))}
 			pick={(key) => navigate((params) => params.set("period", key))}
 		/>
@@ -202,6 +233,7 @@
 				value={domain}
 				options={sites}
 				data
+				icon={globe}
 				pick={(key) => goto(resolve("/[site]", { site: key }))}
 			/>
 			{#each filters as filter (encodeFilter(filter))}

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { flip } from "svelte/animate";
+	import type { Spec } from "#lib/icons/lens.ts";
+	import Glyph from "./Glyph.svelte";
 	import Num from "./Num.svelte";
 
 	let {
@@ -9,7 +11,9 @@
 		format,
 		pick
 	}: {
-		rows: { key: string; label: string; value: number }[] | null;
+		rows:
+			| { key: string; label: string; value: number; icon?: Spec | null; fallback?: string }[]
+			| null;
 		loading?: boolean;
 		limit?: number;
 		format?: (value: number) => string;
@@ -41,7 +45,12 @@
 						class="dither absolute inset-y-1 left-0 rounded-px transition-[width] duration-300 ease-out group-hover:opacity-100"
 						style:width="{(row.value / max) * 100}%"
 					></span>
-					<span class="relative truncate text-[14px] text-fg">{row.label}</span>
+					<span class="relative flex min-w-0 items-center gap-2.5">
+						{#if row.icon !== undefined}
+							<Glyph spec={row.icon} fallback={row.fallback} />
+						{/if}
+						<span class="truncate text-[14px] text-fg">{row.label}</span>
+					</span>
 					<Num
 						value={row.value}
 						{format}
