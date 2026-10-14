@@ -15,6 +15,7 @@ use crate::keys;
 use crate::passkeys;
 use crate::sites;
 use crate::stats::{self, Stats};
+use crate::tracker;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 	Router::new()
@@ -38,6 +39,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/api/app/icon/{host}", get(icons::icon))
 				.with_state(web),
 		)
+		.route("/js/{file}", get(tracker::script))
 		.fallback(assets::serve)
 }
 

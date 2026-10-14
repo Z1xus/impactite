@@ -6,7 +6,7 @@
 
 	let features = $state<string[]>([]);
 
-	const order = ["hash", "outbound-links", "file-downloads", "form-submissions"];
+	const order = ["hash", "outbound-links", "file-downloads", "tagged-events", "form-submissions"];
 	const file = $derived(
 		["script", ...order.filter((feature) => features.includes(feature)), "js"].join(".")
 	);
@@ -22,6 +22,7 @@
 		options={[
 			{ key: "outbound-links", label: "outbound links" },
 			{ key: "file-downloads", label: "downloads" },
+			{ key: "tagged-events", label: "tagged events" },
 			{ key: "form-submissions", label: "forms" },
 			{ key: "hash", label: "hash routing" }
 		]}
