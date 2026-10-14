@@ -27,6 +27,8 @@ pub struct Web {
 	pub stats: Arc<Stats>,
 	pub ingest: Arc<Ingest>,
 	pub mail: Arc<Mail>,
+	pub http: reqwest::Client,
+	pub data: std::path::PathBuf,
 	pub url: String,
 	pub setup: Mutex<Option<String>>,
 }

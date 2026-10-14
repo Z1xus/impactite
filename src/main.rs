@@ -2,6 +2,7 @@ mod accounts;
 mod app;
 mod demo;
 mod geo;
+mod icons;
 mod ingest;
 mod mail;
 mod server;
@@ -218,6 +219,8 @@ async fn serve(
 		stats: stats.clone(),
 		ingest: ingest.clone(),
 		mail,
+		http: reqwest::Client::new(),
+		data: data.to_path_buf(),
 		url,
 		setup: Mutex::new(setup),
 	});

@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
 use crate::accounts::{self, Web};
+use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::stats::{self, Stats};
 
@@ -25,6 +26,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 		.merge(
 			accounts::routes()
 				.route("/api/app/query", post(stats::dashboard))
+				.route("/api/app/icon/{host}", get(icons::icon))
 				.with_state(web),
 		)
 }
