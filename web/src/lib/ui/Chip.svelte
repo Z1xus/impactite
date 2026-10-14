@@ -10,7 +10,7 @@
 	<span class="max-w-60 truncate text-[13px] text-fg">{value}</span>
 	<button
 		type="button"
-		class="grid h-5 w-5 place-items-center text-dim transition-colors duration-100 hover:text-fg"
+		class="grid h-5 w-5 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
 		aria-label="remove filter"
 		onclick={remove}
 	>

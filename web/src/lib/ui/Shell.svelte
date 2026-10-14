@@ -35,7 +35,7 @@
 				{@render actions?.()}
 				<button
 					type="button"
-					class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
+					class="grid h-8 w-8 cursor-pointer place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
 					aria-label="sign out"
 					onclick={signOut}
 				>

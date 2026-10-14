@@ -22,7 +22,7 @@
 
 <button
 	type="button"
-	class="flex flex-col gap-3 border-b px-4 py-4 text-left transition-colors duration-100 {active
+	class="flex cursor-pointer flex-col gap-3 border-b px-4 py-4 text-left transition-colors duration-100 {active
 		? 'border-cyan'
 		: 'border-transparent hover:border-edge'}"
 	onclick={pick}

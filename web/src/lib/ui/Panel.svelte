@@ -13,7 +13,8 @@
 		{#each tabs as item (item.key)}
 			<button
 				type="button"
-				class="h-full border-b label transition-colors duration-100 {tab === item.key
+				class="h-full cursor-pointer border-b label transition-colors duration-100 {tab ===
+				item.key
 					? 'border-cyan text-fg'
 					: 'border-transparent hover:text-fg'}"
 				onclick={() => (tab = item.key)}

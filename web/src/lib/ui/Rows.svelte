@@ -33,7 +33,7 @@
 			<li animate:flip={{ duration: 200 }}>
 				<button
 					type="button"
-					class="group relative flex h-8 w-full items-center justify-between gap-4 rounded-px px-2 text-left"
+					class="group relative flex h-8 w-full items-center justify-between gap-4 rounded-px px-2 text-left enabled:cursor-pointer"
 					onclick={() => pick?.(row.key)}
 					disabled={!pick}
 				>
