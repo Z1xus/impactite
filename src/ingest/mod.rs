@@ -12,6 +12,7 @@ use jiff::Timestamp;
 use jiff::tz::TimeZone;
 
 use crate::app::{App, Site};
+use crate::geo::Geo;
 
 const SESSION_SECS: i64 = 30 * 60;
 const SHARDS: usize = 64;
@@ -57,16 +58,18 @@ type Shard = Mutex<HashMap<(u64, u64), Session>>;
 pub struct Ingest {
 	db: Arc<Db>,
 	app: Arc<App>,
+	geo: Arc<Geo>,
 	sites: RwLock<HashMap<String, Arc<Tracked>>>,
 	salts: Mutex<HashMap<(u64, i32), [u8; 32]>>,
 	sessions: Vec<Shard>,
 }
 
 impl Ingest {
-	pub fn new(db: Arc<Db>, app: Arc<App>) -> Self {
+	pub fn new(db: Arc<Db>, app: Arc<App>, geo: Arc<Geo>) -> Self {
 		Self {
 			db,
 			app,
+			geo,
 			sites: RwLock::default(),
 			salts: Mutex::default(),
 			sessions: (0..SHARDS).map(|_| Mutex::default()).collect(),
@@ -142,6 +145,7 @@ impl Ingest {
 			click_id: click_id.is_some(),
 		});
 		let agent = ua::parse(client.ua);
+		let location = self.geo.locate(client.ip);
 
 		let mut event = Event {
 			site: site.site.id,
@@ -166,6 +170,9 @@ impl Ingest {
 			(Dim::UtmCampaign, param("utm_campaign")),
 			(Dim::UtmContent, param("utm_content")),
 			(Dim::UtmTerm, param("utm_term")),
+			(Dim::Country, location.country.as_str()),
+			(Dim::Region, location.region.as_str()),
+			(Dim::City, location.city.as_str()),
 			(Dim::Device, agent.device),
 			(Dim::Browser, agent.browser),
 			(Dim::BrowserVersion, agent.browser_version.as_str()),

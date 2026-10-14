@@ -1,4 +1,5 @@
 mod app;
+mod geo;
 mod ingest;
 mod server;
 
@@ -17,6 +18,7 @@ use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
 use crate::app::App;
+use crate::geo::Geo;
 use crate::ingest::Ingest;
 
 #[global_allocator]
@@ -36,6 +38,8 @@ enum Command {
 	Serve {
 		#[arg(long, env = "IMPACTITE_LISTEN", default_value = "127.0.0.1:8000")]
 		listen: SocketAddr,
+		#[arg(long, env = "IMPACTITE_GEOIP")]
+		geoip: Option<PathBuf>,
 	},
 	Site {
 		#[command(subcommand)]
@@ -64,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 	let app = Arc::new(App::open(&cli.data.join("impactite.db")).context("open app db")?);
 
 	match cli.command {
-		Command::Serve { listen } => serve(app, &cli.data, listen).await,
+		Command::Serve { listen, geoip } => serve(app, &cli.data, listen, geoip).await,
 		Command::Site {
 			command: SiteCommand::Add { domain, timezone },
 		} => {
@@ -86,9 +90,26 @@ async fn main() -> anyhow::Result<()> {
 	}
 }
 
-async fn serve(app: Arc<App>, data: &Path, listen: SocketAddr) -> anyhow::Result<()> {
+async fn serve(
+	app: Arc<App>,
+	data: &Path,
+	listen: SocketAddr,
+	geoip: Option<PathBuf>,
+) -> anyhow::Result<()> {
 	let db = Arc::new(Db::open(data.join("events")).context("open event store")?);
-	let ingest = Arc::new(Ingest::new(db.clone(), app));
+	let geo = Arc::new(Geo::default());
+	let geo_task = match geoip {
+		Some(path) => {
+			geo.load(&path).context("load geoip database")?;
+			None
+		}
+		None => Some(tokio::spawn({
+			let geo = geo.clone();
+			let dir = data.join("geo");
+			async move { geo.keep_fresh(dir).await }
+		})),
+	};
+	let ingest = Arc::new(Ingest::new(db.clone(), app, geo));
 
 	let sweeper = tokio::spawn({
 		let ingest = ingest.clone();
@@ -112,6 +133,10 @@ async fn serve(app: Arc<App>, data: &Path, listen: SocketAddr) -> anyhow::Result
 
 	sweeper.abort();
 	let _ = sweeper.await;
+	if let Some(task) = geo_task {
+		task.abort();
+		let _ = task.await;
+	}
 	drop(ingest);
 	let db = Arc::try_unwrap(db).map_err(|_| anyhow::anyhow!("event store still in use"))?;
 	db.close().context("close event store")?;

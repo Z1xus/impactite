@@ -16,9 +16,12 @@ blake3 = "1.8.7"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 crater = { path = "crates/crater" }
 crc32fast = "1.5.2"
+flate2 = "1.1.10"
 getrandom = "0.4.3"
 jiff = { version = "0.2.38", default-features = false, features = ["std", "tzdb-bundle-always"] }
+maxminddb = "0.32.0"
 mimalloc = "0.1.52"
+reqwest = { version = "0.13.5", default-features = false, features = ["http2", "rustls"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
@@ -53,9 +56,12 @@ axum.workspace = true
 blake3.workspace = true
 clap.workspace = true
 crater.workspace = true
+flate2.workspace = true
 getrandom.workspace = true
 jiff.workspace = true
+maxminddb.workspace = true
 mimalloc.workspace = true
+reqwest.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
