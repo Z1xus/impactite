@@ -2,7 +2,44 @@ import { api } from "./api";
 
 export type Metric =
 	"visitors" | "visits" | "pageviews" | "bounce_rate" | "visit_duration" | "views_per_visit";
-export type Filter = { op: "is" | "is_not" | "contains"; dim: string; value: string };
+export type Op = "is" | "is_not" | "contains" | "contains_not";
+export type Filter = { op: Op; dim: string; values: string[] };
+
+export const OPS: { key: Op; label: string }[] = [
+	{ key: "is", label: "is" },
+	{ key: "is_not", label: "is not" },
+	{ key: "contains", label: "contains" },
+	{ key: "contains_not", label: "not contains" }
+];
+
+export const DIMENSIONS: { key: string; label: string }[] = [
+	{ key: "event:page", label: "page" },
+	{ key: "visit:entry_page", label: "entry page" },
+	{ key: "visit:exit_page", label: "exit page" },
+	{ key: "event:hostname", label: "hostname" },
+	{ key: "visit:source", label: "source" },
+	{ key: "visit:referrer", label: "referrer" },
+	{ key: "visit:channel", label: "channel" },
+	{ key: "visit:utm_medium", label: "utm medium" },
+	{ key: "visit:utm_source", label: "utm source" },
+	{ key: "visit:utm_campaign", label: "utm campaign" },
+	{ key: "visit:utm_content", label: "utm content" },
+	{ key: "visit:utm_term", label: "utm term" },
+	{ key: "visit:country", label: "country" },
+	{ key: "visit:region", label: "region" },
+	{ key: "visit:city", label: "city" },
+	{ key: "visit:device", label: "device" },
+	{ key: "visit:browser", label: "browser" },
+	{ key: "visit:browser_version", label: "browser version" },
+	{ key: "visit:os", label: "system" },
+	{ key: "visit:os_version", label: "system version" },
+	{ key: "event:goal", label: "goal" }
+];
+
+export function dimLabel(dim: string) {
+	if (dim.startsWith("event:props:")) return dim.slice(12);
+	return DIMENSIONS.find((item) => item.key === dim)?.label ?? dim;
+}
 export type Row = { dimensions: string[]; metrics: number[] };
 export type Result = {
 	results: Row[];
@@ -22,18 +59,21 @@ export function query(site: string, body: Record<string, unknown>, imports = tru
 	return api<Result>("/api/app/query", { site_id: site, include: { imports }, ...body });
 }
 
+const escape = (value: string) => value.replaceAll("%", "%25").replaceAll("~", "%7E");
+const unescape = (value: string) => value.replaceAll("%7E", "~").replaceAll("%25", "%");
+
 export function encodeFilter(filter: Filter) {
-	return `${filter.op}~${filter.dim}~${filter.value}`;
+	return [filter.op, filter.dim, ...filter.values.map(escape)].join("~");
 }
 
 export function decodeFilter(raw: string): Filter | null {
-	const [op, dim, ...rest] = raw.split("~");
-	if (!dim || !["is", "is_not", "contains"].includes(op)) return null;
-	return { op: op as Filter["op"], dim, value: rest.join("~") };
+	const [op, dim, ...values] = raw.split("~");
+	if (!dim || !values.length || !OPS.some((item) => item.key === op)) return null;
+	return { op: op as Op, dim, values: values.map(unescape) };
 }
 
 export function toQueryFilters(filters: Filter[]) {
-	return filters.map((filter) => [filter.op, filter.dim, [filter.value]]);
+	return filters.map((filter) => [filter.op, filter.dim, filter.values]);
 }
 
 export function compact(value: number) {

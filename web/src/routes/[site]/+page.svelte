@@ -5,11 +5,14 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
+	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
+		OPS,
 		decodeFilter,
+		dimLabel,
 		delta,
 		display,
 		encodeFilter,
@@ -21,7 +24,10 @@
 	} from "#lib/stats.ts";
 	import Period from "#lib/Period.svelte";
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
+	import FilterDialog from "#lib/FilterDialog.svelte";
 	import Snippet from "#lib/Snippet.svelte";
+	import Button from "#lib/ui/Button.svelte";
+	import Dialog from "#lib/ui/Dialog.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
 	import Chip from "#lib/ui/Chip.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
@@ -220,19 +226,27 @@
 		goto(resolve(`/[site]?${params}`, { site: domain }), { reset: false });
 	}
 
-	function addFilter(dim: string, value: string) {
-		const filter = encodeFilter({ op: "is", dim, value });
+	let editing = $state<Filter | null | undefined>(undefined);
+
+	function setFilter(filter: Filter) {
+		editing = undefined;
 		navigate((params) => {
-			if (!params.getAll("f").includes(filter)) params.append("f", filter);
+			const rest = params.getAll("f").filter((raw) => decodeFilter(raw)?.dim !== filter.dim);
+			params.delete("f");
+			for (const raw of [...rest, encodeFilter(filter)]) params.append("f", raw);
 		});
 	}
 
-	function removeFilter(filter: Filter) {
-		const encoded = encodeFilter(filter);
+	function addFilter(dim: string, value: string) {
+		setFilter({ op: "is", dim, values: [value] });
+	}
+
+	function removeFilter(dim: string) {
+		editing = undefined;
 		navigate((params) => {
-			const rest = params.getAll("f").filter((value) => value !== encoded);
+			const rest = params.getAll("f").filter((raw) => decodeFilter(raw)?.dim !== dim);
 			params.delete("f");
-			for (const value of rest) params.append("f", value);
+			for (const raw of rest) params.append("f", raw);
 		});
 	}
 
@@ -326,6 +340,27 @@
 	});
 </script>
 
+<Dialog
+	bind:open={
+		() => editing !== undefined,
+		(open) => {
+			if (!open) editing = undefined;
+		}
+	}
+>
+	{#if dates}
+		<FilterDialog
+			{domain}
+			range={dates.current}
+			{goals}
+			{propKeys}
+			initial={editing ?? null}
+			apply={setFilter}
+			remove={removeFilter}
+		/>
+	{/if}
+</Dialog>
+
 {#snippet picker()}
 	<Select
 		value={propKey}
@@ -359,12 +394,21 @@
 			{/if}
 			{#each filters as filter (encodeFilter(filter))}
 				<Chip
-					label={filter.dim.split(":").at(-1) ?? filter.dim}
-					value={display(filter.dim, filter.value)}
-					icon={ICONIC.has(filter.dim) ? icon(filter.dim, filter.value) : undefined}
-					remove={() => removeFilter(filter)}
+					label={filter.op === "is"
+						? dimLabel(filter.dim)
+						: `${dimLabel(filter.dim)} ${OPS.find((op) => op.key === filter.op)?.label}`}
+					value={filter.values.map((value) => display(filter.dim, value)).join(" or ")}
+					icon={ICONIC.has(filter.dim) && filter.values.length === 1
+						? icon(filter.dim, filter.values[0])
+						: undefined}
+					edit={() => (editing = filter)}
+					remove={() => removeFilter(filter.dim)}
 				/>
 			{/each}
+			<Button variant="plain" onclick={() => (editing = null)}>
+				<Icon svg={funnel} size={12} />
+				filter
+			</Button>
 			<div class="ml-auto flex flex-wrap items-center gap-3">
 				{#if hasImports}
 					<Checks
