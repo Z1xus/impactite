@@ -5,11 +5,13 @@
 		tabs,
 		tab = $bindable(),
 		actions,
+		footer,
 		children
 	}: {
 		tabs: { key: string; label: string }[];
 		tab: string;
 		actions?: Snippet;
+		footer?: Snippet;
 		children: Snippet;
 	} = $props();
 </script>
@@ -32,7 +34,12 @@
 			<div class="ml-auto">{@render actions()}</div>
 		{/if}
 	</header>
-	<div class="p-2">
+	<div class="flex-1 p-2">
 		{@render children()}
 	</div>
+	{#if footer}
+		<footer class="flex justify-end border-t border-line px-2 py-1">
+			{@render footer()}
+		</footer>
+	{/if}
 </section>

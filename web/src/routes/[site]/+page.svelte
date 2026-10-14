@@ -25,6 +25,7 @@
 	} from "#lib/stats.ts";
 	import Period from "#lib/Period.svelte";
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
+	import Details from "#lib/Details.svelte";
 	import FilterDialog from "#lib/FilterDialog.svelte";
 	import Snippet from "#lib/Snippet.svelte";
 	import Button from "#lib/ui/Button.svelte";
@@ -230,6 +231,9 @@
 	}
 
 	let editing = $state<Filter | null | undefined>(undefined);
+	let details = $state<{ dim: string; title: string } | null>(null);
+	const converting = $derived(filters.some((filter) => filter.dim === "event:goal"));
+	const dimOf = (id: string) => (tabs[id] === "props" ? `event:props:${propKey}` : tabs[id]);
 
 	type Segment = { id: number; name: string; filters: string[]; shared: boolean; mine: boolean };
 	let segments = $state<Segment[]>([]);
@@ -353,7 +357,10 @@
 			let stale = false;
 			loading[panel.id] = true;
 			ask({
-				metrics: dim === "event:goal" ? ["visitors", "conversion_rate"] : ["visitors"],
+				metrics:
+					dim === "event:goal" || converting
+						? ["visitors", "conversion_rate"]
+						: ["visitors"],
 				date_range: dates.current,
 				dimensions: [dim],
 				filters: where,
@@ -367,7 +374,9 @@
 						key: value,
 						label,
 						value: row.metrics[0],
-						...(dim === "event:goal" && { extra: `${row.metrics[1]}%` }),
+						...((dim === "event:goal" || converting) && {
+							extra: `${row.metrics[1]}%`
+						}),
 						...(PAGES.has(dim) &&
 							value.startsWith("/") && { href: `https://${domain}${value}` }),
 						...(ICONIC.has(dim) && {
@@ -415,6 +424,34 @@
 			/>
 		{/if}
 	</Form>
+</Dialog>
+
+<Dialog
+	wide
+	bind:open={
+		() => details !== null,
+		(open) => {
+			if (!open) details = null;
+		}
+	}
+>
+	{#if details && dates}
+		<Details
+			{domain}
+			dim={details.dim}
+			title={details.title}
+			range={dates.current}
+			filters={toQueryFilters(filters)}
+			imports={withImports}
+			{converting}
+			iconic={ICONIC.has(details.dim)}
+			pick={(value) => {
+				const dim = details?.dim ?? "";
+				details = null;
+				addFilter(dim, value);
+			}}
+		/>
+	{/if}
 </Dialog>
 
 {#snippet picker()}
@@ -555,17 +592,25 @@
 							bind:tab={tabs[panel.id]}
 							actions={tabs[panel.id] === "props" ? picker : undefined}
 						>
+							{#snippet footer()}
+								<Button
+									variant="plain"
+									onclick={() =>
+										(details = {
+											dim: dimOf(panel.id),
+											title:
+												panel.tabs.find((tab) => tab.key === tabs[panel.id])
+													?.label ?? ""
+										})}
+								>
+									details
+								</Button>
+							{/snippet}
 							<Rows
 								rows={ranked[panel.id] ?? null}
 								loading={loading[panel.id]}
 								format={(value) => format("visitors", value)}
-								pick={(key) =>
-									addFilter(
-										tabs[panel.id] === "props"
-											? `event:props:${propKey}`
-											: tabs[panel.id],
-										key
-									)}
+								pick={(key) => addFilter(dimOf(panel.id), key)}
 							/>
 						</Panel>
 					</div>
