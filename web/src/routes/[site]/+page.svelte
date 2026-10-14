@@ -33,6 +33,8 @@
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";
+	import Table from "#lib/ui/Table.svelte";
+	import Toggle from "#lib/ui/Toggle.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
@@ -140,6 +142,33 @@
 	let totals = $state<number[] | null>(null);
 	let previousTotals = $state<number[] | null>(null);
 	let series = $state<number[]>([]);
+	let lines = $state<{ key: string; label: string; values: number[] }[]>([]);
+	let lineSort = $state<[string, "asc" | "desc"]>(["", "asc"]);
+	const sortedLines = $derived.by(() => {
+		const i = METRICS.findIndex((item) => item.key === lineSort[0]);
+		if (i < 0) return lines;
+		const sign = lineSort[1] === "desc" ? -1 : 1;
+		return [...lines].sort((a, b) => sign * (a.values[i] - b.values[i]));
+	});
+
+	type Layout = { order: string[]; hidden: string[]; table: boolean };
+	let layout = $state<Layout>({ order: [], hidden: [], table: false });
+	let arranging = $state(false);
+
+	$effect(() => {
+		api<Partial<Layout> | null>(`/api/app/prefs/layout:${domain}`).then((saved) => {
+			layout = {
+				order: saved?.order ?? [],
+				hidden: saved?.hidden ?? [],
+				table: saved?.table ?? false
+			};
+		});
+	});
+
+	function saveLayout(next: Layout) {
+		layout = next;
+		api(`/api/app/prefs/layout:${domain}`, next, "PUT");
+	}
 	let previousSeries = $state<number[]>([]);
 	let labels = $state<string[]>([]);
 
@@ -278,6 +307,24 @@
 		const filter = filters.find((item) => item.dim === tab);
 		return filter?.op === "is" && filter.values.length === 1 ? DRILL[tab] : undefined;
 	};
+	const arranged = $derived.by(() => {
+		const all = panels.filter((panel) => panel.tabs.length);
+		const rank = (id: string) => {
+			const i = layout.order.indexOf(id);
+			return i < 0 ? 1000 + all.findIndex((panel) => panel.id === id) : i;
+		};
+		return [...all].sort((a, b) => rank(a.id) - rank(b.id));
+	});
+	const shown = $derived(arranged.filter((panel) => !layout.hidden.includes(panel.id)));
+
+	function move(id: string, by: number) {
+		const ids = arranged.map((panel) => panel.id);
+		const i = ids.indexOf(id);
+		if (i + by < 0 || i + by >= ids.length) return;
+		[ids[i], ids[i + by]] = [ids[i + by], ids[i]];
+		saveLayout({ ...layout, order: ids });
+	}
+
 	const dimOf = (id: string) => {
 		const tab = tabs[id];
 		if (tab === "props") return `event:props:${propKey}`;
@@ -370,7 +417,7 @@
 			ask({ metrics: keys, date_range: dates.current, filters: where }),
 			before && ask({ metrics: keys, date_range: before, filters: where }),
 			ask({
-				metrics: [chartMetric],
+				metrics: layout.table ? keys : [chartMetric],
 				date_range: dates.current,
 				dimensions: [grain],
 				filters: where
@@ -390,7 +437,13 @@
 				!withImports || (now.meta?.imports_skip_reason ?? "") !== "no_imported_data";
 			totals = now.results[0]?.metrics ?? null;
 			previousTotals = before ? (before.results[0]?.metrics ?? null) : null;
-			series = line.results.map((row) => row.metrics[0]);
+			const at = layout.table ? keys.indexOf(chartMetric) : 0;
+			series = line.results.map((row) => row.metrics[Math.max(at, 0)]);
+			lines = line.results.map((row) => ({
+				key: row.dimensions[0],
+				label: label(row.dimensions[0], grain),
+				values: row.metrics
+			}));
 			previousSeries = previousLine ? previousLine.results.map((row) => row.metrics[0]) : [];
 			labels = line.results.map((row) => label(row.dimensions[0], grain));
 		});
@@ -596,6 +649,9 @@
 					/>
 				{/if}
 				{#if view && !empty}
+					<Button variant="quiet" onclick={() => (arranging = !arranging)}>
+						{arranging ? "done" : "layout"}
+					</Button>
 					<Menu
 						label="export"
 						icon={downloadIcon}
@@ -639,27 +695,68 @@
 					{/each}
 				</div>
 				<div class="relative px-4 pt-8 pb-5">
-					{#if dates && dates.choices.length > 1}
-						<div class="absolute top-3 right-4 z-10">
+					<div class="absolute top-3 right-4 z-10 flex items-center gap-2">
+						{#if dates && dates.choices.length > 1}
 							<Select
 								align="right"
 								value={dates.interval}
 								options={dates.choices.map((key) => ({ key, label: key }))}
 								pick={(key) => go({ interval: key })}
 							/>
+						{/if}
+						<Toggle
+							bind:value={
+								() => (layout.table ? "table" : "chart"),
+								(view: "chart" | "table") =>
+									saveLayout({ ...layout, table: view === "table" })
+							}
+							options={[
+								{ key: "chart", label: "chart" },
+								{ key: "table", label: "table" }
+							]}
+						/>
+					</div>
+					{#if layout.table}
+						<div class="max-h-96 overflow-y-auto pt-10">
+							<Table
+								columns={METRICS.map((item) => ({
+									key: item.key,
+									label: item.label,
+									format: (value: number | null) => format(item.key, value ?? 0)
+								}))}
+								rows={sortedLines}
+								bind:sort={lineSort}
+							/>
 						</div>
+					{:else}
+						<Chart
+							values={series}
+							previous={previousSeries}
+							{labels}
+							format={(value) => format(chartMetric, value)}
+						/>
 					{/if}
-					<Chart
-						values={series}
-						previous={previousSeries}
-						{labels}
-						format={(value) => format(chartMetric, value)}
-					/>
 				</div>
 			</section>
 
+			{#if arranging && layout.hidden.length}
+				<div class="flex flex-wrap items-center gap-2">
+					{#each arranged.filter( (panel) => layout.hidden.includes(panel.id) ) as panel (panel.id)}
+						<Button
+							variant="quiet"
+							onclick={() =>
+								saveLayout({
+									...layout,
+									hidden: layout.hidden.filter((id) => id !== panel.id)
+								})}
+						>
+							show {panel.tabs[0].label}
+						</Button>
+					{/each}
+				</div>
+			{/if}
 			<div class="grid gap-6 md:grid-cols-2">
-				{#each panels.filter((panel) => panel.tabs.length) as panel (panel.id)}
+				{#each shown as panel (panel.id)}
 					<div class={panel.id === "goals" ? "md:col-span-2" : ""}>
 						<Panel
 							tabs={panel.tabs.map((tab) => ({
@@ -674,18 +771,40 @@
 									: undefined}
 						>
 							{#snippet footer()}
-								<Button
-									variant="plain"
-									onclick={() =>
-										(details = {
-											dim: dimOf(panel.id),
-											title:
-												panel.tabs.find((tab) => tab.key === tabs[panel.id])
-													?.label ?? ""
-										})}
-								>
-									details
-								</Button>
+								{#if arranging}
+									<div class="flex items-center gap-1">
+										<Button variant="plain" onclick={() => move(panel.id, -1)}
+											>earlier</Button
+										>
+										<Button variant="plain" onclick={() => move(panel.id, 1)}
+											>later</Button
+										>
+										<Button
+											variant="plain"
+											onclick={() =>
+												saveLayout({
+													...layout,
+													hidden: [...layout.hidden, panel.id]
+												})}
+										>
+											hide
+										</Button>
+									</div>
+								{:else}
+									<Button
+										variant="plain"
+										onclick={() =>
+											(details = {
+												dim: dimOf(panel.id),
+												title:
+													panel.tabs.find(
+														(tab) => tab.key === tabs[panel.id]
+													)?.label ?? ""
+											})}
+									>
+										details
+									</Button>
+								{/if}
 							{/snippet}
 							{#if tabs[panel.id] === "map"}
 								<WorldMap

@@ -138,6 +138,14 @@ const MIGRATIONS: &[&str] = &[
 	update sessions set created_at = expires_at - 2592000, seen_at = expires_at - 2592000
 	where created_at = 0;
 	",
+	"
+	create table prefs (
+		user integer not null references users (id) on delete cascade,
+		key text not null,
+		value text not null,
+		primary key (user, key)
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]
