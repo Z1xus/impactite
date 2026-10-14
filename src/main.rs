@@ -1,5 +1,6 @@
 mod accounts;
 mod app;
+mod demo;
 mod geo;
 mod ingest;
 mod mail;
@@ -69,6 +70,13 @@ enum Command {
 		#[command(subcommand)]
 		command: MailCommand,
 	},
+	Demo {
+		domain: String,
+		#[arg(long, default_value_t = 90)]
+		days: i64,
+		#[arg(long, default_value = "Europe/Berlin")]
+		timezone: String,
+	},
 }
 
 #[derive(Subcommand)]
@@ -130,6 +138,28 @@ async fn main() -> anyhow::Result<()> {
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
+		Command::Demo {
+			domain,
+			days,
+			timezone,
+		} => {
+			let site = match app.site(&domain)? {
+				Some(site) => site,
+				None => {
+					let team = match app.first_user()? {
+						Some(user) => Some(app.personal_team(user)?),
+						None => None,
+					};
+					app.add_site(&domain, &timezone, team)?
+				}
+			};
+			let db = Db::open(cli.data.join("events")).context("open event store")?;
+			let count = demo::seed(&db, site.id, &site.domain, &site.timezone, days);
+			db.sync()?;
+			db.close()?;
+			println!("{count} events  {}  {days} days", site.domain);
+			Ok(())
+		}
 		Command::Key {
 			command: KeyCommand::Create { name },
 		} => {
@@ -182,14 +212,15 @@ async fn serve(
 			url.trim_end_matches('/')
 		);
 	}
+	let ingest = Arc::new(Ingest::new(db.clone(), app.clone(), geo));
 	let web = Arc::new(Web {
-		app: app.clone(),
+		app,
 		stats: stats.clone(),
+		ingest: ingest.clone(),
 		mail,
 		url,
 		setup: Mutex::new(setup),
 	});
-	let ingest = Arc::new(Ingest::new(db.clone(), app, geo));
 
 	let sweeper = tokio::spawn({
 		let ingest = ingest.clone();
@@ -204,13 +235,26 @@ async fn serve(
 
 	let listener = TcpListener::bind(listen).await.context("bind")?;
 	tracing::info!(%listen, "listening");
-	axum::serve(
+	let stop = Arc::new(tokio::sync::Notify::new());
+	let server = axum::serve(
 		listener,
 		server::router(ingest.clone(), stats.clone(), web.clone())
 			.into_make_service_with_connect_info::<SocketAddr>(),
 	)
-	.with_graceful_shutdown(shutdown())
-	.await?;
+	.with_graceful_shutdown({
+		let stop = stop.clone();
+		async move {
+			shutdown().await;
+			stop.notify_one();
+		}
+	});
+	tokio::select! {
+		served = server => served?,
+		() = async {
+			stop.notified().await;
+			tokio::time::sleep(Duration::from_secs(3)).await;
+		} => {}
+	}
 
 	sweeper.abort();
 	let _ = sweeper.await;
@@ -218,10 +262,6 @@ async fn serve(
 		task.abort();
 		let _ = task.await;
 	}
-	drop(ingest);
-	drop(stats);
-	drop(web);
-	let db = Arc::try_unwrap(db).map_err(|_| anyhow::anyhow!("event store still in use"))?;
 	db.close().context("close event store")?;
 	Ok(())
 }

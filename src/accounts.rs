@@ -4,6 +4,7 @@ use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use axum::extract::{FromRequestParts, Path, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
@@ -12,6 +13,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::app::{App, key_hash, token};
+use crate::ingest::Ingest;
 use crate::mail::Mail;
 use crate::stats::Stats;
 
@@ -23,6 +25,7 @@ const ROLES: &[&str] = &["owner", "admin", "editor", "viewer"];
 pub struct Web {
 	pub app: Arc<App>,
 	pub stats: Arc<Stats>,
+	pub ingest: Arc<Ingest>,
 	pub mail: Arc<Mail>,
 	pub url: String,
 	pub setup: Mutex<Option<String>>,
@@ -57,6 +60,31 @@ pub fn routes() -> Router<Arc<Web>> {
 		)
 		.route("/api/app/invites/accept", post(accept))
 		.route("/api/app/sites", post(add_site))
+		.route("/api/app/live/{domain}", get(live))
+}
+
+async fn live(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
+	if !matches!(web.app.site_role(viewer.user, &domain), Ok(Some(_))) {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	}
+	let Ok(Some(site)) = web.app.site(&domain) else {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	};
+	let ticks = futures_util::stream::unfold(
+		(
+			web.ingest.clone(),
+			tokio::time::interval(std::time::Duration::from_secs(2)),
+		),
+		move |(ingest, mut interval)| async move {
+			interval.tick().await;
+			let count = ingest.current_visitors(site.id);
+			let event = Event::default().data(count.to_string());
+			Some((Ok::<_, std::convert::Infallible>(event), (ingest, interval)))
+		},
+	);
+	Sse::new(ticks)
+		.keep_alive(KeepAlive::default())
+		.into_response()
 }
 
 #[derive(Deserialize)]
@@ -371,6 +399,11 @@ fn now() -> i64 {
 }
 
 impl App {
+	pub fn first_user(&self) -> rusqlite::Result<Option<i64>> {
+		self.conn()
+			.query_row("select min(id) from users", [], |row| row.get(0))
+	}
+
 	pub fn users_exist(&self) -> rusqlite::Result<bool> {
 		self.conn()
 			.query_row("select exists (select 1 from users)", [], |row| row.get(0))

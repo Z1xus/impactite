@@ -1,6 +1,6 @@
 pub mod goatcounter;
 pub mod plausible;
-mod referrer;
+pub(crate) mod referrer;
 mod ua;
 
 use std::collections::HashMap;
@@ -187,6 +187,19 @@ impl Ingest {
 			true => Ok(()),
 			false => Err(Rejected::Busy),
 		}
+	}
+
+	pub fn current_visitors(&self, site: u64) -> usize {
+		let cutoff = Timestamp::now().as_second() - 5 * 60;
+		self.sessions
+			.iter()
+			.map(|shard| {
+				lock(shard)
+					.iter()
+					.filter(|((id, _), session)| *id == site && session.last >= cutoff)
+					.count()
+			})
+			.sum()
 	}
 
 	pub fn sweep(&self) {
