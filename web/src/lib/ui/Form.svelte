@@ -36,7 +36,7 @@
 	{#if inline}
 		<div class="flex items-end gap-2 [&>*:first-child]:flex-1">
 			{@render children?.()}
-			<Button type="submit" quiet {busy} class="h-10">{action}</Button>
+			<Button type="submit" variant="quiet" {busy} class="h-10">{action}</Button>
 		</div>
 	{:else}
 		{@render children?.()}
