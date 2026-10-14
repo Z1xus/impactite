@@ -56,7 +56,10 @@ import smartphone from "pixelarticons/svg/smartphone.svg?raw";
 import tablet from "pixelarticons/svg/tablet.svg?raw";
 import users from "pixelarticons/svg/users.svg?raw";
 import video from "pixelarticons/svg/video.svg?raw";
-import type { Spec } from "./lens.ts";
+export type Spec =
+	| { kind: "brand"; path: string; hex: string }
+	| { kind: "image"; url: string; flag?: boolean }
+	| { kind: "pixel"; svg: string };
 
 type Brand = { path: string; hex: string };
 
@@ -172,7 +175,7 @@ const flags = import.meta.glob("../../../node_modules/flag-icons/flags/4x3/*.svg
 
 function flag(code: string): Spec | null {
 	const url = flags[`../../../node_modules/flag-icons/flags/4x3/${code.toLowerCase()}.svg`];
-	return url ? { kind: "image", url, ratio: 4 / 3 } : null;
+	return url ? { kind: "image", url, flag: true } : null;
 }
 
 const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;

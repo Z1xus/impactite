@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { flip } from "svelte/animate";
-	import type { Spec } from "#lib/icons/lens.ts";
+	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
 	import Num from "./Num.svelte";
 
