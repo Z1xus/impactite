@@ -7,6 +7,6 @@
 	const tones = { dim: "text-dim", bad: "text-bad", cyan: "text-cyan" };
 </script>
 
-<p class="min-h-[11px] label normal-case {tones[tone]}" aria-live="polite">
+<p class="min-h-[11px] label tracking-normal normal-case {tones[tone]}" aria-live="polite">
 	{@render children?.()}
 </p>

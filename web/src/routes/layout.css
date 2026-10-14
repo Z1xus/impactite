@@ -62,7 +62,8 @@
 	font-family: var(--font-mono);
 	font-size: var(--text-label);
 	line-height: var(--text-label--line-height);
-	text-transform: lowercase;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
 	color: var(--color-dim);
 }
 

@@ -201,6 +201,7 @@
 			<Select
 				value={domain}
 				options={sites}
+				data
 				pick={(key) => goto(resolve("/[site]", { site: key }))}
 			/>
 			{#each filters as filter (encodeFilter(filter))}
