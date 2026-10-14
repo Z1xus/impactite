@@ -151,10 +151,16 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 		.ok_or_else(|| format!("#/site_id: Site {} not found", request.site_id))?;
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let today = Timestamp::now().to_zoned(tz.clone()).date();
+	let imported = stats
+		.app
+		.first_import(site.id)
+		.map_err(|err| err.to_string())?
+		.and_then(|day| day.parse::<Date>().ok());
 	let created = Timestamp::from_second(site.created_at)
 		.map_err(|err| err.to_string())?
 		.to_zoned(tz.clone())
 		.date();
+	let created = imported.map_or(created, |day| day.min(created));
 	let (from, to) = date_range(
 		&request.date_range,
 		today,
@@ -190,6 +196,11 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 			}
 		}
 	}
+	let skip = match imported {
+		None => "no_imported_data",
+		Some(_) => imports_skip(&grouping, !request.filters.is_empty()).unwrap_or_default(),
+	};
+	let imports = request.include.imports && skip.is_empty();
 	let days = day_number(from)..=day_number(to);
 	let run = |filters: Vec<Filter>, breakdown: Option<Field>, daily: bool| {
 		stats
@@ -201,6 +212,7 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 				breakdown,
 				limit: usize::MAX,
 				daily,
+				imports,
 			})
 			.map_err(|err| err.to_string())
 	};
@@ -312,8 +324,10 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 		meta["total_rows"] = json!(total_rows);
 	}
 	if request.include.imports {
-		meta["imports_included"] = json!(false);
-		meta["imports_skip_reason"] = json!("no_imported_data");
+		meta["imports_included"] = json!(imports);
+		if !imports {
+			meta["imports_skip_reason"] = json!(skip);
+		}
 	}
 	Ok(json!({
 		"results": results,
@@ -600,6 +614,19 @@ fn filters(raw: &Value, goals: &[Goal]) -> Result<Vec<(Filter, bool)>, String> {
 	}
 }
 
+fn imports_skip(grouping: &Grouping, filtered: bool) -> Option<&'static str> {
+	match grouping {
+		Grouping::Time(Time::Hour) => Some("unsupported_interval"),
+		Grouping::Goal | Grouping::TimeField(..) => Some("unsupported_query"),
+		_ if filtered => Some("unsupported_query"),
+		Grouping::Field(Field::Dim(Dim::City)) => Some("unsupported_query"),
+		Grouping::Field(Field::Prop(key)) if !matches!(key.as_str(), "url" | "path") => {
+			Some("unsupported_query")
+		}
+		_ => None,
+	}
+}
+
 fn date_range(raw: &Value, today: Date, created: Date, trim: bool) -> Result<(Date, Date), String> {
 	let invalid = || format!("#/date_range: Invalid date range {raw}");
 	let parse = |value: &Value| -> Result<Date, String> {
@@ -650,7 +677,7 @@ fn date_range(raw: &Value, today: Date, created: Date, trim: bool) -> Result<(Da
 	}
 }
 
-fn day_number(date: Date) -> i32 {
+pub(crate) fn day_number(date: Date) -> i32 {
 	Date::constant(1970, 1, 1)
 		.until(date)
 		.map_or(0, |span| span.get_days())

@@ -83,6 +83,16 @@ const MIGRATIONS: &[&str] = &[
 		unique (site, page, value)
 	);
 	",
+	"
+	create table imports (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		source text not null,
+		first_day text not null,
+		last_day text not null,
+		created_at integer not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]
@@ -129,6 +139,28 @@ impl App {
 			timezone: timezone.to_owned(),
 			created_at: jiff::Timestamp::now().as_second(),
 		})
+	}
+
+	pub fn add_import(
+		&self,
+		site: u64,
+		source: &str,
+		first: &str,
+		last: &str,
+	) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"insert into imports (site, source, first_day, last_day, created_at) values (?1, ?2, ?3, ?4, unixepoch())",
+			params![site as i64, source, first, last],
+		)?;
+		Ok(())
+	}
+
+	pub fn first_import(&self, site: u64) -> rusqlite::Result<Option<String>> {
+		self.conn().query_row(
+			"select min(first_day) from imports where site = ?1",
+			[site as i64],
+			|row| row.get(0),
+		)
 	}
 
 	pub fn backdate(&self, site: u64, ts: i64) -> rusqlite::Result<()> {

@@ -195,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
 			let site = find_or_create(&app, domain, timezone)?;
 			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let started = std::time::Instant::now();
-			let (count, first) = match source {
+			let (count, unit, first) = match source {
 				ImportSource::Plausible {
 					source,
 					plausible_site_id,
@@ -204,12 +204,32 @@ async fn main() -> anyhow::Result<()> {
 					true => {
 						let id = plausible_site_id
 							.context("--plausible-site-id is needed for clickhouse")?;
-						import::clickhouse::import(&db, &site, &source, id).await?
+						let (count, first) =
+							import::clickhouse::import(&db, &site, &source, id).await?;
+						(count, "events", first)
 					}
-					false => bail!("plausible csv import comes next"),
+					false => {
+						let tz = jiff::tz::TimeZone::get(&site.timezone)?;
+						let before = jiff::Timestamp::from_second(site.created_at)?
+							.to_zoned(tz)
+							.date();
+						let range =
+							import::plausible::import(&db, &site, Path::new(&source), before)?;
+						let Some((first, last)) = range else {
+							bail!("no days before {before} in this export");
+						};
+						app.add_import(
+							site.id,
+							"plausible",
+							&first.to_string(),
+							&last.to_string(),
+						)?;
+						(first.until(last)?.get_days() as u64 + 1, "days", None)
+					}
 				},
 				ImportSource::Goatcounter { file, .. } => {
-					import::goatcounter::import(&db, &site, &file)?
+					let (count, first) = import::goatcounter::import(&db, &site, &file)?;
+					(count, "events", first)
 				}
 			};
 			db.sync()?;
@@ -220,7 +240,7 @@ async fn main() -> anyhow::Result<()> {
 			cli::say(
 				'+',
 				&format!(
-					"{count} events  |  {}  |  {:.1?}",
+					"{count} {unit}  |  {}  |  {:.1?}",
 					site.domain,
 					started.elapsed()
 				),

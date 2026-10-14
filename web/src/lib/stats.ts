@@ -25,7 +25,7 @@ export const PERIODS = [
 export type Period = (typeof PERIODS)[number]["key"];
 
 export function query(site: string, body: Record<string, unknown>) {
-	return api<Result>("/api/app/query", { site_id: site, ...body });
+	return api<Result>("/api/app/query", { site_id: site, include: { imports: true }, ...body });
 }
 
 export function today(timezone: string) {

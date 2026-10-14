@@ -23,7 +23,7 @@ pub struct Metrics {
 }
 
 impl Metrics {
-	pub(crate) fn merge(&mut self, other: &Metrics) {
+	pub fn merge(&mut self, other: &Metrics) {
 		self.visitors += other.visitors;
 		self.visits += other.visits;
 		self.pageviews += other.pageviews;

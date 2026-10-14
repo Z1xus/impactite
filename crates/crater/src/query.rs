@@ -68,6 +68,7 @@ pub struct Query {
 	pub breakdown: Option<Field>,
 	pub limit: usize,
 	pub daily: bool,
+	pub imports: bool,
 }
 
 #[derive(Debug, Clone, Default)]

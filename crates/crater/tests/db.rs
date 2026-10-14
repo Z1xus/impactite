@@ -82,6 +82,7 @@ fn query(db: &Db, filters: Vec<Filter>, breakdown: Option<Field>) -> std::io::Re
 		breakdown,
 		limit: 10,
 		daily: false,
+		imports: false,
 	})
 }
 
@@ -226,6 +227,7 @@ fn serves_today_live_and_after_restart() {
 		breakdown: None,
 		limit: 10,
 		daily: false,
+		imports: false,
 	};
 
 	let db = Db::open(&dir.0).unwrap();

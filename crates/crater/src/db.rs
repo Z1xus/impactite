@@ -11,7 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::cache::Cache;
 use crate::dict::Dict;
 use crate::event::Event;
-use crate::query::{Matcher, Query, Report, Slot};
+use crate::query::{Field, Matcher, Query, Report, Slot};
 use crate::rollup::{Counts, Metrics, Names};
 use crate::segment::{Columns, Dense, Segment};
 use crate::wal::Wal;
@@ -53,6 +53,7 @@ impl Db {
 			live: RwLock::default(),
 			cache: Mutex::new(Cache::new(CACHE)),
 			ranges: Mutex::new(Cache::new(CACHE)),
+			imports: Mutex::new(Cache::new(CACHE)),
 			versions: Mutex::default(),
 		});
 		let writer = Writer::open(shared.clone())?;
@@ -97,7 +98,8 @@ impl Db {
 		let plan = {
 			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
 			Plan {
-				shape: hash(&(&query.filters, &query.breakdown)),
+				shape: hash(&(&query.filters, &query.breakdown, query.imports)),
+				imports: query.imports && query.filters.is_empty(),
 				matchers: query
 					.filters
 					.iter()
@@ -149,6 +151,15 @@ impl Db {
 			days.push(counts.total);
 			for &(id, metrics) in plan.rows(&counts) {
 				live_rows.entry(id).or_default().merge(&metrics);
+			}
+			if let Some(imported) = self.imported((site, day), &plan)? {
+				total.merge(&imported.total);
+				if let Some(last) = days.last_mut() {
+					last.merge(&imported.total);
+				}
+				for &(id, metrics) in plan.rows(&imported) {
+					live_rows.entry(id).or_default().merge(&metrics);
+				}
 			}
 		}
 
@@ -205,6 +216,66 @@ impl Db {
 		})
 	}
 
+	pub fn import(
+		&self,
+		site: u64,
+		day: i32,
+		total: Metrics,
+		rows: &[(Field, String, Metrics)],
+	) -> io::Result<()> {
+		let dict = self.shared.dict(site)?;
+		let mut fields: HashMap<Slot, HashMap<u32, Metrics>> = HashMap::new();
+		{
+			let mut dict = dict.write().unwrap_or_else(PoisonError::into_inner);
+			for (field, value, metrics) in rows {
+				let slot = match field {
+					Field::Prop(key) => Slot::Prop(dict.id(key)),
+					field => Slot::resolve(field, &dict),
+				};
+				fields
+					.entry(slot)
+					.or_default()
+					.entry(dict.id(value))
+					.or_default()
+					.merge(metrics);
+			}
+			dict.flush()?;
+		}
+		let counts = Counts {
+			total,
+			fields: fields
+				.into_iter()
+				.map(|(slot, rows)| {
+					let mut rows: Vec<_> = rows.into_iter().collect();
+					sort_rows(&mut rows);
+					(slot, rows)
+				})
+				.collect(),
+			..Counts::empty()
+		};
+		let key = (site, day);
+		counts.write(&self.shared.path(key, "imp"))?;
+		lock(&self.shared.imports).insert(key, Some(Arc::new(counts)));
+		*lock(&self.shared.ranges) = Cache::new(CACHE);
+		Ok(())
+	}
+
+	fn imported(&self, key: Key, plan: &Plan) -> io::Result<Option<Arc<Counts>>> {
+		if !plan.imports {
+			return Ok(None);
+		}
+		if let Some(counts) = lock(&self.shared.imports).get(&key) {
+			return Ok(counts);
+		}
+		let counts = match Counts::read(&self.shared.path(key, "imp")) {
+			Ok(counts) => Some(Arc::new(counts)),
+			Err(err) if err.kind() == ErrorKind::NotFound => None,
+			Err(err) => return Err(err),
+		};
+		lock(&self.shared.imports).insert(key, counts.clone());
+		Ok(counts)
+	}
+
 	fn merged(&self, site: u64, days: &[i32], plan: &Plan) -> io::Result<Arc<Merged>> {
 		let id = hash(&(site, days, plan.shape));
 		if let Some(merged) = lock(&self.shared.ranges).get(&id) {
@@ -237,6 +308,15 @@ impl Db {
 			merged.days.push(counts.total);
 			for &(id, metrics) in plan.rows(&counts) {
 				rows.entry(id).or_default().merge(&metrics);
+			}
+			if let Some(imported) = self.imported((site, day), plan)? {
+				merged.total.merge(&imported.total);
+				if let Some(last) = merged.days.last_mut() {
+					last.merge(&imported.total);
+				}
+				for &(id, metrics) in plan.rows(&imported) {
+					rows.entry(id).or_default().merge(&metrics);
+				}
 			}
 		}
 		merged.rows = rows.into_iter().collect();
@@ -340,6 +420,7 @@ impl Db {
 
 struct Plan {
 	shape: u64,
+	imports: bool,
 	matchers: Vec<Matcher>,
 	names: Names,
 	slots: Vec<Slot>,
@@ -407,6 +488,7 @@ struct Shared {
 	live: RwLock<HashMap<Key, LiveView>>,
 	cache: Mutex<Cache<(Key, u64, bool), Arc<Counts>>>,
 	ranges: Mutex<Cache<u64, Arc<Merged>>>,
+	imports: Mutex<Cache<Key, Option<Arc<Counts>>>>,
 	versions: Mutex<HashMap<Key, u64>>,
 }
 
