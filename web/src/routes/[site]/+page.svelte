@@ -5,7 +5,6 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import { icon } from "#lib/icons/resolve.ts";
 	import calendar from "pixelarticons/svg/calendar.svg?raw";
-	import globe from "pixelarticons/svg/globe.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
@@ -51,6 +50,8 @@
 		"visit:os"
 	]);
 
+	const PAGES = new Set(["event:page", "visit:entry_page", "visit:exit_page"]);
+
 	const domain = $derived(page.params.site ?? "");
 	const site = $derived(
 		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
@@ -58,7 +59,8 @@
 	const sites = $derived(
 		(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
 			key: site.domain,
-			label: site.domain
+			label: site.domain,
+			glyph: icon("event:hostname", site.domain)
 		}))
 	);
 	const period = $derived((page.url.searchParams.get("period") ?? "30d") as Period);
@@ -202,6 +204,8 @@
 						key: value,
 						label,
 						value: row.metrics[0],
+						...(PAGES.has(dim) &&
+							value.startsWith("/") && { href: `https://${domain}${value}` }),
 						...(ICONIC.has(dim) && {
 							icon: icon(dim, value),
 							fallback: LETTERED.has(dim) ? label : undefined
@@ -233,13 +237,13 @@
 				value={domain}
 				options={sites}
 				data
-				icon={globe}
 				pick={(key) => goto(resolve("/[site]", { site: key }))}
 			/>
 			{#each filters as filter (encodeFilter(filter))}
 				<Chip
 					label={filter.dim.split(":").at(-1) ?? filter.dim}
 					value={display(filter.dim, filter.value)}
+					icon={ICONIC.has(filter.dim) ? icon(filter.dim, filter.value) : undefined}
 					remove={() => removeFilter(filter)}
 				/>
 			{/each}

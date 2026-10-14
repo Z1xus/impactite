@@ -2,10 +2,12 @@
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
 	import Chart from "#lib/dither/Chart.svelte";
+	import { icon } from "#lib/icons/resolve.ts";
 	import { currentTeam, refresh } from "#lib/session.svelte.ts";
 	import { compact, query, range } from "#lib/stats.ts";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
+	import Glyph from "#lib/ui/Glyph.svelte";
 	import Num from "#lib/ui/Num.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
@@ -48,8 +50,14 @@
 							href={resolve("/[site]", { site: site.domain })}
 							class="flex flex-col gap-5 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
 						>
-							<div class="flex items-baseline justify-between gap-4">
-								<span class="truncate text-fg">{site.domain}</span>
+							<div class="flex items-center justify-between gap-4">
+								<span class="flex min-w-0 items-center gap-2.5">
+									<Glyph
+										spec={icon("event:hostname", site.domain)}
+										fallback={site.domain}
+									/>
+									<span class="truncate text-fg">{site.domain}</span>
+								</span>
 								{#if values}
 									<Num
 										value={values.reduce((sum, value) => sum + value, 0)}

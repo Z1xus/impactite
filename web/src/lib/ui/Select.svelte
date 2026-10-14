@@ -1,5 +1,7 @@
 <script lang="ts" generics="T extends string | number">
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
+	import type { Spec } from "#lib/icons/resolve.ts";
+	import Glyph from "./Glyph.svelte";
 	import Icon from "./Icon.svelte";
 
 	let {
@@ -10,7 +12,7 @@
 		icon
 	}: {
 		value: T;
-		options: { key: T; label: string }[];
+		options: { key: T; label: string; glyph?: Spec | null }[];
 		pick: (key: T) => void;
 		data?: boolean;
 		icon?: string;
@@ -45,7 +47,9 @@
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
-		{#if icon}
+		{#if current?.glyph !== undefined}
+			<Glyph spec={current.glyph} fallback={current.label} />
+		{:else if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
 		{current?.label}
@@ -59,12 +63,15 @@
 				<li>
 					<button
 						type="button"
-						class="flex w-full cursor-pointer items-center px-3 py-2 text-left label {text} whitespace-nowrap transition-colors duration-75 hover:bg-line {option.key ===
+						class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left label {text} whitespace-nowrap transition-colors duration-75 hover:bg-line {option.key ===
 						value
 							? 'text-cyan'
 							: 'text-fg'}"
 						onclick={() => choose(option.key)}
 					>
+						{#if option.glyph !== undefined}
+							<Glyph spec={option.glyph} fallback={option.label} />
+						{/if}
 						{option.label}
 					</button>
 				</li>

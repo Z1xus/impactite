@@ -1,7 +1,9 @@
 <script lang="ts">
+	import external from "pixelarticons/svg/external-link.svg?raw";
 	import { flip } from "svelte/animate";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
+	import Icon from "./Icon.svelte";
 	import Num from "./Num.svelte";
 
 	let {
@@ -12,7 +14,14 @@
 		pick
 	}: {
 		rows:
-			| { key: string; label: string; value: number; icon?: Spec | null; fallback?: string }[]
+			| {
+					key: string;
+					label: string;
+					value: number;
+					icon?: Spec | null;
+					fallback?: string;
+					href?: string;
+			  }[]
 			| null;
 		loading?: boolean;
 		limit?: number;
@@ -34,31 +43,49 @@
 		<li class="flex h-8 items-center px-2 label">none</li>
 	{:else}
 		{#each rows.slice(0, limit) as row (row.key)}
-			<li animate:flip={{ duration: 200 }}>
+			<li
+				animate:flip={{ duration: 200 }}
+				class="group relative flex h-8 items-center gap-2.5 px-2"
+			>
 				<button
 					type="button"
-					class="group flex h-8 w-full items-center gap-2.5 rounded-px px-2 text-left enabled:cursor-pointer"
+					class="absolute inset-0 rounded-px enabled:cursor-pointer"
+					aria-label={row.label}
 					onclick={() => pick?.(row.key)}
 					disabled={!pick}
+				></button>
+				{#if row.icon !== undefined}
+					<Glyph spec={row.icon} fallback={row.fallback} />
+				{/if}
+				<span
+					class="pointer-events-none relative flex h-full min-w-0 flex-1 items-center justify-between gap-4"
 				>
-					{#if row.icon !== undefined}
-						<Glyph spec={row.icon} fallback={row.fallback} />
-					{/if}
 					<span
-						class="relative flex h-full min-w-0 flex-1 items-center justify-between gap-4"
-					>
-						<span
-							class="dither absolute inset-y-1 left-0 rounded-px transition-[width] duration-300 ease-out"
-							style:width="{(row.value / max) * 100}%"
-						></span>
-						<span class="relative truncate pl-2 text-[14px] text-fg">{row.label}</span>
-						<Num
-							value={row.value}
-							{format}
-							class="relative pr-2 text-label text-dim group-hover:text-fg"
-						/>
+						class="dither absolute inset-y-1 left-0 rounded-px transition-[width] duration-300 ease-out"
+						style:width="{(row.value / max) * 100}%"
+					></span>
+					<span class="relative flex min-w-0 items-center gap-1.5 pl-2">
+						<span class="truncate text-[14px] text-fg">{row.label}</span>
+						{#if row.href}
+							<!-- eslint-disable svelte/no-navigation-without-resolve -- external page -->
+							<a
+								href={row.href}
+								target="_blank"
+								rel="noopener noreferrer"
+								aria-label="open {row.label}"
+								class="pointer-events-auto grid h-5 w-5 shrink-0 cursor-pointer place-items-center text-dim opacity-0 transition-opacity duration-100 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100"
+							>
+								<Icon svg={external} size={12} />
+							</a>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+						{/if}
 					</span>
-				</button>
+					<Num
+						value={row.value}
+						{format}
+						class="relative pr-2 text-label text-dim group-hover:text-fg"
+					/>
+				</span>
 			</li>
 		{/each}
 	{/if}
