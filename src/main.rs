@@ -1,5 +1,6 @@
 mod accounts;
 mod app;
+mod assets;
 mod demo;
 mod geo;
 mod icons;

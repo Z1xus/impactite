@@ -168,7 +168,7 @@ const CHANNELS: Record<string, Spec> = {
 };
 
 const flags = import.meta.glob("../../../node_modules/flag-icons/flags/4x3/*.svg", {
-	query: "?url",
+	query: "?url&no-inline",
 	import: "default",
 	eager: true
 }) as Record<string, string>;

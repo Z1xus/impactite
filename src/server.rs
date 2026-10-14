@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
 use crate::accounts::{self, Web};
+use crate::assets;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::passkeys;
@@ -31,6 +32,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/api/app/icon/{host}", get(icons::icon))
 				.with_state(web),
 		)
+		.fallback(assets::serve)
 }
 
 async fn preflight() -> Response {
