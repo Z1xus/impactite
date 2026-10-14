@@ -9,9 +9,10 @@ use crate::frame::{self, invalid};
 use crate::query::{MISSING, Matcher, Slot};
 use crate::segment::Columns;
 
-const MAGIC: &[u8; 5] = b"CRRU\x03";
-// v2 had no page metrics, imported days still use it
-const LEGACY: &[u8; 5] = b"CRRU\x02";
+const MAGIC: &[u8; 5] = b"CRRU\x04";
+// older versions and how many metrics they stored, imported days still use them
+const LEGACY: [(&[u8; 5], usize); 2] = [(b"CRRU\x03", 11), (b"CRRU\x02", 6)];
+const FIELDS: usize = 12;
 const PROP_KEYS: usize = 64;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -27,6 +28,7 @@ pub struct Metrics {
 	pub engaged_views: u64,
 	pub scroll: u64,
 	pub scrolled: u64,
+	pub revenue: u64,
 }
 
 impl Metrics {
@@ -42,6 +44,7 @@ impl Metrics {
 		self.engaged_views += other.engaged_views;
 		self.scroll += other.scroll;
 		self.scrolled += other.scrolled;
+		self.revenue += other.revenue;
 	}
 
 	fn engage(&mut self, (ms, scroll): (u64, u32)) {
@@ -72,29 +75,45 @@ impl Metrics {
 			self.engaged_views,
 			self.scroll,
 			self.scrolled,
+			self.revenue,
 		] {
 			put_uvar(buf, value);
 		}
 	}
 
-	fn read(r: &mut Reader, legacy: bool) -> Option<Self> {
-		let mut metrics = Self {
-			visitors: r.uvar()?,
-			visits: r.uvar()?,
-			pageviews: r.uvar()?,
-			events: r.uvar()?,
-			bounces: r.uvar()?,
-			duration: r.uvar()?,
-			..Self::default()
-		};
-		if !legacy {
-			metrics.exits = r.uvar()?;
-			metrics.engaged = r.uvar()?;
-			metrics.engaged_views = r.uvar()?;
-			metrics.scroll = r.uvar()?;
-			metrics.scrolled = r.uvar()?;
+	fn read(r: &mut Reader, fields: usize) -> Option<Self> {
+		let mut values = [0; FIELDS];
+		for value in values.iter_mut().take(fields) {
+			*value = r.uvar()?;
 		}
-		Some(metrics)
+		let [
+			visitors,
+			visits,
+			pageviews,
+			events,
+			bounces,
+			duration,
+			exits,
+			engaged,
+			engaged_views,
+			scroll,
+			scrolled,
+			revenue,
+		] = values;
+		Some(Self {
+			visitors,
+			visits,
+			pageviews,
+			events,
+			bounces,
+			duration,
+			exits,
+			engaged,
+			engaged_views,
+			scroll,
+			scrolled,
+			revenue,
+		})
 	}
 }
 
@@ -125,6 +144,7 @@ struct Visit {
 	selected: bool,
 	hit_pageviews: u64,
 	hit_events: u64,
+	hit_revenue: u64,
 }
 
 impl Visit {
@@ -183,6 +203,8 @@ impl Scan<'_> {
 		match slot {
 			Slot::Dim(dim) => self.parts[p].dims[dim as usize][row],
 			Slot::Prop(key) => self.prop(p, row, key),
+			Slot::Scroll => self.parts[p].scroll[row],
+			Slot::Currency => self.parts[p].currency[row],
 			Slot::Entry | Slot::Exit => MISSING,
 		}
 	}
@@ -273,6 +295,7 @@ impl Counts {
 				selected: false,
 				hit_pageviews: 0,
 				hit_events: 0,
+				hit_revenue: 0,
 			};
 			sessions
 		];
@@ -309,9 +332,11 @@ impl Counts {
 					.all(|m| m.matches(scan.visit_value(m.slot, visit)));
 		}
 
+		// a scroll filter can only match engagement events, which carry the depth
+		let scrolling = event_filters.iter().any(|m| m.slot == Slot::Scroll);
 		let is_hit = |visits: &[Visit], p: usize, row: usize| {
 			visits[parts[p].session[row] as usize].selected
-				&& !scan.is_engagement(p, row)
+				&& scan.is_engagement(p, row) == scrolling
 				&& event_filters
 					.iter()
 					.all(|m| m.matches(scan.event_value(m.slot, p, row)))
@@ -327,10 +352,13 @@ impl Counts {
 			let pageview = u64::from(scan.is_pageview(p, row));
 			let hour = (part.time[row] / 3600) as usize;
 			let visit = &mut visits[part.session[row] as usize];
+			let revenue = u64::from(part.revenue[row]);
 			visit.hit_events += 1;
 			visit.hit_pageviews += pageview;
+			visit.hit_revenue += revenue;
 			hours[hour].events += 1;
 			hours[hour].pageviews += pageview;
+			hours[hour].revenue += revenue;
 			if let Some(since) = since {
 				minutes[((part.time[row] - since) / 60) as usize] += pageview;
 			}
@@ -345,6 +373,7 @@ impl Counts {
 			total.add_visit(visit);
 			total.pageviews += visit.hit_pageviews;
 			total.events += visit.hit_events;
+			total.revenue += visit.hit_revenue;
 			hours[(visit.start / 3600) as usize].add_visit(visit);
 		}
 		for mask in visitor_hours.into_iter().filter(|&mask| mask != 0) {
@@ -389,6 +418,7 @@ impl Counts {
 								scan.event_value(slot, p, row),
 								session,
 								scan.is_pageview(p, row),
+								parts[p].revenue[row],
 							)
 						})
 						.filter(|hit| hit.0 != MISSING)
@@ -457,6 +487,8 @@ impl Counts {
 						buf.push(3);
 						put_uvar(buf, key.into());
 					}
+					Slot::Scroll => buf.push(4),
+					Slot::Currency => buf.push(5),
 				}
 				put_uvar(buf, entries.len() as u64);
 				for (id, metrics) in entries {
@@ -472,21 +504,24 @@ impl Counts {
 		let frames = frame::read_file(path, MAGIC, 1)?;
 		frames
 			.first()
-			.and_then(|buf| decode(buf, false))
+			.and_then(|buf| decode(buf, FIELDS))
 			.ok_or_else(|| invalid("bad rollup"))
 	}
 
 	pub(crate) fn read_any(path: &Path) -> io::Result<Self> {
-		match Self::read(path) {
-			Err(err) if err.kind() == io::ErrorKind::InvalidData => {
-				let frames = frame::read_file(path, LEGACY, 1)?;
-				frames
-					.first()
-					.and_then(|buf| decode(buf, true))
-					.ok_or_else(|| invalid("bad rollup"))
-			}
-			read => read,
+		let mut read = Self::read(path);
+		for (magic, fields) in LEGACY {
+			read = match read {
+				Err(err) if err.kind() == io::ErrorKind::InvalidData => {
+					frame::read_file(path, magic, 1)?
+						.first()
+						.and_then(|buf| decode(buf, fields))
+						.ok_or_else(|| invalid("bad rollup"))
+				}
+				read => return read,
+			};
 		}
+		read
 	}
 }
 
@@ -500,6 +535,7 @@ fn visit_breakdown(mut pairs: Vec<(u32, &Visit)>) -> Vec<(u32, Metrics)> {
 				metrics.add_visit(visit);
 				metrics.pageviews += visit.hit_pageviews;
 				metrics.events += visit.hit_events;
+				metrics.revenue += visit.hit_revenue;
 			}
 			metrics.visitors = group.chunk_by(|a, b| a.1.visitor == b.1.visitor).count() as u64;
 			(group[0].0, metrics)
@@ -507,13 +543,14 @@ fn visit_breakdown(mut pairs: Vec<(u32, &Visit)>) -> Vec<(u32, Metrics)> {
 		.collect()
 }
 
-fn event_breakdown(mut hits: Vec<(u32, u32, bool)>, visits: &[Visit]) -> Vec<(u32, Metrics)> {
+fn event_breakdown(mut hits: Vec<(u32, u32, bool, u32)>, visits: &[Visit]) -> Vec<(u32, Metrics)> {
 	hits.sort_unstable();
 	hits.chunk_by(|a, b| a.0 == b.0)
 		.map(|group| {
 			let mut metrics = Metrics {
 				events: group.len() as u64,
 				pageviews: group.iter().filter(|hit| hit.2).count() as u64,
+				revenue: group.iter().map(|hit| u64::from(hit.3)).sum(),
 				..Metrics::default()
 			};
 			let mut visitors = Vec::new();
@@ -530,13 +567,13 @@ fn event_breakdown(mut hits: Vec<(u32, u32, bool)>, visits: &[Visit]) -> Vec<(u3
 		.collect()
 }
 
-fn decode(buf: &[u8], legacy: bool) -> Option<Counts> {
+fn decode(buf: &[u8], width: usize) -> Option<Counts> {
 	let mut r = Reader::new(buf);
 	let seq = r.uvar()?;
-	let total = Metrics::read(&mut r, legacy)?;
+	let total = Metrics::read(&mut r, width)?;
 	let mut hours = [Metrics::default(); 24];
 	for hour in &mut hours {
-		*hour = Metrics::read(&mut r, legacy)?;
+		*hour = Metrics::read(&mut r, width)?;
 	}
 	let mut fields = HashMap::new();
 	for _ in 0..r.uvar()? {
@@ -545,13 +582,15 @@ fn decode(buf: &[u8], legacy: bool) -> Option<Counts> {
 			1 => Slot::Entry,
 			2 => Slot::Exit,
 			3 => Slot::Prop(u32::try_from(r.uvar()?).ok()?),
+			4 => Slot::Scroll,
+			5 => Slot::Currency,
 			_ => return None,
 		};
 		let entries = (0..r.uvar()?)
 			.map(|_| {
 				Some((
 					u32::try_from(r.uvar()?).ok()?,
-					Metrics::read(&mut r, legacy)?,
+					Metrics::read(&mut r, width)?,
 				))
 			})
 			.collect::<Option<Vec<_>>>()?;

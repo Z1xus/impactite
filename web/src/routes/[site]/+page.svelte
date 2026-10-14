@@ -209,6 +209,7 @@
 		}
 	];
 	let goals = $state<string[]>([]);
+	let revenue = $state(false);
 	let propKeys = $state<string[]>([]);
 	let propKey = $state("");
 	const panels = $derived([
@@ -232,8 +233,11 @@
 	});
 
 	$effect(() => {
-		api<{ goals: { name: string }[] }>(`/api/app/sites/${domain}/goals`)
-			.then((result) => (goals = result.goals.map((goal) => goal.name)))
+		api<{ goals: { name: string; currency: string }[] }>(`/api/app/sites/${domain}/goals`)
+			.then((result) => {
+				goals = result.goals.map((goal) => goal.name);
+				revenue = result.goals.some((goal) => goal.currency);
+			})
 			.catch(() => (goals = []));
 	});
 
@@ -549,6 +553,7 @@
 			filters={toQueryFilters(filters)}
 			imports={withImports}
 			{converting}
+			{revenue}
 			iconic={ICONIC.has(details.dim)}
 			pick={(value) => {
 				const dim = details?.dim ?? "";

@@ -16,7 +16,8 @@ const COLUMNS: &str = "toUnixTimestamp(timestamp) AS ts, name, user_id, session_
 	referrer, referrer_source, utm_medium, utm_source, utm_campaign, utm_content, utm_term, \
 	acquisition_channel, country_code, subdivision1_code, screen_size, browser, browser_version, \
 	operating_system, operating_system_version, `meta.key` AS keys, `meta.value` AS values, \
-	scroll_depth, engagement_time";
+	scroll_depth, engagement_time, revenue_reporting_amount AS revenue, \
+	revenue_reporting_currency AS currency";
 
 #[derive(Deserialize)]
 struct Row {
@@ -46,6 +47,8 @@ struct Row {
 	interactive: u8,
 	scroll_depth: u8,
 	engagement_time: u32,
+	revenue: Option<f64>,
+	currency: String,
 }
 
 pub async fn import(
@@ -119,6 +122,12 @@ fn event(site: u64, tz: &TimeZone, row: Row) -> anyhow::Result<Event> {
 		scroll_depth: (row.scroll_depth <= 100).then_some(row.scroll_depth),
 		engagement_ms: row.engagement_time,
 		props: row.keys.into_iter().zip(row.values).collect(),
+		revenue: row.revenue.filter(|amount| *amount > 0.0).map(|amount| {
+			(
+				(amount * 100.0).round() as u32,
+				row.currency.trim_matches('\0').to_owned(),
+			)
+		}),
 		..Event::default()
 	};
 	for (dim, value) in [

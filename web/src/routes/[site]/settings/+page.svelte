@@ -6,6 +6,8 @@
 	import { goto } from "$app/navigation";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import Snippet from "#lib/Snippet.svelte";
+	import Button from "#lib/ui/Button.svelte";
+	import Dialog from "#lib/ui/Dialog.svelte";
 	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
@@ -21,7 +23,14 @@
 	import Upload from "#lib/ui/Upload.svelte";
 	import { ZONES } from "#lib/zones.ts";
 
-	type Goal = { id: number; page: boolean; value: string; name: string };
+	type Goal = {
+		id: number;
+		page: boolean;
+		value: string;
+		name: string;
+		scroll: number;
+		currency: string;
+	};
 	type Import = { id: number; source: string; first: string; last: string };
 	type People = {
 		guests: { id: number; name: string; email: string; role: string }[];
@@ -35,8 +44,14 @@
 
 	let goals = $state<Goal[] | null>(null);
 	let imports = $state<Import[] | null>(null);
-	let kind = $state<"event" | "page">("event");
+	let kind = $state<"event" | "page" | "revenue">("event");
 	let value = $state("");
+	let goalName = $state("");
+	let scroll = $state("");
+	let currency = $state("EUR");
+	let adding = $state(false);
+	let renaming = $state<Goal | null>(null);
+	let newName = $state("");
 	let source = $state<"impactite" | "plausible" | "goatcounter">("impactite");
 	let file = $state<File | null>(null);
 	let imported = $state("");
@@ -133,10 +148,26 @@
 		goals = (
 			await api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`, {
 				page: kind === "page",
-				value
+				value,
+				name: goalName,
+				scroll: kind === "page" ? Number(scroll) || 0 : 0,
+				currency: kind === "revenue" ? currency : ""
 			})
 		).goals;
-		value = "";
+		value = goalName = scroll = "";
+		adding = false;
+	}
+
+	async function renameGoal() {
+		if (!renaming) return;
+		goals = (
+			await api<{ goals: Goal[] }>(
+				`/api/app/sites/${domain}/goals/${renaming.id}`,
+				{ name: newName },
+				"PATCH"
+			)
+		).goals;
+		renaming = null;
 	}
 
 	const removeGoal = (id: string | number) =>
@@ -205,6 +236,61 @@
 	]);
 </script>
 
+<Dialog title="add goal" bind:open={adding}>
+	<Form action="add goal" submit={addGoal}>
+		<Toggle
+			label="kind"
+			bind:value={kind}
+			options={[
+				{ key: "event", label: "event" },
+				{ key: "page", label: "page" },
+				{ key: "revenue", label: "revenue" }
+			]}
+		/>
+		<div class="grid gap-4 sm:grid-cols-2">
+			<Field
+				label={kind === "page" ? "path" : "event name"}
+				placeholder={kind === "page" ? "/pricing" : "Signup"}
+				bind:value
+				required
+			/>
+			{#if kind === "page"}
+				<Field
+					label="scrolled at least"
+					type="number"
+					min="0"
+					max="100"
+					placeholder="0 for any visit"
+					bind:value={scroll}
+				/>
+			{:else if kind === "revenue"}
+				<Field
+					label="currency"
+					placeholder="EUR"
+					maxlength={3}
+					bind:value={currency}
+					required
+				/>
+			{/if}
+		</div>
+		<Field label="display name" placeholder="optional" bind:value={goalName} />
+	</Form>
+</Dialog>
+
+<Dialog
+	title="rename goal"
+	bind:open={
+		() => renaming !== null,
+		(open) => {
+			if (!open) renaming = null;
+		}
+	}
+>
+	<Form action="rename" submit={renameGoal}>
+		<Field label="name" bind:value={newName} required />
+	</Form>
+</Dialog>
+
 <Shell>
 	{#if site}
 		<Settings {sections}>
@@ -241,29 +327,36 @@
 			</Section>
 
 			<Section id="goals" label="goals">
+				{#snippet actions()}
+					<Button variant="quiet" onclick={() => (adding = true)}>add goal</Button>
+				{/snippet}
 				<List
 					items={goals?.map((goal) => ({
 						key: goal.id,
 						title: goal.name,
-						meta: [goal.page ? "page" : "event"]
+						meta: [
+							goal.currency
+								? `revenue in ${goal.currency}`
+								: goal.page
+									? "page"
+									: "event",
+							...(goal.value !== goal.name ? [goal.value] : []),
+							...(goal.scroll ? [`scrolled ${goal.scroll}%`] : [])
+						]
 					})) ?? null}
 					remove={removeGoal}
-				/>
-				<Form action="add goal" submit={addGoal} inline>
-					<Field
-						label={kind === "page" ? "path" : "event name"}
-						placeholder={kind === "page" ? "/pricing" : "Signup"}
-						bind:value
-						required
-					/>
-					<Toggle
-						bind:value={kind}
-						options={[
-							{ key: "event", label: "event" },
-							{ key: "page", label: "page" }
-						]}
-					/>
-				</Form>
+				>
+					{#snippet control(key)}
+						{@const goal = goals?.find((goal) => goal.id === key)}
+						{#if goal}
+							<Button
+								variant="plain"
+								onclick={() => ((newName = goal.name), (renaming = goal))}
+								>rename</Button
+							>
+						{/if}
+					{/snippet}
+				</List>
 			</Section>
 
 			{#if segments?.length}

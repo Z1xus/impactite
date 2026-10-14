@@ -30,6 +30,8 @@ struct Payload {
 	h: Option<Value>,
 	sd: Option<Value>,
 	e: Option<Value>,
+	#[serde(rename = "$", alias = "revenue")]
+	revenue: Option<Value>,
 }
 
 pub async fn event(
@@ -75,6 +77,10 @@ pub async fn event(
 	{
 		path = format!("{path}#{fragment}");
 	}
+	let revenue = match revenue(payload.revenue.as_ref()) {
+		Ok(revenue) => revenue,
+		Err(message) => return invalid("revenue", message),
+	};
 	let engagement = name == "engagement";
 	let hit = || Hit {
 		name: name.clone(),
@@ -91,6 +97,7 @@ pub async fn event(
 			.then(|| number(payload.e.as_ref()).filter(|&ms| ms < 2_592_000_000))
 			.flatten()
 			.unwrap_or_default() as u32,
+		revenue: revenue.clone(),
 	};
 
 	let ua = headers
@@ -148,6 +155,28 @@ fn props(raw: Option<Value>) -> Result<Vec<(String, String)>, &'static str> {
 		props.push((key, value));
 	}
 	Ok(props)
+}
+
+// amount in hundredths of a three letter currency
+fn revenue(value: Option<&Value>) -> Result<Option<(u32, String)>, &'static str> {
+	let Some(value) = value.filter(|value| !value.is_null()) else {
+		return Ok(None);
+	};
+	let amount = match &value["amount"] {
+		Value::Number(number) => number.as_f64(),
+		Value::String(text) => text.parse().ok(),
+		_ => None,
+	}
+	.filter(|amount: &f64| amount.is_finite() && *amount >= 0.0)
+	.ok_or("amount must be a positive number")?;
+	let currency = value["currency"]
+		.as_str()
+		.filter(|code| code.len() == 3 && code.chars().all(|c| c.is_ascii_alphabetic()))
+		.ok_or("currency must be a 3 letter code")?;
+	Ok(Some((
+		(amount * 100.0).round().min(f64::from(u32::MAX)) as u32,
+		currency.to_uppercase(),
+	)))
 }
 
 fn number(value: Option<&Value>) -> Option<u64> {

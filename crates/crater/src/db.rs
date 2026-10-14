@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::cache::Cache;
 use crate::dict::Dict;
 use crate::event::{Dim, Event};
-use crate::query::{Field, Matcher, Query, Report, Slot};
+use crate::query::{Field, MISSING, Matcher, Query, Report, Slot};
 use crate::rollup::{Counts, Metrics, Names};
 use crate::segment::{Columns, Dense, Segment};
 use crate::wal::Wal;
@@ -313,6 +313,8 @@ impl Db {
 						interactive: part.interactive[row] == 1,
 						scroll_depth: part.scroll[row].checked_sub(1).map(|depth| depth as u8),
 						engagement_ms: part.engagement[row],
+						revenue: (part.currency[row] != MISSING)
+							.then(|| (part.revenue[row], text(part.currency[row]))),
 						..Event::default()
 					};
 					for dim in Dim::ALL {

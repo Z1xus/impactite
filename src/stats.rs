@@ -88,6 +88,8 @@ enum Metric {
 	TimeOnPage,
 	ScrollDepth,
 	ExitRate,
+	TotalRevenue,
+	AverageRevenue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -610,6 +612,9 @@ fn value(metric: Metric, metrics: &Metrics, base: u64) -> Value {
 			views => json!((metrics.scroll as f64 / views as f64).round() as u64),
 		},
 		Metric::ExitRate => json!((ratio(metrics.exits, metrics.visits) * 1000.0).round() / 10.0),
+		Metric::TotalRevenue | Metric::AverageRevenue if metrics.revenue == 0 => Value::Null,
+		Metric::TotalRevenue => json!(metrics.revenue as f64 / 100.0),
+		Metric::AverageRevenue => json!((ratio(metrics.revenue, metrics.events)).round() / 100.0),
 	}
 }
 
@@ -627,6 +632,8 @@ fn metric(name: &str) -> Option<Metric> {
 		"time_on_page" => Metric::TimeOnPage,
 		"scroll_depth" => Metric::ScrollDepth,
 		"exit_rate" => Metric::ExitRate,
+		"total_revenue" => Metric::TotalRevenue,
+		"average_revenue" => Metric::AverageRevenue,
 		_ => return None,
 	})
 }

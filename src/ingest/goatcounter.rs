@@ -67,6 +67,7 @@ pub async fn count(
 			.collect(),
 		referrer: param("r").to_owned(),
 		props: Vec::new(),
+		revenue: None,
 		interactive: true,
 		scroll_depth: None,
 		engagement_ms: 0,

@@ -391,7 +391,7 @@ fn native(db: &Db, site: &Site, goals: &[Goal], from: Date, to: Date) -> anyhow:
 			"version": 1,
 			"domain": site.domain,
 			"timezone": site.timezone,
-			"goals": goals.iter().map(|goal| json!({ "page": goal.page, "value": goal.value })).collect::<Vec<_>>(),
+			"goals": goals.iter().map(|goal| json!({ "page": goal.page, "value": goal.value, "name": goal.name, "scroll": goal.scroll, "currency": goal.currency })).collect::<Vec<_>>(),
 		}),
 	)?;
 	zip.start_file("events.ndjson", SimpleFileOptions::default())?;
@@ -417,6 +417,9 @@ fn native(db: &Db, site: &Site, goals: &[Goal], from: Date, to: Date) -> anyhow:
 			if !event.dims[dim].is_empty() {
 				line.insert(dim.name().into(), json!(event.dims[dim]));
 			}
+		}
+		if let Some((amount, currency)) = &event.revenue {
+			line.insert("r".into(), json!([amount, currency]));
 		}
 		if !event.props.is_empty() {
 			let props: Map<String, Value> = event

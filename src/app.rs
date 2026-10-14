@@ -146,6 +146,23 @@ const MIGRATIONS: &[&str] = &[
 		primary key (user, key)
 	);
 	",
+	"
+	create table goals_next (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		page integer not null,
+		value text not null,
+		name text not null,
+		scroll integer not null default 0,
+		currency text not null default '',
+		created_at integer not null,
+		unique (site, page, value, scroll)
+	);
+	insert into goals_next (id, site, page, value, name, created_at)
+	select id, site, page, value, name, created_at from goals;
+	drop table goals;
+	alter table goals_next rename to goals;
+	",
 ];
 
 #[derive(Debug, Clone)]

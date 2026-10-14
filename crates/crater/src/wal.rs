@@ -69,6 +69,12 @@ fn encode(buf: &mut Vec<u8>, event: &Event) {
 		put_str(buf, key);
 		put_str(buf, value);
 	}
+
+	// appended later, older frames end before it
+	if let Some((amount, currency)) = &event.revenue {
+		put_uvar(buf, (*amount).into());
+		put_str(buf, currency);
+	}
 }
 
 fn decode(buf: &[u8]) -> Option<Event> {
@@ -98,6 +104,10 @@ fn decode(buf: &[u8]) -> Option<Event> {
 
 	for _ in 0..r.uvar()? {
 		event.props.push((r.str()?, r.str()?));
+	}
+
+	if !r.is_empty() {
+		event.revenue = Some((u32::try_from(r.uvar()?).ok()?, r.str()?));
 	}
 
 	r.is_empty().then_some(event)

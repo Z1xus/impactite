@@ -14,6 +14,9 @@ pub enum Field {
 	Entry,
 	Exit,
 	Prop(String),
+	// scroll depth of at least the first value, matched on engagement events
+	Scroll,
+	Currency,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,6 +25,8 @@ pub(crate) enum Slot {
 	Entry,
 	Exit,
 	Prop(u32),
+	Scroll,
+	Currency,
 }
 
 impl Slot {
@@ -31,13 +36,15 @@ impl Slot {
 			Field::Entry => Slot::Entry,
 			Field::Exit => Slot::Exit,
 			Field::Prop(key) => Slot::Prop(dict.find(key).unwrap_or(MISSING)),
+			Field::Scroll => Slot::Scroll,
+			Field::Currency => Slot::Currency,
 		}
 	}
 
 	pub(crate) fn is_event(self) -> bool {
 		match self {
 			Slot::Dim(dim) => dim.is_event(),
-			Slot::Prop(_) => true,
+			Slot::Prop(_) | Slot::Scroll | Slot::Currency => true,
 			Slot::Entry | Slot::Exit => false,
 		}
 	}
@@ -87,6 +94,7 @@ pub(crate) struct Matcher {
 	pub(crate) slot: Slot,
 	ids: HashSet<u32>,
 	negate: bool,
+	min: Option<u32>,
 }
 
 impl Matcher {
@@ -107,11 +115,19 @@ impl Matcher {
 			slot: Slot::resolve(&filter.field, dict),
 			ids,
 			negate: matches!(filter.op, Op::IsNot | Op::ContainsNot | Op::MatchesNot),
+			min: match filter.field {
+				Field::Scroll => filter.values.first().and_then(|value| value.parse().ok()),
+				_ => None,
+			},
 		}
 	}
 
 	pub(crate) fn matches(&self, id: u32) -> bool {
-		self.ids.contains(&id) != self.negate
+		match self.min {
+			// scroll is stored as depth + 1
+			Some(min) => (id > min) != self.negate,
+			None => self.ids.contains(&id) != self.negate,
+		}
 	}
 }
 

@@ -34,6 +34,7 @@ pub struct Hit {
 	pub interactive: bool,
 	pub scroll_depth: Option<u8>,
 	pub engagement_ms: u32,
+	pub revenue: Option<(u32, String)>,
 }
 
 pub struct Client<'a> {
@@ -172,6 +173,7 @@ impl Ingest {
 			interactive: hit.interactive,
 			scroll_depth: hit.scroll_depth,
 			engagement_ms: hit.engagement_ms,
+			revenue: hit.revenue.clone(),
 			..Event::default()
 		};
 		for (dim, value) in [

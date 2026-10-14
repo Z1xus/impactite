@@ -26,7 +26,10 @@ pub fn import(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<(u
 			false => value.to_owned(),
 		};
 		// goals that already exist are kept as they are
-		let _ = app.add_goal(site.id, page, value, &name);
+		let scroll = goal["scroll"].as_u64().unwrap_or(0) as u32;
+		let currency = goal["currency"].as_str().unwrap_or_default();
+		let name = goal["name"].as_str().map_or(name, str::to_owned);
+		let _ = app.add_goal(site.id, page, value, &name, scroll, currency);
 	}
 	let source = meta["timezone"]
 		.as_str()
@@ -60,6 +63,18 @@ pub fn import(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<(u
 				.flatten()
 				.map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_owned()))
 				.collect(),
+			revenue: match line.get("r") {
+				Some(Value::Array(pair)) => Some((
+					pair.first()
+						.and_then(Value::as_u64)
+						.context("bad revenue")? as u32,
+					pair.get(1)
+						.and_then(Value::as_str)
+						.unwrap_or_default()
+						.to_owned(),
+				)),
+				_ => None,
+			},
 			..Event::default()
 		};
 		for dim in Dim::ALL {

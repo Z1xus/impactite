@@ -107,6 +107,8 @@ pub struct Event {
 	pub scroll_depth: Option<u8>,
 	pub engagement_ms: u32,
 	pub props: Vec<(String, String)>,
+	// hundredths of the currency unit
+	pub revenue: Option<(u32, String)>,
 }
 
 impl Event {

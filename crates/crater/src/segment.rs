@@ -6,6 +6,7 @@ use crate::codec::{Reader, put_packed, put_uvar};
 use crate::dict::Dict;
 use crate::event::{Dim, Event};
 use crate::frame::{self, invalid};
+use crate::query::MISSING;
 
 const MAGIC: &[u8; 5] = b"CRSG\x01";
 
@@ -22,6 +23,9 @@ pub(crate) struct Columns {
 	pub(crate) props: Vec<u32>,
 	pub(crate) keys: Vec<u32>,
 	pub(crate) values: Vec<u32>,
+	pub(crate) revenue: Vec<u32>,
+	// dict ids, MISSING without revenue
+	pub(crate) currency: Vec<u32>,
 }
 
 impl Columns {
@@ -37,6 +41,8 @@ impl Columns {
 			props: Vec::new(),
 			keys: Vec::new(),
 			values: Vec::new(),
+			revenue: Vec::new(),
+			currency: Vec::new(),
 		}
 	}
 
@@ -56,6 +62,12 @@ impl Columns {
 		for dim in Dim::ALL {
 			self.dims[dim as usize].push(dict.id(&event.dims[dim]));
 		}
+		let (amount, currency) = match &event.revenue {
+			Some((amount, currency)) => (*amount, dict.id(currency)),
+			None => (0, MISSING),
+		};
+		self.revenue.push(amount);
+		self.currency.push(currency);
 		self.props.push(event.props.len() as u32);
 		for (key, value) in &event.props {
 			self.keys.push(dict.id(key));
@@ -78,6 +90,8 @@ impl Columns {
 			all.props.extend(&part.props);
 			all.keys.extend(&part.keys);
 			all.values.extend(&part.values);
+			all.revenue.extend(&part.revenue);
+			all.currency.extend(&part.currency);
 		}
 		all
 	}
@@ -91,6 +105,8 @@ impl Columns {
 			&self.scroll,
 			&self.engagement,
 			&self.props,
+			&self.revenue,
+			&self.currency,
 		];
 		columns
 			.into_iter()
@@ -180,6 +196,8 @@ impl Segment {
 			for column in cols.dims.iter().chain([&cols.keys, &cols.values]) {
 				put_strings(buf, column);
 			}
+			put_packed(buf, &cols.revenue);
+			put_packed(buf, &cols.currency);
 		});
 		frame::write_file(path, MAGIC, &buf)
 	}
@@ -220,7 +238,7 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 	let mut ids = || -> Option<Vec<u64>> { (0..r.uvar()?).map(|_| r.u64()).collect() };
 	let visitors = ids()?;
 	let sessions = ids()?;
-	let cols = Columns {
+	let mut cols = Columns {
 		time: r.packed()?,
 		visitor: r.packed()?,
 		session: r.packed()?,
@@ -233,7 +251,20 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 			.collect::<Option<_>>()?,
 		keys: strings(&mut r)?,
 		values: strings(&mut r)?,
+		revenue: Vec::new(),
+		currency: Vec::new(),
 	};
+	// segments written before revenue end here
+	match r.is_empty() {
+		true => {
+			cols.revenue = vec![0; cols.rows()];
+			cols.currency = vec![MISSING; cols.rows()];
+		}
+		false => {
+			cols.revenue = r.packed()?;
+			cols.currency = r.packed()?;
+		}
+	}
 	r.is_empty().then_some(Segment {
 		seq,
 		visitors,

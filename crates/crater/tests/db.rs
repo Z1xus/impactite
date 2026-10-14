@@ -49,6 +49,7 @@ fn day() -> Vec<Event> {
 		{
 			let mut signup = event(3, 10, 7400, "Signup", "/a", "Twitter");
 			signup.props.push(("plan".into(), "pro".into()));
+			signup.revenue = Some((4999, "EUR".into()));
 			signup
 		},
 		event(4, 30, 10_900, "pageview", "/b", ""),
@@ -87,6 +88,7 @@ fn core(metrics: Metrics) -> Metrics {
 		engaged_views: 0,
 		scroll: 0,
 		scrolled: 0,
+		revenue: 0,
 		..metrics
 	}
 }
@@ -189,6 +191,31 @@ fn filters() {
 		core(query(&db, google, None).unwrap().total),
 		metrics(1, 1, 2, 2, 0, 100)
 	);
+
+	let scrolled = |min: &str| {
+		let filters = vec![
+			filter(Dim::Page, Op::Is, "/b"),
+			Filter {
+				field: Field::Scroll,
+				op: Op::Is,
+				values: vec![min.into()],
+			},
+		];
+		query(&db, filters, None).unwrap().total.visitors
+	};
+	assert_eq!((scrolled("50"), scrolled("70")), (1, 0));
+
+	let paid = |currency: &str| {
+		let filters = vec![Filter {
+			field: Field::Currency,
+			op: Op::Is,
+			values: vec![currency.into()],
+		}];
+		query(&db, filters, None).unwrap().total
+	};
+	assert_eq!(query(&db, Vec::new(), None).unwrap().total.revenue, 4999);
+	assert_eq!((paid("EUR").visitors, paid("EUR").revenue), (1, 4999));
+	assert_eq!(paid("USD").visitors, 0);
 
 	let page_a = vec![filter(Dim::Page, Op::Is, "/a")];
 	let report = query(&db, page_a, Some(Field::Dim(Dim::Source))).unwrap();

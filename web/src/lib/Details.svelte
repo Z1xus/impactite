@@ -13,6 +13,7 @@
 		filters,
 		imports,
 		converting,
+		revenue,
 		iconic,
 		pick
 	}: {
@@ -22,6 +23,7 @@
 		filters: unknown[];
 		imports: boolean;
 		converting: boolean;
+		revenue: boolean;
 		iconic: boolean;
 		pick: (value: string) => void;
 	} = $props();
@@ -30,6 +32,10 @@
 	const percent = (value: number | null) => (value === null ? "-" : `${value}%`);
 	const seconds = (value: number | null) =>
 		value === null ? "-" : format("visit_duration", value);
+	const money = (value: number | null) =>
+		value === null
+			? "-"
+			: value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 	const count = (value: number | null) => (value === null ? "-" : format("visitors", value));
 
 	const columns = $derived.by(() => {
@@ -42,7 +48,13 @@
 			return [
 				visitors,
 				{ key: "events", label: "events", format: count },
-				{ key: "conversion_rate", label: "cr", format: percent }
+				{ key: "conversion_rate", label: "cr", format: percent },
+				...(revenue
+					? [
+							{ key: "total_revenue", label: "revenue", format: money },
+							{ key: "average_revenue", label: "average", format: money }
+						]
+					: [])
 			];
 		if (dim.startsWith("event:props:"))
 			return [
