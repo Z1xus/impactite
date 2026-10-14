@@ -107,6 +107,20 @@
 			await load();
 		});
 
+	const resend = (invite: Invite) =>
+		attempt(async () => {
+			await api(`/api/app/teams/${id}/invites/${invite.id}`, undefined, "DELETE");
+			const result = await api<{ link: string; sent: boolean }>(
+				`/api/app/teams/${id}/invites`,
+				{
+					email: invite.email,
+					role: invite.role
+				}
+			);
+			link = result.sent ? "" : result.link;
+			await load();
+		});
+
 	const leave = () =>
 		attempt(async () => {
 			await api(`/api/app/teams/${id}/members/${session.me?.id}`, undefined, "DELETE");
@@ -177,7 +191,16 @@
 								meta: invite.role
 							}))}
 							remove={revoke}
-						/>
+						>
+							{#snippet control(key)}
+								{@const invite = team?.invites.find((invite) => invite.id === key)}
+								{#if invite}
+									<Button variant="plain" onclick={() => resend(invite)}
+										>resend</Button
+									>
+								{/if}
+							{/snippet}
+						</List>
 					{/if}
 					<Form action="invite" submit={invite} inline>
 						<Field
