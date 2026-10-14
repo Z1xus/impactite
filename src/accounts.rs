@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::app::{App, key_hash, token};
+use crate::mail::Mail;
 use crate::stats::Stats;
 
 const COOKIE: &str = "impactite_session";
@@ -22,6 +23,8 @@ const ROLES: &[&str] = &["owner", "admin", "editor", "viewer"];
 pub struct Web {
 	pub app: Arc<App>,
 	pub stats: Arc<Stats>,
+	pub mail: Arc<Mail>,
+	pub url: String,
 	pub setup: Mutex<Option<String>>,
 }
 
@@ -173,10 +176,40 @@ async fn invite(
 	if !ROLES[1..].contains(&body.role.as_str()) || !body.email.contains('@') {
 		return fail(StatusCode::BAD_REQUEST, "Use a valid email and role.");
 	}
-	match web.app.invite(team, &body.email, &body.role) {
-		Ok(token) => Json(json!({ "token": token })).into_response(),
-		Err(err) => internal(err),
-	}
+	let (token, team_name, inviter) = match (
+		web.app.invite(team, &body.email, &body.role),
+		web.app.team_name(team),
+		web.app.user_name(viewer.user),
+	) {
+		(Ok(token), Ok(team), Ok(inviter)) => (token, team, inviter),
+		(Err(err), _, _) | (_, Err(err), _) | (_, _, Err(err)) => return internal(err),
+	};
+	let link = format!("{}/invite/{token}", web.url.trim_end_matches('/'));
+	let text = format!(
+		"{inviter} invited you to {team_name} on Impactite.\n\n{link}\n\nThe link works for 7 days."
+	);
+	let html = format!(
+		"<p>{} invited you to <b>{}</b> on Impactite.</p><p><a href=\"{link}\">Join {}</a></p><p>The link works for 7 days.</p>",
+		escape(&inviter),
+		escape(&team_name),
+		escape(&team_name)
+	);
+	let subject = format!("Join {team_name} on Impactite");
+	let sent = match web.mail.send(&body.email, &subject, &text, &html).await {
+		Ok(()) => true,
+		Err(err) => {
+			tracing::warn!(%err, "invite mail");
+			false
+		}
+	};
+	Json(json!({ "token": token, "link": link, "sent": sent })).into_response()
+}
+
+fn escape(text: &str) -> String {
+	text.replace('&', "&amp;")
+		.replace('<', "&lt;")
+		.replace('>', "&gt;")
+		.replace('"', "&quot;")
 }
 
 #[derive(Deserialize)]
@@ -415,6 +448,20 @@ impl App {
 			params![team, user],
 		)?;
 		Ok(team)
+	}
+
+	pub fn team_name(&self, team: i64) -> rusqlite::Result<String> {
+		self.conn()
+			.query_row("select name from teams where id = ?1", [team], |row| {
+				row.get(0)
+			})
+	}
+
+	pub fn user_name(&self, user: i64) -> rusqlite::Result<String> {
+		self.conn()
+			.query_row("select name from users where id = ?1", [user], |row| {
+				row.get(0)
+			})
 	}
 
 	pub fn personal_team(&self, user: i64) -> rusqlite::Result<i64> {

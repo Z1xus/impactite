@@ -2,6 +2,7 @@ mod accounts;
 mod app;
 mod geo;
 mod ingest;
+mod mail;
 mod server;
 mod stats;
 
@@ -23,6 +24,7 @@ use crate::accounts::Web;
 use crate::app::App;
 use crate::geo::Geo;
 use crate::ingest::Ingest;
+use crate::mail::Mail;
 use crate::stats::Stats;
 
 #[global_allocator]
@@ -33,6 +35,14 @@ static GLOBAL: MiMalloc = MiMalloc;
 struct Cli {
 	#[arg(long, env = "IMPACTITE_DATA", default_value = "data")]
 	data: PathBuf,
+	#[arg(long, env = "IMPACTITE_MAIL")]
+	mail: Option<String>,
+	#[arg(
+		long,
+		env = "IMPACTITE_MAIL_FROM",
+		default_value = "Impactite <impactite@localhost>"
+	)]
+	mail_from: String,
 	#[command(subcommand)]
 	command: Command,
 }
@@ -44,6 +54,8 @@ enum Command {
 		listen: SocketAddr,
 		#[arg(long, env = "IMPACTITE_GEOIP")]
 		geoip: Option<PathBuf>,
+		#[arg(long, env = "IMPACTITE_URL")]
+		url: Option<String>,
 	},
 	Site {
 		#[command(subcommand)]
@@ -53,6 +65,15 @@ enum Command {
 		#[command(subcommand)]
 		command: KeyCommand,
 	},
+	Mail {
+		#[command(subcommand)]
+		command: MailCommand,
+	},
+}
+
+#[derive(Subcommand)]
+enum MailCommand {
+	Test { to: String },
 }
 
 #[derive(Subcommand)]
@@ -79,9 +100,26 @@ async fn main() -> anyhow::Result<()> {
 	let cli = Cli::parse();
 	fs::create_dir_all(&cli.data).context("create data dir")?;
 	let app = Arc::new(App::open(&cli.data.join("impactite.db")).context("open app db")?);
+	let mail = Arc::new(Mail::new(cli.mail.as_deref(), &cli.mail_from)?);
 
 	match cli.command {
-		Command::Serve { listen, geoip } => serve(app, &cli.data, listen, geoip).await,
+		Command::Serve { listen, geoip, url } => {
+			let url = url.unwrap_or_else(|| format!("http://{listen}"));
+			serve(app, mail, &cli.data, listen, geoip, url).await
+		}
+		Command::Mail {
+			command: MailCommand::Test { to },
+		} => {
+			mail.send(
+				&to,
+				"Impactite mail works",
+				"Mail is set up.",
+				"<p>Mail is set up.</p>",
+			)
+			.await?;
+			println!("sent to {to}");
+			Ok(())
+		}
 		Command::Site {
 			command: SiteCommand::Add { domain, timezone },
 		} => {
@@ -111,9 +149,11 @@ async fn main() -> anyhow::Result<()> {
 
 async fn serve(
 	app: Arc<App>,
+	mail: Arc<Mail>,
 	data: &Path,
 	listen: SocketAddr,
 	geoip: Option<PathBuf>,
+	url: String,
 ) -> anyhow::Result<()> {
 	let db = Arc::new(Db::open(data.join("events")).context("open event store")?);
 	let geo = Arc::new(Geo::default());
@@ -137,11 +177,16 @@ async fn serve(
 		false => Some(app::token()?),
 	};
 	if let Some(token) = &setup {
-		tracing::info!("finish setup at http://{listen}/setup?token={token}");
+		tracing::info!(
+			"finish setup at {}/setup?token={token}",
+			url.trim_end_matches('/')
+		);
 	}
 	let web = Arc::new(Web {
 		app: app.clone(),
 		stats: stats.clone(),
+		mail,
+		url,
 		setup: Mutex::new(setup),
 	});
 	let ingest = Arc::new(Ingest::new(db.clone(), app, geo));
