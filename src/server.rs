@@ -8,12 +8,18 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
 use crate::ingest::{Ingest, goatcounter, plausible};
+use crate::stats::{self, Stats};
 
-pub fn router(ingest: Arc<Ingest>) -> Router {
+pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>) -> Router {
 	Router::new()
 		.route("/api/event", post(plausible::event).options(preflight))
 		.route("/count", get(goatcounter::count).post(goatcounter::count))
 		.with_state(ingest)
+		.merge(
+			Router::new()
+				.route("/api/v2/query", post(stats::query))
+				.with_state(stats),
+		)
 		.layer(map_response(cors))
 }
 

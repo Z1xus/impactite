@@ -2,6 +2,7 @@ mod app;
 mod geo;
 mod ingest;
 mod server;
+mod stats;
 
 use std::fs;
 use std::net::SocketAddr;
@@ -20,6 +21,7 @@ use tracing_subscriber::EnvFilter;
 use crate::app::App;
 use crate::geo::Geo;
 use crate::ingest::Ingest;
+use crate::stats::Stats;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -45,6 +47,15 @@ enum Command {
 		#[command(subcommand)]
 		command: SiteCommand,
 	},
+	Key {
+		#[command(subcommand)]
+		command: KeyCommand,
+	},
+}
+
+#[derive(Subcommand)]
+enum KeyCommand {
+	Create { name: String },
 }
 
 #[derive(Subcommand)]
@@ -79,6 +90,12 @@ async fn main() -> anyhow::Result<()> {
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
+		Command::Key {
+			command: KeyCommand::Create { name },
+		} => {
+			println!("{}", app.create_key(&name)?);
+			Ok(())
+		}
 		Command::Site {
 			command: SiteCommand::List,
 		} => {
@@ -109,6 +126,10 @@ async fn serve(
 			async move { geo.keep_fresh(dir).await }
 		})),
 	};
+	let stats = Arc::new(Stats {
+		db: db.clone(),
+		app: app.clone(),
+	});
 	let ingest = Arc::new(Ingest::new(db.clone(), app, geo));
 
 	let sweeper = tokio::spawn({
@@ -126,7 +147,8 @@ async fn serve(
 	tracing::info!(%listen, "listening");
 	axum::serve(
 		listener,
-		server::router(ingest.clone()).into_make_service_with_connect_info::<SocketAddr>(),
+		server::router(ingest.clone(), stats.clone())
+			.into_make_service_with_connect_info::<SocketAddr>(),
 	)
 	.with_graceful_shutdown(shutdown())
 	.await?;
@@ -138,6 +160,7 @@ async fn serve(
 		let _ = task.await;
 	}
 	drop(ingest);
+	drop(stats);
 	let db = Arc::try_unwrap(db).map_err(|_| anyhow::anyhow!("event store still in use"))?;
 	db.close().context("close event store")?;
 	Ok(())
