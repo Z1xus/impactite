@@ -13,7 +13,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail};
-use crate::app::App;
+use crate::app::{App, Site};
 use crate::goals::Goal;
 
 pub struct Stats {
@@ -142,13 +142,49 @@ pub async fn dashboard(State(web): State<Arc<Web>>, viewer: Viewer, body: Json<V
 	}
 }
 
-fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
-	let request: Request = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
+#[derive(Deserialize)]
+pub struct PropsRequest {
+	site_id: String,
+	date_range: Value,
+}
+
+pub async fn props(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Json(body): Json<PropsRequest>,
+) -> Response {
+	if !matches!(web.app.site_role(viewer.user, &body.site_id), Ok(Some(_))) {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	}
+	let keys = period(&web.stats, &body.site_id, &body.date_range, false).and_then(|period| {
+		web.stats
+			.db
+			.prop_keys(
+				period.site.id,
+				day_number(period.from)..=day_number(period.to),
+			)
+			.map_err(|err| err.to_string())
+	});
+	match keys {
+		Ok(keys) => Json(json!(keys.iter().map(|key| &**key).collect::<Vec<_>>())).into_response(),
+		Err(message) => fail(StatusCode::BAD_REQUEST, &message),
+	}
+}
+
+struct Period {
+	site: Site,
+	tz: TimeZone,
+	from: Date,
+	to: Date,
+	imported: Option<Date>,
+}
+
+fn period(stats: &Stats, site_id: &str, range: &Value, trim: bool) -> Result<Period, String> {
 	let site = stats
 		.app
-		.site(&request.site_id)
+		.site(site_id)
 		.map_err(|err| err.to_string())?
-		.ok_or_else(|| format!("#/site_id: Site {} not found", request.site_id))?;
+		.ok_or_else(|| format!("#/site_id: Site {site_id} not found"))?;
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let today = Timestamp::now().to_zoned(tz.clone()).date();
 	let imported = stats
@@ -161,10 +197,28 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 		.to_zoned(tz.clone())
 		.date();
 	let created = imported.map_or(created, |day| day.min(created));
-	let (from, to) = date_range(
+	let (from, to) = date_range(range, today, created, trim)?;
+	Ok(Period {
+		site,
+		tz,
+		from,
+		to,
+		imported,
+	})
+}
+
+fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
+	let request: Request = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
+	let Period {
+		site,
+		tz,
+		from,
+		to,
+		imported,
+	} = period(
+		stats,
+		&request.site_id,
 		&request.date_range,
-		today,
-		created,
 		request.include.trim_relative_date_range,
 	)?;
 

@@ -30,6 +30,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(passkeys::routes())
 				.merge(goals::routes())
 				.route("/api/app/query", post(stats::dashboard))
+				.route("/api/app/props", post(stats::props))
 				.route("/api/app/icon/{host}", get(icons::icon))
 				.with_state(web),
 		)

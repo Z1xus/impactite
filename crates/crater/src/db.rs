@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, ErrorKind};
+use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
@@ -152,7 +153,9 @@ impl Db {
 			for &(id, metrics) in plan.rows(&counts) {
 				live_rows.entry(id).or_default().merge(&metrics);
 			}
-			if let Some(imported) = self.imported((site, day), &plan)? {
+			if plan.imports
+				&& let Some(imported) = self.imported((site, day))?
+			{
 				total.merge(&imported.total);
 				if let Some(last) = days.last_mut() {
 					last.merge(&imported.total);
@@ -260,10 +263,50 @@ impl Db {
 		Ok(())
 	}
 
-	fn imported(&self, key: Key, plan: &Plan) -> io::Result<Option<Arc<Counts>>> {
-		if !plan.imports {
-			return Ok(None);
+	pub fn prop_keys(&self, site: u64, days: RangeInclusive<i32>) -> io::Result<Vec<Arc<str>>> {
+		let mut counts: HashMap<u32, u64> = HashMap::new();
+		for day in days {
+			let live = self
+				.shared
+				.live
+				.read()
+				.unwrap_or_else(PoisonError::into_inner)
+				.get(&(site, day))
+				.map(|live| live.parts.clone());
+			match live {
+				Some(parts) => {
+					for key in parts.iter().flat_map(|part| &part.keys) {
+						*counts.entry(*key).or_default() += 1;
+					}
+				}
+				None => {
+					let rollup = self.rollup((site, day))?;
+					let imported = self.imported((site, day))?;
+					for (slot, rows) in rollup
+						.fields
+						.iter()
+						.chain(imported.iter().flat_map(|i| &i.fields))
+					{
+						if let Slot::Prop(key) = slot {
+							*counts.entry(*key).or_default() +=
+								rows.iter().map(|row| row.1.events).sum::<u64>();
+						}
+					}
+				}
+			}
 		}
+		let mut keys: Vec<(u32, u64)> =
+			counts.into_iter().filter(|&(_, count)| count > 0).collect();
+		keys.sort_unstable_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+		let dict = self.shared.dict(site)?;
+		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
+		Ok(keys
+			.into_iter()
+			.filter_map(|(key, _)| dict.get(key).cloned())
+			.collect())
+	}
+
+	fn imported(&self, key: Key) -> io::Result<Option<Arc<Counts>>> {
 		if let Some(counts) = lock(&self.shared.imports).get(&key) {
 			return Ok(counts);
 		}
@@ -309,7 +352,9 @@ impl Db {
 			for &(id, metrics) in plan.rows(&counts) {
 				rows.entry(id).or_default().merge(&metrics);
 			}
-			if let Some(imported) = self.imported((site, day), plan)? {
+			if plan.imports
+				&& let Some(imported) = self.imported((site, day))?
+			{
 				merged.total.merge(&imported.total);
 				if let Some(last) = merged.days.last_mut() {
 					last.merge(&imported.total);

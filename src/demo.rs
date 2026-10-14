@@ -197,6 +197,10 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 					] {
 						event.dims[dim] = value.to_owned();
 					}
+					if name == "Signup" {
+						let plan = rng.pick(&[("free", 6), ("pro", 3), ("team", 1)], |p| p.1).0;
+						event.props = vec![("plan".into(), plan.into())];
+					}
 					let mut event = Box::new(event);
 					while let Err(back) = db.insert(event) {
 						event = back;

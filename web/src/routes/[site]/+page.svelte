@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import Chart from "#lib/dither/Chart.svelte";
+	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import calendar from "pixelarticons/svg/calendar.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
@@ -79,7 +80,7 @@
 	let previousSeries = $state<number[]>([]);
 	let labels = $state<string[]>([]);
 
-	const panels = [
+	const base = [
 		{
 			id: "sources",
 			tabs: [
@@ -92,6 +93,8 @@
 			id: "pages",
 			tabs: [
 				{ key: "event:page", label: "pages" },
+				{ key: "visit:entry_page", label: "entry" },
+				{ key: "visit:exit_page", label: "exit" },
 				{ key: "event:hostname", label: "hostnames" }
 			]
 		},
@@ -112,9 +115,44 @@
 			]
 		}
 	];
-	let tabs = $state<Record<string, string>>(
-		Object.fromEntries(panels.map((panel) => [panel.id, panel.tabs[0].key]))
-	);
+	let goals = $state<string[]>([]);
+	let propKeys = $state<string[]>([]);
+	let propKey = $state("");
+	const panels = $derived([
+		...base,
+		{
+			id: "goals",
+			tabs: [
+				...(goals.length ? [{ key: "event:goal", label: "goals" }] : []),
+				...(propKeys.length ? [{ key: "props", label: "props" }] : [])
+			]
+		}
+	]);
+	let tabs = $state<Record<string, string>>({
+		...Object.fromEntries(base.map((panel) => [panel.id, panel.tabs[0].key])),
+		goals: "event:goal"
+	});
+
+	$effect(() => {
+		const goal = panels.at(-1)?.tabs ?? [];
+		if (goal.length && !goal.some((item) => item.key === tabs.goals)) tabs.goals = goal[0].key;
+	});
+
+	$effect(() => {
+		api<{ goals: { name: string }[] }>(`/api/app/sites/${domain}/goals`)
+			.then((result) => (goals = result.goals.map((goal) => goal.name)))
+			.catch(() => (goals = []));
+	});
+
+	$effect(() => {
+		if (!dates) return;
+		api<string[]>("/api/app/props", { site_id: domain, date_range: dates.current }).then(
+			(keys) => {
+				propKeys = keys;
+				if (!keys.includes(propKey)) propKey = keys[0] ?? "";
+			}
+		);
+	});
 	let ranked = $state<Record<string, Ranked>>({});
 	let loading = $state<Record<string, boolean>>({});
 
@@ -186,11 +224,12 @@
 		const where = toQueryFilters(filters);
 		const cleanups: (() => void)[] = [];
 		for (const panel of panels) {
-			const dim = tabs[panel.id];
+			if (!panel.tabs.length) continue;
+			const dim = tabs[panel.id] === "props" ? `event:props:${propKey}` : tabs[panel.id];
 			let stale = false;
 			loading[panel.id] = true;
 			query(domain, {
-				metrics: ["visitors"],
+				metrics: dim === "event:goal" ? ["visitors", "conversion_rate"] : ["visitors"],
 				date_range: dates.current,
 				dimensions: [dim],
 				filters: where,
@@ -204,6 +243,7 @@
 						key: value,
 						label,
 						value: row.metrics[0],
+						...(dim === "event:goal" && { extra: `${row.metrics[1]}%` }),
 						...(PAGES.has(dim) &&
 							value.startsWith("/") && { href: `https://${domain}${value}` }),
 						...(ICONIC.has(dim) && {
@@ -219,6 +259,15 @@
 		return () => cleanups.forEach((cleanup) => cleanup());
 	});
 </script>
+
+{#snippet picker()}
+	<Select
+		value={propKey}
+		options={propKeys.map((key) => ({ key, label: key }))}
+		data
+		pick={(key) => (propKey = key)}
+	/>
+{/snippet}
 
 <Shell>
 	{#snippet actions()}
@@ -276,15 +325,27 @@
 		</section>
 
 		<div class="grid gap-6 md:grid-cols-2">
-			{#each panels as panel (panel.id)}
-				<Panel tabs={panel.tabs} bind:tab={tabs[panel.id]}>
-					<Rows
-						rows={ranked[panel.id] ?? null}
-						loading={loading[panel.id]}
-						format={(value) => format("visitors", value)}
-						pick={(key) => addFilter(tabs[panel.id], key)}
-					/>
-				</Panel>
+			{#each panels.filter((panel) => panel.tabs.length) as panel (panel.id)}
+				<div class={panel.id === "goals" ? "md:col-span-2" : ""}>
+					<Panel
+						tabs={panel.tabs}
+						bind:tab={tabs[panel.id]}
+						actions={tabs[panel.id] === "props" ? picker : undefined}
+					>
+						<Rows
+							rows={ranked[panel.id] ?? null}
+							loading={loading[panel.id]}
+							format={(value) => format("visitors", value)}
+							pick={(key) =>
+								addFilter(
+									tabs[panel.id] === "props"
+										? `event:props:${propKey}`
+										: tabs[panel.id],
+									key
+								)}
+						/>
+					</Panel>
+				</div>
 			{/each}
 		</div>
 	</div>

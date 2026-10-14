@@ -21,6 +21,7 @@
 					icon?: Spec | null;
 					fallback?: string;
 					href?: string;
+					extra?: string;
 			  }[]
 			| null;
 		loading?: boolean;
@@ -80,11 +81,16 @@
 							<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						{/if}
 					</span>
-					<Num
-						value={row.value}
-						{format}
-						class="relative pr-2 text-label text-dim group-hover:text-fg"
-					/>
+					<span class="relative flex items-center gap-4 pr-2">
+						{#if row.extra}
+							<span class="text-label text-dim">{row.extra}</span>
+						{/if}
+						<Num
+							value={row.value}
+							{format}
+							class="text-label text-dim group-hover:text-fg"
+						/>
+					</span>
 				</span>
 			</li>
 		{/each}
