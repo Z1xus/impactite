@@ -39,16 +39,26 @@ pub struct Web {
 
 pub struct Viewer {
 	pub user: i64,
+	pub session: String,
 }
 
 impl FromRequestParts<Arc<Web>> for Viewer {
 	type Rejection = Response;
 
 	async fn from_request_parts(parts: &mut Parts, web: &Arc<Web>) -> Result<Self, Response> {
-		cookie(&parts.headers)
-			.and_then(|token| web.app.session_user(&token).ok().flatten())
-			.map(|user| Viewer { user })
-			.ok_or_else(|| fail(StatusCode::UNAUTHORIZED, "Sign in to continue."))
+		let session = cookie(&parts.headers).map(|token| key_hash(&token));
+		let found = session
+			.as_ref()
+			.and_then(|hash| web.app.session(hash).ok().flatten());
+		let (Some(session), Some((user, seen))) = (session, found) else {
+			return Err(fail(StatusCode::UNAUTHORIZED, "Sign in to continue."));
+		};
+		if now() - seen > 3600 {
+			let _ = web
+				.app
+				.touch_session(&session, &device(&parts.headers, "Unknown device"));
+		}
+		Ok(Viewer { user, session })
 	}
 }
 
@@ -168,7 +178,7 @@ fn new_account(
 			let key = registered(web, proof, purpose)?;
 			let user = web.app.create_user(name, email, None).map_err(broken)?;
 			web.app
-				.add_passkey(user, &key, &device(headers))
+				.add_passkey(user, &key, &device(headers, "Passkey"))
 				.map_err(broken)?;
 			Ok(user)
 		}
@@ -451,7 +461,14 @@ pub fn internal(err: rusqlite::Error) -> Response {
 	fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
 }
 
-fn now() -> i64 {
+pub(crate) fn hash(password: &str) -> rusqlite::Result<String> {
+	Argon2::default()
+		.hash_password(password.as_bytes())
+		.map(|hash| hash.to_string())
+		.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.to_string().into()))
+}
+
+pub(crate) fn now() -> i64 {
 	jiff::Timestamp::now().as_second()
 }
 
@@ -473,10 +490,7 @@ impl App {
 		password: Option<&str>,
 	) -> rusqlite::Result<i64> {
 		let hash = match password {
-			Some(password) => Argon2::default()
-				.hash_password(password.as_bytes())
-				.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.to_string().into()))?
-				.to_string(),
+			Some(password) => hash(password)?,
 			None => String::new(),
 		};
 		let user = {
@@ -513,10 +527,28 @@ impl App {
 	pub fn start_session(&self, user: i64) -> rusqlite::Result<String> {
 		let token = token()?;
 		self.conn().execute(
-			"insert into sessions (hash, user, expires_at) values (?1, ?2, ?3)",
+			"insert into sessions (hash, user, expires_at, created_at) values (?1, ?2, ?3, unixepoch())",
 			params![key_hash(&token), user, now() + SESSION_SECS],
 		)?;
 		Ok(token)
+	}
+
+	pub fn session(&self, hash: &str) -> rusqlite::Result<Option<(i64, i64)>> {
+		self.conn()
+			.query_row(
+				"select user, seen_at from sessions where hash = ?1 and expires_at > ?2",
+				params![hash, now()],
+				|row| Ok((row.get(0)?, row.get(1)?)),
+			)
+			.optional()
+	}
+
+	pub fn touch_session(&self, hash: &str, device: &str) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sessions set seen_at = unixepoch(), device = ?2 where hash = ?1",
+			params![hash, device],
+		)?;
+		Ok(())
 	}
 
 	pub fn session_user(&self, token: &str) -> rusqlite::Result<Option<i64>> {
@@ -678,10 +710,10 @@ impl App {
 
 	pub fn me(&self, user: i64) -> rusqlite::Result<Value> {
 		let conn = self.conn();
-		let (name, email): (String, String) = conn.query_row(
-			"select name, email from users where id = ?1",
+		let (name, email, password): (String, String, bool) = conn.query_row(
+			"select name, email, password != '' from users where id = ?1",
 			[user],
-			|row| Ok((row.get(0)?, row.get(1)?)),
+			|row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
 		)?;
 		let mut teams_stmt = conn.prepare(
 			"select t.id, t.name, t.personal, m.role from teams t join members m on m.team = t.id
@@ -725,6 +757,6 @@ impl App {
 		if !shared.is_empty() {
 			teams.push(json!({ "id": 0, "name": "Shared with me", "personal": false, "role": "guest", "sites": shared }));
 		}
-		Ok(json!({ "id": user, "name": name, "email": email, "teams": teams }))
+		Ok(json!({ "id": user, "name": name, "email": email, "password": password, "teams": teams }))
 	}
 }

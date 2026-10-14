@@ -105,6 +105,16 @@ const MIGRATIONS: &[&str] = &[
 	);
 	alter table invites add column site integer references sites (id) on delete cascade;
 	",
+	"
+	alter table sessions add column created_at integer not null default 0;
+	alter table sessions add column seen_at integer not null default 0;
+	alter table sessions add column device text not null default '';
+	create table logins (
+		hash text primary key,
+		user integer not null references users (id) on delete cascade,
+		expires_at integer not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

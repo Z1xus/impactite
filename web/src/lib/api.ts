@@ -1,6 +1,6 @@
 export type Site = { id: number; domain: string; timezone: string; role: string };
 export type Team = { id: number; name: string; personal: boolean; role: string; sites: Site[] };
-export type Me = { id: number; name: string; email: string; teams: Team[] };
+export type Me = { id: number; name: string; email: string; password: boolean; teams: Team[] };
 
 export class ApiError extends Error {
 	constructor(

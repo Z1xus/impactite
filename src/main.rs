@@ -12,6 +12,7 @@ mod keys;
 mod mail;
 mod net;
 mod passkeys;
+mod profile;
 mod server;
 mod sites;
 mod stats;

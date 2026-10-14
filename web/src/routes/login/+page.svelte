@@ -8,10 +8,19 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
+	import Message from "#lib/ui/Message.svelte";
 
-	let password = $state(false);
+	type Mode = "passkey" | "password" | "link";
+	const MODES: { key: Mode; label: string }[] = [
+		{ key: "passkey", label: "use a passkey" },
+		{ key: "password", label: "use a password" },
+		{ key: "link", label: "email me a link" }
+	];
+
+	let mode = $state<Mode>("passkey");
 	let email = $state("");
 	let secret = $state("");
+	let sent = $state(false);
 
 	async function finish(promise: Promise<{ me: Me }>) {
 		adopt((await promise).me);
@@ -30,11 +39,16 @@
 	function withPassword() {
 		return finish(api("/api/app/login", { email, password: secret }));
 	}
+
+	async function withLink() {
+		await api("/api/app/login/link", { email });
+		sent = true;
+	}
 </script>
 
 <Gate>
 	<div class="flex flex-col gap-3">
-		{#if password}
+		{#if mode === "password"}
 			<Form action="sign in" submit={withPassword}>
 				<Field
 					label="email"
@@ -51,11 +65,28 @@
 					required
 				/>
 			</Form>
+		{:else if mode === "link"}
+			<Form action="email me a link" submit={withLink}>
+				<Field
+					label="email"
+					type="email"
+					bind:value={email}
+					autocomplete="email"
+					required
+				/>
+			</Form>
+			{#if sent}
+				<Message tone="cyan">If the account exists, the link is on its way.</Message>
+			{/if}
 		{:else}
 			<Form action="sign in with passkey" submit={withPasskey} />
 		{/if}
-		<Button variant="plain" type="button" onclick={() => (password = !password)}>
-			{password ? "use a passkey" : "use a password"}
-		</Button>
+		<div class="flex flex-wrap justify-center gap-x-4">
+			{#each MODES.filter((item) => item.key !== mode) as item (item.key)}
+				<Button variant="plain" type="button" onclick={() => (mode = item.key)}>
+					{item.label}
+				</Button>
+			{/each}
+		</div>
 	</div>
 </Gate>

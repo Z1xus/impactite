@@ -85,7 +85,7 @@ pub fn registered(web: &Web, proof: &Proof, purpose: &Purpose) -> Result<Key, Fa
 	})
 }
 
-pub fn device(headers: &HeaderMap) -> String {
+pub fn device(headers: &HeaderMap, fallback: &str) -> String {
 	let agent = ua::parse(
 		headers
 			.get(header::USER_AGENT)
@@ -93,7 +93,7 @@ pub fn device(headers: &HeaderMap) -> String {
 			.unwrap_or_default(),
 	);
 	match (agent.browser, agent.os) {
-		("", "") => "Passkey".into(),
+		("", "") => fallback.into(),
 		(browser, "") => browser.into(),
 		("", os) => os.into(),
 		(browser, os) => format!("{browser} on {os}"),
@@ -163,7 +163,10 @@ async fn add(
 		Ok(key) => key,
 		Err((status, message)) => return fail(status, message),
 	};
-	match web.app.add_passkey(viewer.user, &key, &device(&headers)) {
+	match web
+		.app
+		.add_passkey(viewer.user, &key, &device(&headers, "Passkey"))
+	{
 		Ok(()) => list(State(web), viewer).await,
 		Err(_) => fail(StatusCode::CONFLICT, "This passkey is already saved."),
 	}
