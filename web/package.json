@@ -5,8 +5,9 @@
 	"type": "module",
 	"packageManager": "bun@1.4.2",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
+		"dev": "bun run tracker && vite dev",
+		"build": "bun run tracker && vite build",
+		"tracker": "bun build ../tracker/script.js --minify --outfile static/js/script.js",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
