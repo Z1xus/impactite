@@ -6,6 +6,7 @@
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import calendar from "pixelarticons/svg/calendar.svg?raw";
+	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
@@ -23,6 +24,7 @@
 		type Period
 	} from "#lib/stats.ts";
 	import Chip from "#lib/ui/Chip.svelte";
+	import Icon from "#lib/ui/Icon.svelte";
 	import Kpi from "#lib/ui/Kpi.svelte";
 	import Live from "#lib/ui/Live.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
@@ -56,6 +58,10 @@
 	const domain = $derived(page.params.site ?? "");
 	const site = $derived(
 		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
+	);
+	const editable = $derived(
+		session.me?.teams.find((team) => team.sites.some((site) => site.domain === domain))
+			?.role !== "viewer"
 	);
 	const sites = $derived(
 		(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
@@ -288,6 +294,15 @@
 				data
 				pick={(key) => goto(resolve("/[site]", { site: key }))}
 			/>
+			{#if editable}
+				<a
+					href={resolve("/[site]/settings", { site: domain })}
+					class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
+					aria-label="site settings"
+				>
+					<Icon svg={sliders} size={14} />
+				</a>
+			{/if}
 			{#each filters as filter (encodeFilter(filter))}
 				<Chip
 					label={filter.dim.split(":").at(-1) ?? filter.dim}

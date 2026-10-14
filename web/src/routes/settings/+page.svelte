@@ -1,15 +1,20 @@
 <script lang="ts">
-	import close from "pixelarticons/svg/close.svg?raw";
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
+	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
-	import Icon from "#lib/ui/Icon.svelte";
+	import List from "#lib/ui/List.svelte";
 	import Message from "#lib/ui/Message.svelte";
+	import Section from "#lib/ui/Section.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
 	type Passkey = { id: string; name: string; created_at: number; used_at: number | null };
+	type Key = { id: number; name: string; prefix: string; created: number };
 
 	let passkeys = $state<Passkey[] | null>(null);
+	let keys = $state<Key[] | null>(null);
+	let keyName = $state("");
+	let fresh = $state("");
 	let error = $state("");
 
 	const date = (seconds: number) =>
@@ -23,7 +28,24 @@
 		api<{ passkeys: Passkey[] }>("/api/app/passkeys").then((result) => {
 			passkeys = result.passkeys;
 		});
+		api<{ keys: Key[] }>("/api/app/keys").then((result) => (keys = result.keys));
 	});
+
+	async function addKey() {
+		const result = await api<{ keys: Key[]; key: string }>("/api/app/keys", { name: keyName });
+		keys = result.keys;
+		fresh = result.key;
+		keyName = "";
+	}
+
+	async function removeKey(id: string | number) {
+		error = "";
+		try {
+			keys = (await api<{ keys: Key[] }>(`/api/app/keys/${id}`, undefined, "DELETE")).keys;
+		} catch (err) {
+			error = err instanceof Error ? err.message : "Something went wrong.";
+		}
+	}
 
 	async function add() {
 		const { challenge, options } = await api<{ challenge: string; options: never }>(
@@ -36,7 +58,7 @@
 		).passkeys;
 	}
 
-	async function remove(id: string) {
+	async function remove(id: string | number) {
 		error = "";
 		try {
 			passkeys = (
@@ -53,39 +75,42 @@
 </script>
 
 <Shell>
-	<section class="flex max-w-xl flex-col gap-5">
-		<span class="label">passkeys</span>
-		<ul class="flex flex-col rounded-px border border-line bg-panel">
-			{#if passkeys === null}
-				<li class="h-14"></li>
-			{:else}
-				{#each passkeys as passkey (passkey.id)}
-					<li
-						class="flex items-center justify-between gap-4 border-b border-line px-4 py-3 last:border-0"
-					>
-						<div class="flex flex-col gap-1.5">
-							<span class="text-[14px] text-fg">{passkey.name}</span>
-							<span class="label">
-								added {date(passkey.created_at)}{passkey.used_at
-									? ` · used ${date(passkey.used_at)}`
-									: ""}
-							</span>
-						</div>
-						<button
-							type="button"
-							class="grid h-8 w-8 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-bad"
-							aria-label="remove passkey"
-							onclick={() => remove(passkey.id)}
-						>
-							<Icon svg={close} size={14} />
-						</button>
-					</li>
-				{/each}
+	<div class="flex flex-col gap-12">
+		<Section label="passkeys">
+			<List
+				items={passkeys?.map((passkey) => ({
+					key: passkey.id,
+					title: passkey.name,
+					meta: `added ${date(passkey.created_at)}${passkey.used_at ? ` · used ${date(passkey.used_at)}` : ""}`
+				})) ?? null}
+				{remove}
+			/>
+			<div class="max-w-60">
+				<Form action="add passkey" submit={add} />
+			</div>
+		</Section>
+
+		<Section label="api keys">
+			<List
+				items={keys?.map((key) => ({
+					key: key.id,
+					title: key.name,
+					meta: `${key.prefix}… · added ${date(key.created)}`
+				})) ?? null}
+				remove={removeKey}
+			/>
+			{#if fresh}
+				<code
+					class="rounded-px border border-cyan/40 bg-panel px-3 py-2.5 text-[13px] break-all text-cyan"
+					>{fresh}</code
+				>
+				<Message>Copy this key now. It is shown only once.</Message>
 			{/if}
-		</ul>
+			<Form action="create key" submit={addKey} inline>
+				<Field label="name" placeholder="grafana" bind:value={keyName} required />
+			</Form>
+		</Section>
+
 		<Message tone="bad">{error}</Message>
-		<div class="max-w-60">
-			<Form action="add passkey" submit={add} />
-		</div>
-	</section>
+	</div>
 </Shell>

@@ -57,7 +57,7 @@
 	</button>
 	{#if open}
 		<ul
-			class="absolute top-full right-0 z-20 mt-1 min-w-full rounded-px border border-edge bg-raised py-1"
+			class="absolute top-full right-0 z-20 mt-1 max-h-80 min-w-full overflow-y-auto rounded-px border border-edge bg-raised py-1"
 		>
 			{#each options as option (option.key)}
 				<li>

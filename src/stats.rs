@@ -114,12 +114,18 @@ pub async fn query(
 	headers: HeaderMap,
 	body: Json<Value>,
 ) -> Response {
-	let authorized = headers
+	let owner = headers
 		.get(header::AUTHORIZATION)
 		.and_then(|value| value.to_str().ok())
 		.and_then(|value| value.strip_prefix("Bearer "))
-		.is_some_and(|key| stats.app.key_valid(key).unwrap_or(false));
-	if !authorized {
+		.and_then(|key| stats.app.key_owner(key).ok().flatten());
+	let domain = body.0["site_id"].as_str().unwrap_or_default();
+	let allowed = match owner {
+		Some(Some(user)) => matches!(stats.app.site_role(user, domain), Ok(Some(_))),
+		Some(None) => true,
+		None => false,
+	};
+	if !allowed {
 		return error(
 			StatusCode::UNAUTHORIZED,
 			"Missing or invalid API key. Please use a valid Bearer token.",

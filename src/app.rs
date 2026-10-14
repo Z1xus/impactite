@@ -93,6 +93,9 @@ const MIGRATIONS: &[&str] = &[
 		created_at integer not null
 	);
 	",
+	"
+	alter table api_keys add column user integer references users (id) on delete cascade;
+	",
 ];
 
 #[derive(Debug, Clone)]
@@ -208,24 +211,71 @@ impl App {
 		)
 	}
 
-	pub fn create_key(&self, name: &str) -> rusqlite::Result<String> {
+	pub fn create_key(&self, name: &str, user: Option<i64>) -> rusqlite::Result<String> {
 		let key = token()?;
 		self.conn().execute(
-			"insert into api_keys (hash, name, prefix, created_at) values (?1, ?2, ?3, unixepoch())",
-			params![key_hash(&key), name, &key[..8]],
+			"insert into api_keys (hash, name, prefix, user, created_at) values (?1, ?2, ?3, ?4, unixepoch())",
+			params![key_hash(&key), name, &key[..8], user],
 		)?;
 		Ok(key)
 	}
 
-	pub fn key_valid(&self, key: &str) -> rusqlite::Result<bool> {
+	pub fn key_owner(&self, key: &str) -> rusqlite::Result<Option<Option<i64>>> {
 		self.conn()
 			.query_row(
-				"select 1 from api_keys where hash = ?1",
+				"select user from api_keys where hash = ?1",
 				[key_hash(key)],
-				|_| Ok(()),
+				|row| row.get(0),
 			)
 			.optional()
-			.map(|found| found.is_some())
+	}
+
+	pub fn keys(&self, user: i64) -> rusqlite::Result<Vec<(i64, String, String, i64)>> {
+		let conn = self.conn();
+		let mut stmt = conn.prepare(
+			"select rowid, name, prefix, created_at from api_keys where user = ?1 order by rowid",
+		)?;
+		stmt.query_map([user], |row| {
+			Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+		})?
+		.collect()
+	}
+
+	pub fn remove_key(&self, user: i64, id: i64) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"delete from api_keys where rowid = ?1 and user = ?2",
+			params![id, user],
+		)?;
+		Ok(())
+	}
+
+	pub fn imports(&self, site: u64) -> rusqlite::Result<Vec<(i64, String, String, String)>> {
+		let conn = self.conn();
+		let mut stmt = conn.prepare(
+			"select id, source, first_day, last_day from imports where site = ?1 order by id",
+		)?;
+		stmt.query_map([site as i64], |row| {
+			Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+		})?
+		.collect()
+	}
+
+	pub fn remove_import(&self, site: u64, id: i64) -> rusqlite::Result<Option<(String, String)>> {
+		self.conn()
+			.query_row(
+				"delete from imports where site = ?1 and id = ?2 returning first_day, last_day",
+				params![site as i64, id],
+				|row| Ok((row.get(0)?, row.get(1)?)),
+			)
+			.optional()
+	}
+
+	pub fn set_timezone(&self, site: u64, timezone: &str) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set timezone = ?2 where id = ?1",
+			params![site as i64, timezone],
+		)?;
+		Ok(())
 	}
 }
 

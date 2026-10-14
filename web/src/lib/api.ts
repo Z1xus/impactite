@@ -12,10 +12,11 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
+	const json = body !== undefined && !(body instanceof Blob);
 	const res = await fetch(path, {
 		method: method ?? (body === undefined ? "GET" : "POST"),
-		headers: body === undefined ? undefined : { "content-type": "application/json" },
-		body: body === undefined ? undefined : JSON.stringify(body)
+		headers: json ? { "content-type": "application/json" } : undefined,
+		body: json ? JSON.stringify(body) : (body as Blob | undefined)
 	});
 	if (res.status === 204) return undefined as T;
 	const data = await res.json().catch(() => ({}));

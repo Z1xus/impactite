@@ -8,10 +8,12 @@ mod goals;
 mod icons;
 mod import;
 mod ingest;
+mod keys;
 mod mail;
 mod net;
 mod passkeys;
 mod server;
+mod sites;
 mod stats;
 mod webauthn;
 
@@ -195,48 +197,31 @@ async fn main() -> anyhow::Result<()> {
 			let site = find_or_create(&app, domain, timezone)?;
 			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let started = std::time::Instant::now();
-			let (count, unit, first) = match source {
+			let (count, unit) = match source {
 				ImportSource::Plausible {
 					source,
 					plausible_site_id,
 					..
-				} => match source.starts_with("http") {
-					true => {
-						let id = plausible_site_id
-							.context("--plausible-site-id is needed for clickhouse")?;
-						let (count, first) =
-							import::clickhouse::import(&db, &site, &source, id).await?;
-						(count, "events", first)
+				} if source.starts_with("http") => {
+					let id = plausible_site_id
+						.context("--plausible-site-id is needed for clickhouse")?;
+					let (count, first) =
+						import::clickhouse::import(&db, &site, &source, id).await?;
+					if let Some(first) = first {
+						app.backdate(site.id, first)?;
 					}
-					false => {
-						let tz = jiff::tz::TimeZone::get(&site.timezone)?;
-						let before = jiff::Timestamp::from_second(site.created_at)?
-							.to_zoned(tz)
-							.date();
-						let range =
-							import::plausible::import(&db, &site, Path::new(&source), before)?;
-						let Some((first, last)) = range else {
-							bail!("no days before {before} in this export");
-						};
-						app.add_import(
-							site.id,
-							"plausible",
-							&first.to_string(),
-							&last.to_string(),
-						)?;
-						(first.until(last)?.get_days() as u64 + 1, "days", None)
-					}
-				},
+					(count, "events")
+				}
+				ImportSource::Plausible { source, .. } => (
+					import::plausible_zip(&db, &app, &site, Path::new(&source))?,
+					"days",
+				),
 				ImportSource::Goatcounter { file, .. } => {
-					let (count, first) = import::goatcounter::import(&db, &site, &file)?;
-					(count, "events", first)
+					(import::goatcounter_csv(&db, &app, &site, &file)?, "events")
 				}
 			};
 			db.sync()?;
 			db.close()?;
-			if let Some(first) = first {
-				app.backdate(site.id, first)?;
-			}
 			cli::say(
 				'+',
 				&format!(
@@ -263,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
 		Command::Key {
 			command: KeyCommand::Create { name },
 		} => {
-			println!("{}", app.create_key(&name)?);
+			println!("{}", app.create_key(&name, None)?);
 			Ok(())
 		}
 		Command::Site {

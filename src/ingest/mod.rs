@@ -102,6 +102,13 @@ impl Ingest {
 		}
 	}
 
+	pub fn forget(&self, domain: &str) {
+		self.sites
+			.write()
+			.unwrap_or_else(PoisonError::into_inner)
+			.remove(domain);
+	}
+
 	fn remember(&self, site: Site) -> Arc<Tracked> {
 		let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 		let tracked = Arc::new(Tracked { site, tz });

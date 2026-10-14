@@ -11,7 +11,9 @@ use crate::assets;
 use crate::goals;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
+use crate::keys;
 use crate::passkeys;
+use crate::sites;
 use crate::stats::{self, Stats};
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
@@ -29,6 +31,8 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 			accounts::routes()
 				.merge(passkeys::routes())
 				.merge(goals::routes())
+				.merge(keys::routes())
+				.merge(sites::routes())
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))
 				.route("/api/app/icon/{host}", get(icons::icon))

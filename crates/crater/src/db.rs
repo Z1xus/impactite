@@ -263,6 +263,17 @@ impl Db {
 		Ok(())
 	}
 
+	pub fn drop_imports(&self, site: u64, days: RangeInclusive<i32>) -> io::Result<()> {
+		for day in days {
+			match fs::remove_file(self.shared.path((site, day), "imp")) {
+				Err(err) if err.kind() != ErrorKind::NotFound => return Err(err),
+				_ => lock(&self.shared.imports).insert((site, day), None),
+			}
+		}
+		*lock(&self.shared.ranges) = Cache::new(CACHE);
+		Ok(())
+	}
+
 	pub fn prop_keys(&self, site: u64, days: RangeInclusive<i32>) -> io::Result<Vec<Arc<str>>> {
 		let mut counts: HashMap<u32, u64> = HashMap::new();
 		for day in days {
