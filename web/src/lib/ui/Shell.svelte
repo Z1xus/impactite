@@ -4,6 +4,7 @@
 	import { resolve } from "$app/paths";
 	import logout from "pixelarticons/svg/logout.svg?raw";
 	import settings from "pixelarticons/svg/settings-cog.svg?raw";
+	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import user from "pixelarticons/svg/user.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
 	import { currentTeam } from "#lib/session.svelte.ts";
@@ -39,6 +40,15 @@
 					pick={pickTeam}
 					icon={currentTeam()?.personal ? user : users}
 				/>
+				{#if session.team !== 0}
+					<a
+						href={resolve("/team")}
+						class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
+						aria-label="team settings"
+					>
+						<Icon svg={sliders} size={14} />
+					</a>
+				{/if}
 			{/if}
 			<div class="ml-auto flex items-center gap-3">
 				{@render actions?.()}

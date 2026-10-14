@@ -58,6 +58,10 @@ impl Mail {
 		})
 	}
 
+	pub fn ready(&self) -> bool {
+		!matches!(self.transport, Transport::Log)
+	}
+
 	pub async fn send(
 		&self,
 		to: &str,

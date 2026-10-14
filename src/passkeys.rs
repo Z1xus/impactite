@@ -111,7 +111,7 @@ struct Signup {
 async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Response {
 	let (purpose, email) = if body.invite {
 		match web.app.open_invite(&body.token) {
-			Ok(Some((_, email, _))) => (Purpose::Invite(body.token.clone()), email),
+			Ok(Some(invitation)) => (Purpose::Invite(body.token.clone()), invitation.email),
 			_ => {
 				return fail(
 					StatusCode::NOT_FOUND,
@@ -229,7 +229,7 @@ async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Response
 	match webauthn::verify(&web.rp, &body.challenge, &body.credential, &key) {
 		Ok(counter) => {
 			let _ = web.app.touch_passkey(&id, counter);
-			signed_in(&web, user)
+			signed_in(&web, user, None)
 		}
 		Err(err) => {
 			tracing::warn!(err, "passkey login");

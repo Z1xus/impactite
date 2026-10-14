@@ -4,7 +4,7 @@
 	import { page } from "$app/state";
 	import { api, type Me } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
-	import { adopt, session } from "#lib/session.svelte.ts";
+	import { adopt, pickTeam, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
@@ -29,8 +29,9 @@
 				body.passkey = { challenge, credential: await create(options) };
 			}
 		}
-		const { me } = await api<{ me: Me }>("/api/app/invites/accept", body);
+		const { me, team } = await api<{ me: Me; team: number }>("/api/app/invites/accept", body);
 		adopt(me);
+		pickTeam(team);
 		await goto(resolve("/"));
 	}
 </script>

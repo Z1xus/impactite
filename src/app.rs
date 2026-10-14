@@ -96,6 +96,15 @@ const MIGRATIONS: &[&str] = &[
 	"
 	alter table api_keys add column user integer references users (id) on delete cascade;
 	",
+	"
+	create table guests (
+		site integer not null references sites (id) on delete cascade,
+		user integer not null references users (id) on delete cascade,
+		role text not null,
+		primary key (site, user)
+	);
+	alter table invites add column site integer references sites (id) on delete cascade;
+	",
 ];
 
 #[derive(Debug, Clone)]

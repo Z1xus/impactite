@@ -15,6 +15,7 @@ mod passkeys;
 mod server;
 mod sites;
 mod stats;
+mod teams;
 mod tracker;
 mod webauthn;
 

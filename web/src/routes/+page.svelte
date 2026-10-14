@@ -12,7 +12,7 @@
 	import Shell from "#lib/ui/Shell.svelte";
 
 	const team = $derived(currentTeam());
-	const editable = $derived(team !== null && team.role !== "viewer");
+	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
 	let series = $state<Record<string, number[]>>({});
 	let domain = $state("");
 

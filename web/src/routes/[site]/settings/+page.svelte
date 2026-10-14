@@ -6,6 +6,7 @@
 	import { goto } from "$app/navigation";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import Snippet from "#lib/Snippet.svelte";
+	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
@@ -19,6 +20,10 @@
 
 	type Goal = { id: number; page: boolean; value: string; name: string };
 	type Import = { id: number; source: string; first: string; last: string };
+	type People = {
+		guests: { id: number; name: string; email: string; role: string }[];
+		invites: { id: number; email: string; role: string }[];
+	};
 
 	const zones = Intl.supportedValuesOf("timeZone").map((zone) => ({ key: zone, label: zone }));
 	const domain = $derived(page.params.site ?? "");
@@ -34,15 +39,67 @@
 	let file = $state<File | null>(null);
 	let imported = $state("");
 	let confirm = $state("");
-	const owner = $derived(
-		["owner", "admin"].includes(
-			session.me?.teams.find((team) => team.sites.some((site) => site.domain === domain))
-				?.role ?? ""
+	const owner = $derived(["owner", "admin"].includes(site?.role ?? ""));
+	const home = $derived(
+		session.me?.teams.find(
+			(team) => team.id && team.sites.some((site) => site.domain === domain)
 		)
 	);
+	const targets = $derived(
+		(session.me?.teams ?? [])
+			.filter((team) => team.id && ["owner", "admin"].includes(team.role))
+			.map((team) => ({ key: team.id, label: team.personal ? "personal" : team.name }))
+	);
+
+	let people = $state<People | null>(null);
+	let guestEmail = $state("");
+	let guestRole = $state<"viewer" | "editor">("viewer");
+	let guestLink = $state("");
 	let error = $state("");
 
 	$effect(() => {
+		if (owner) api<People>(`/api/app/sites/${domain}/guests`).then((r) => (people = r));
+	});
+
+	async function inviteGuest() {
+		const result = await api<{ link: string; sent: boolean }>(
+			`/api/app/sites/${domain}/guests`,
+			{
+				email: guestEmail,
+				role: guestRole
+			}
+		);
+		guestLink = result.sent ? "" : result.link;
+		guestEmail = "";
+		people = await api<People>(`/api/app/sites/${domain}/guests`);
+	}
+
+	const removeGuest = (user: string | number) =>
+		attempt(async () => {
+			people = await api<People>(
+				`/api/app/sites/${domain}/guests/${user}`,
+				undefined,
+				"DELETE"
+			);
+		});
+
+	const revokeGuest = (invite: string | number) =>
+		attempt(async () => {
+			people = await api<People>(
+				`/api/app/sites/${domain}/guests/invites/${invite}`,
+				undefined,
+				"DELETE"
+			);
+		});
+
+	const moveTo = (team: number) =>
+		attempt(async () => {
+			await api(`/api/app/sites/${domain}`, { team }, "PATCH");
+			await refresh();
+		});
+
+	$effect(() => {
+		if (!site) return;
 		api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then((r) => (goals = r.goals));
 		api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`).then(
 			(r) => (imports = r.imports)
@@ -117,84 +174,142 @@
 </script>
 
 <Shell>
-	<div class="flex flex-col gap-12">
-		<a
-			href={resolve("/[site]", { site: domain })}
-			class="flex w-fit items-center gap-2.5 text-fg transition-colors duration-100 hover:text-cyan"
-		>
-			<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
-			{domain}
-		</a>
+	{#if site}
+		<div class="flex flex-col gap-12">
+			<a
+				href={resolve("/[site]", { site: domain })}
+				class="flex w-fit items-center gap-2.5 text-fg transition-colors duration-100 hover:text-cyan"
+			>
+				<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
+				{domain}
+			</a>
 
-		<Section label="tracking">
-			<Snippet {domain} />
-		</Section>
+			<Section label="tracking">
+				<Snippet {domain} />
+			</Section>
 
-		<Section label="timezone">
-			<div class="w-fit">
-				<Select value={site?.timezone ?? "UTC"} options={zones} data pick={setTimezone} />
-			</div>
-		</Section>
+			<Section label="timezone">
+				<div class="w-fit">
+					<Select
+						value={site?.timezone ?? "UTC"}
+						options={zones}
+						data
+						pick={setTimezone}
+					/>
+				</div>
+			</Section>
 
-		<Section label="goals">
-			<List
-				items={goals?.map((goal) => ({
-					key: goal.id,
-					title: goal.name,
-					meta: goal.page ? "page" : "event"
-				})) ?? null}
-				remove={removeGoal}
-			/>
-			<Form action="add goal" submit={addGoal} inline>
-				<Field
-					label={kind === "page" ? "path" : "event name"}
-					placeholder={kind === "page" ? "/pricing" : "Signup"}
-					bind:value
-					required
+			<Section label="goals">
+				<List
+					items={goals?.map((goal) => ({
+						key: goal.id,
+						title: goal.name,
+						meta: goal.page ? "page" : "event"
+					})) ?? null}
+					remove={removeGoal}
 				/>
-				<Toggle
-					bind:value={kind}
-					options={[
-						{ key: "event", label: "event" },
-						{ key: "page", label: "page" }
-					]}
-				/>
-			</Form>
-		</Section>
-
-		<Section label="imports">
-			<List
-				items={imports?.map((item) => ({
-					key: item.id,
-					title: `${item.first} to ${item.last}`,
-					meta: item.source
-				})) ?? null}
-				remove={removeImport}
-			/>
-			<Form action="import" submit={runImport} inline>
-				<Upload bind:file accept={source === "plausible" ? ".zip" : ".csv,.gz"} />
-				<Toggle
-					bind:value={source}
-					options={[
-						{ key: "plausible", label: "plausible" },
-						{ key: "goatcounter", label: "goatcounter" }
-					]}
-				/>
-			</Form>
-			<Message tone="cyan">{imported}</Message>
-		</Section>
-
-		{#if owner}
-			<Section label="delete site">
-				<Form action="delete" submit={destroy} inline>
+				<Form action="add goal" submit={addGoal} inline>
 					<Field
-						label="type {domain} to delete it and all its data"
-						bind:value={confirm}
+						label={kind === "page" ? "path" : "event name"}
+						placeholder={kind === "page" ? "/pricing" : "Signup"}
+						bind:value
+						required
+					/>
+					<Toggle
+						bind:value={kind}
+						options={[
+							{ key: "event", label: "event" },
+							{ key: "page", label: "page" }
+						]}
 					/>
 				</Form>
 			</Section>
-		{/if}
 
-		<Message tone="bad">{error}</Message>
-	</div>
+			<Section label="imports">
+				<List
+					items={imports?.map((item) => ({
+						key: item.id,
+						title: `${item.first} to ${item.last}`,
+						meta: item.source
+					})) ?? null}
+					remove={removeImport}
+				/>
+				<Form action="import" submit={runImport} inline>
+					<Upload bind:file accept={source === "plausible" ? ".zip" : ".csv,.gz"} />
+					<Toggle
+						bind:value={source}
+						options={[
+							{ key: "plausible", label: "plausible" },
+							{ key: "goatcounter", label: "goatcounter" }
+						]}
+					/>
+				</Form>
+				<Message tone="cyan">{imported}</Message>
+			</Section>
+
+			{#if owner && people}
+				<Section label="guests">
+					<List
+						items={[
+							...people.guests.map((guest) => ({
+								key: `g${guest.id}`,
+								title: guest.name,
+								meta: `${guest.email} · ${guest.role}`
+							})),
+							...people.invites.map((invite) => ({
+								key: `i${invite.id}`,
+								title: invite.email,
+								meta: `invited · ${invite.role}`
+							}))
+						]}
+						remove={(key) =>
+							String(key).startsWith("g")
+								? removeGuest(String(key).slice(1))
+								: revokeGuest(String(key).slice(1))}
+					/>
+					<Form action="invite" submit={inviteGuest} inline>
+						<Field
+							label="email"
+							type="email"
+							placeholder="ada@example.com"
+							bind:value={guestEmail}
+							required
+						/>
+						<Toggle
+							bind:value={guestRole}
+							options={[
+								{ key: "viewer", label: "viewer" },
+								{ key: "editor", label: "editor" }
+							]}
+						/>
+					</Form>
+					{#if guestLink}
+						<Code code={guestLink} />
+						<Message>Mail is not set up, so share this link yourself.</Message>
+					{/if}
+				</Section>
+
+				{#if home && targets.length > 1}
+					<Section label="team">
+						<div class="w-fit">
+							<Select value={home.id} options={targets} pick={moveTo} />
+						</div>
+					</Section>
+				{/if}
+			{/if}
+
+			{#if owner}
+				<Section label="delete site">
+					<Form action="delete" submit={destroy} inline>
+						<Field
+							label="type {domain} to delete it and all its data"
+							bind:value={confirm}
+						/>
+					</Form>
+				</Section>
+			{/if}
+
+			<Message tone="bad">{error}</Message>
+		</div>
+	{/if}
 </Shell>

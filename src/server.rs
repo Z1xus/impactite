@@ -15,6 +15,7 @@ use crate::keys;
 use crate::passkeys;
 use crate::sites;
 use crate::stats::{self, Stats};
+use crate::teams;
 use crate::tracker;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
@@ -34,6 +35,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(goals::routes())
 				.merge(keys::routes())
 				.merge(sites::routes())
+				.merge(teams::routes())
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))
 				.route("/api/app/icon/{host}", get(icons::icon))

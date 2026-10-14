@@ -11,11 +11,12 @@ use axum::routing::{delete, get, patch};
 use axum::{Json, Router};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
+use rusqlite::params;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail};
-use crate::app::{Site, token};
+use crate::accounts::{self, Viewer, Web, fail};
+use crate::app::{App, Site, token};
 use crate::import;
 use crate::stats::day_number;
 
@@ -29,11 +30,30 @@ pub fn routes() -> Router<Arc<Web>> {
 			get(list).post(upload).layer(DefaultBodyLimit::max(UPLOAD)),
 		)
 		.route("/api/app/sites/{domain}/imports/{id}", delete(remove))
+		.route(
+			"/api/app/sites/{domain}/guests",
+			get(guests).post(invite_guest),
+		)
+		.route(
+			"/api/app/sites/{domain}/guests/{user}",
+			delete(remove_guest),
+		)
+		.route(
+			"/api/app/sites/{domain}/guests/invites/{id}",
+			delete(revoke_guest),
+		)
 }
 
 #[derive(Deserialize)]
 struct Update {
-	timezone: String,
+	timezone: Option<String>,
+	team: Option<i64>,
+}
+
+#[derive(Deserialize)]
+struct Guest {
+	email: String,
+	role: String,
 }
 
 #[derive(Deserialize)]
@@ -50,16 +70,115 @@ async fn update(
 	let Some(site) = editable(&web, viewer.user, &domain) else {
 		return forbidden();
 	};
-	if TimeZone::get(&body.timezone).is_err() {
-		return fail(StatusCode::BAD_REQUEST, "Use a valid timezone.");
+	if let Some(timezone) = &body.timezone {
+		if TimeZone::get(timezone).is_err() {
+			return fail(StatusCode::BAD_REQUEST, "Use a valid timezone.");
+		}
+		if web.app.set_timezone(site.id, timezone).is_err() {
+			return broken();
+		}
+		web.ingest.forget(&site.domain);
 	}
-	match web.app.set_timezone(site.id, &body.timezone) {
-		Ok(()) => {
-			web.ingest.forget(&site.domain);
-			StatusCode::NO_CONTENT.into_response()
+	if let Some(team) = body.team {
+		if !manages(&web, viewer.user, &site) || !manager(&web, viewer.user, team) {
+			return fail(
+				StatusCode::FORBIDDEN,
+				"You need to manage both teams to move a site.",
+			);
+		}
+		if web.app.move_site(site.id, team).is_err() {
+			return broken();
+		}
+	}
+	StatusCode::NO_CONTENT.into_response()
+}
+
+async fn guests(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	match managed(&web, viewer.user, &domain) {
+		Some(site) => respond_guests(&web, &site),
+		None => forbidden(),
+	}
+}
+
+async fn invite_guest(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+	Json(body): Json<Guest>,
+) -> Response {
+	let Some(site) = managed(&web, viewer.user, &domain) else {
+		return forbidden();
+	};
+	if !matches!(body.role.as_str(), "viewer" | "editor") || !body.email.contains('@') {
+		return fail(StatusCode::BAD_REQUEST, "Use a valid email and role.");
+	}
+	let token = web
+		.app
+		.site_team(site.id)
+		.and_then(|team| web.app.invite(team, Some(site.id), &body.email, &body.role));
+	match token {
+		Ok(token) => {
+			accounts::send_invite(&web, viewer.user, &site.domain, &body.email, &token).await
 		}
 		Err(_) => broken(),
 	}
+}
+
+async fn remove_guest(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path((domain, user)): Path<(String, i64)>,
+) -> Response {
+	let Some(site) = managed(&web, viewer.user, &domain) else {
+		return forbidden();
+	};
+	match web.app.remove_guest(site.id, user) {
+		Ok(()) => respond_guests(&web, &site),
+		Err(_) => broken(),
+	}
+}
+
+async fn revoke_guest(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path((domain, id)): Path<(String, i64)>,
+) -> Response {
+	let Some(site) = managed(&web, viewer.user, &domain) else {
+		return forbidden();
+	};
+	match web.app.revoke_guest_invite(site.id, id) {
+		Ok(()) => respond_guests(&web, &site),
+		Err(_) => broken(),
+	}
+}
+
+fn respond_guests(web: &Web, site: &Site) -> Response {
+	match web.app.guests(site.id) {
+		Ok(guests) => Json(guests).into_response(),
+		Err(_) => broken(),
+	}
+}
+
+fn manager(web: &Web, user: i64, team: i64) -> bool {
+	matches!(
+		web.app.role(user, team).ok().flatten().as_deref(),
+		Some("owner" | "admin")
+	)
+}
+
+fn manages(web: &Web, user: i64, site: &Site) -> bool {
+	web.app
+		.site_team(site.id)
+		.is_ok_and(|team| manager(web, user, team))
+}
+
+fn managed(web: &Web, user: i64, domain: &str) -> Option<Site> {
+	let site = web.app.site(domain).ok().flatten()?;
+	manages(web, user, &site).then_some(site)
 }
 
 async fn destroy(
@@ -75,16 +194,20 @@ async fn destroy(
 			"Only owners and admins can delete sites.",
 		);
 	};
+	match drop_site(&web, site).await {
+		true => StatusCode::NO_CONTENT.into_response(),
+		false => broken(),
+	}
+}
+
+pub async fn drop_site(web: &Web, site: Site) -> bool {
 	let db = web.stats.db.clone();
 	let dropped = tokio::task::spawn_blocking(move || db.drop_site(site.id)).await;
 	if !matches!(dropped, Ok(Ok(()))) {
-		return broken();
+		return false;
 	}
 	web.ingest.forget(&site.domain);
-	match web.app.delete_site(site.id) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(_) => broken(),
-	}
+	web.app.delete_site(site.id).is_ok()
 }
 
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
@@ -182,4 +305,69 @@ fn forbidden() -> Response {
 
 fn broken() -> Response {
 	fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
+}
+
+impl App {
+	pub fn site_team(&self, site: u64) -> rusqlite::Result<i64> {
+		self.conn().query_row(
+			"select team from sites where id = ?1",
+			[site as i64],
+			|row| row.get(0),
+		)
+	}
+
+	pub fn move_site(&self, site: u64, team: i64) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set team = ?2 where id = ?1",
+			params![site as i64, team],
+		)?;
+		Ok(())
+	}
+
+	pub fn guests(&self, site: u64) -> rusqlite::Result<Value> {
+		let conn = self.conn();
+		let guests = conn
+			.prepare(
+				"select u.id, u.name, u.email, g.role from guests g join users u on u.id = g.user
+				where g.site = ?1 order by u.name",
+			)?
+			.query_map([site as i64], |row| {
+				Ok(json!({
+					"id": row.get::<_, i64>(0)?,
+					"name": row.get::<_, String>(1)?,
+					"email": row.get::<_, String>(2)?,
+					"role": row.get::<_, String>(3)?,
+				}))
+			})?
+			.collect::<rusqlite::Result<Vec<_>>>()?;
+		let invites = conn
+			.prepare(
+				"select rowid, email, role from invites where site = ?1 and expires_at > unixepoch() order by rowid",
+			)?
+			.query_map([site as i64], |row| {
+				Ok(json!({
+					"id": row.get::<_, i64>(0)?,
+					"email": row.get::<_, String>(1)?,
+					"role": row.get::<_, String>(2)?,
+				}))
+			})?
+			.collect::<rusqlite::Result<Vec<_>>>()?;
+		Ok(json!({ "guests": guests, "invites": invites }))
+	}
+
+	pub fn remove_guest(&self, site: u64, user: i64) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"delete from guests where site = ?1 and user = ?2",
+			params![site as i64, user],
+		)?;
+		Ok(())
+	}
+
+	pub fn revoke_guest_invite(&self, site: u64, id: i64) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"delete from invites where site = ?1 and rowid = ?2",
+			params![site as i64, id],
+		)?;
+		Ok(())
+	}
 }

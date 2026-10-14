@@ -62,10 +62,7 @@
 	const site = $derived(
 		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
 	);
-	const editable = $derived(
-		session.me?.teams.find((team) => team.sites.some((site) => site.domain === domain))
-			?.role !== "viewer"
-	);
+	const editable = $derived(["owner", "admin", "editor"].includes(site?.role ?? ""));
 	const sites = $derived(
 		(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
 			key: site.domain,
