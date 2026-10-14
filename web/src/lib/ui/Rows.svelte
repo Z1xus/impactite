@@ -37,25 +37,27 @@
 			<li animate:flip={{ duration: 200 }}>
 				<button
 					type="button"
-					class="group relative flex h-8 w-full items-center justify-between gap-4 rounded-px px-2 text-left enabled:cursor-pointer"
+					class="group flex h-8 w-full items-center gap-2.5 rounded-px px-2 text-left enabled:cursor-pointer"
 					onclick={() => pick?.(row.key)}
 					disabled={!pick}
 				>
+					{#if row.icon !== undefined}
+						<Glyph spec={row.icon} fallback={row.fallback} />
+					{/if}
 					<span
-						class="dither absolute inset-y-1 left-0 rounded-px transition-[width] duration-300 ease-out group-hover:opacity-100"
-						style:width="{(row.value / max) * 100}%"
-					></span>
-					<span class="relative flex min-w-0 items-center gap-2.5">
-						{#if row.icon !== undefined}
-							<Glyph spec={row.icon} fallback={row.fallback} />
-						{/if}
-						<span class="truncate text-[14px] text-fg">{row.label}</span>
+						class="relative flex h-full min-w-0 flex-1 items-center justify-between gap-4"
+					>
+						<span
+							class="dither absolute inset-y-1 left-0 rounded-px transition-[width] duration-300 ease-out"
+							style:width="{(row.value / max) * 100}%"
+						></span>
+						<span class="relative truncate pl-2 text-[14px] text-fg">{row.label}</span>
+						<Num
+							value={row.value}
+							{format}
+							class="relative pr-2 text-label text-dim group-hover:text-fg"
+						/>
 					</span>
-					<Num
-						value={row.value}
-						{format}
-						class="relative text-label text-dim group-hover:text-fg"
-					/>
 				</button>
 			</li>
 		{/each}
