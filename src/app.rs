@@ -72,6 +72,17 @@ const MIGRATIONS: &[&str] = &[
 		used_at integer
 	);
 	",
+	"
+	create table goals (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		page integer not null,
+		value text not null,
+		name text not null,
+		created_at integer not null,
+		unique (site, page, value)
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

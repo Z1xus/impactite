@@ -3,6 +3,7 @@ mod app;
 mod assets;
 mod demo;
 mod geo;
+mod goals;
 mod icons;
 mod ingest;
 mod mail;

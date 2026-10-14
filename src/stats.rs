@@ -1,10 +1,11 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use crater::{Db, Dim, Filter, Metrics, Op, Query, Report};
+use crater::{Db, Dim, Field, Filter, Metrics, Op, Query, Report};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::{Span, Timestamp, ToSpan};
@@ -13,6 +14,7 @@ use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail};
 use crate::app::App;
+use crate::goals::Goal;
 
 pub struct Stats {
 	pub db: Arc<Db>,
@@ -82,6 +84,7 @@ enum Metric {
 	VisitDuration,
 	Events,
 	Percentage,
+	ConversionRate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,11 +95,13 @@ enum Time {
 	Month,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Grouping {
 	Total,
-	Dim(Dim),
 	Time(Time),
+	Field(Field),
+	Goal,
+	TimeField(Time, Field),
 }
 
 struct Row {
@@ -165,51 +170,95 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	if metrics.is_empty() {
 		return Err("#/metrics: Expected a minimum of 1 items".into());
 	}
-	let grouping = match request.dimensions.as_slice() {
-		[] => Grouping::Total,
-		[name] => grouping(name)?,
-		_ => return Err("#/dimensions: Only one dimension is supported for now".into()),
-	};
-	if grouping == Grouping::Time(Time::Hour) && from != to {
+	let grouping = grouping(&request.dimensions)?;
+	if matches!(
+		grouping,
+		Grouping::Time(Time::Hour) | Grouping::TimeField(Time::Hour, _)
+	) && from != to
+	{
 		return Err("#/dimensions: time:hour needs a single day date_range".into());
 	}
-	let filters = request
-		.filters
-		.iter()
-		.map(filters)
-		.collect::<Result<Vec<_>, _>>()?
-		.concat();
 
-	let report = stats
-		.db
-		.query(&Query {
-			site: site.id,
-			days: day_number(from)..=day_number(to),
-			filters,
-			breakdown: match grouping {
-				Grouping::Dim(dim) => Some(dim),
-				_ => None,
-			},
-			limit: usize::MAX,
-		})
-		.map_err(|err| err.to_string())?;
+	let goals = stats.app.goals(site.id).map_err(|err| err.to_string())?;
+	let mut base_filters = Vec::new();
+	let mut goal_filters = Vec::new();
+	for raw in &request.filters {
+		for (filter, from_goal) in filters(raw, &goals)? {
+			match from_goal {
+				true => goal_filters.push(filter),
+				false => base_filters.push(filter),
+			}
+		}
+	}
+	let days = day_number(from)..=day_number(to);
+	let run = |filters: Vec<Filter>, breakdown: Option<Field>, daily: bool| {
+		stats
+			.db
+			.query(&Query {
+				site: site.id,
+				days: days.clone(),
+				filters,
+				breakdown,
+				limit: usize::MAX,
+				daily,
+			})
+			.map_err(|err| err.to_string())
+	};
+	let filtered = || {
+		base_filters
+			.iter()
+			.chain(&goal_filters)
+			.cloned()
+			.collect::<Vec<_>>()
+	};
 
-	let mut rows = rows(&report, grouping, from);
-	let total_visitors = report.total.visitors;
-	let sort_key = |name: &str| -> Option<usize> {
-		match request.dimensions.iter().position(|dim| dim == name) {
-			Some(_) => None,
-			None => request.metrics.iter().position(|metric| metric == name),
+	let (mut rows, base) = match &grouping {
+		Grouping::Goal => {
+			let base = run(filtered(), None, false)?.total.visitors;
+			let rows = goals
+				.iter()
+				.map(|goal| {
+					let mut filters = filtered();
+					filters.extend(goal.filters());
+					let report = run(filters, None, false)?;
+					Ok(Row {
+						dimensions: vec![json!(goal.name)],
+						metrics: report.total,
+					})
+				})
+				.collect::<Result<Vec<_>, String>>()?
+				.into_iter()
+				.filter(|row| row.metrics.visitors > 0)
+				.collect();
+			(rows, base)
+		}
+		grouping => {
+			let (field, daily) = match grouping {
+				Grouping::Field(field) => (Some(field.clone()), false),
+				Grouping::TimeField(_, field) => (Some(field.clone()), true),
+				_ => (None, false),
+			};
+			let report = run(filtered(), field, daily)?;
+			let base = match goal_filters.is_empty() {
+				true => report.total.visitors,
+				false => run(base_filters.clone(), None, false)?.total.visitors,
+			};
+			(rows(&report, grouping, from), base)
 		}
 	};
+
+	let compute = |m: Metric, metrics: &Metrics| value(m, metrics, base);
 	match request.order_by.first() {
 		Some((name, direction)) => {
-			let by_metric = sort_key(name);
+			let by_metric = match request.dimensions.iter().any(|dim| dim == name) {
+				true => None,
+				false => request.metrics.iter().position(|metric| metric == name),
+			};
 			rows.sort_by(|a, b| {
 				let ordering = match by_metric {
-					Some(i) => value(metrics[i], &a.metrics, total_visitors)
+					Some(i) => compute(metrics[i], &a.metrics)
 						.as_f64()
-						.partial_cmp(&value(metrics[i], &b.metrics, total_visitors).as_f64())
+						.partial_cmp(&compute(metrics[i], &b.metrics).as_f64())
 						.unwrap_or(std::cmp::Ordering::Equal),
 					None => a
 						.dimensions
@@ -223,30 +272,33 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 				}
 			});
 		}
-		None if !matches!(grouping, Grouping::Time(_)) => rows.sort_by(|a, b| {
-			value(metrics[0], &b.metrics, total_visitors)
-				.as_f64()
-				.partial_cmp(&value(metrics[0], &a.metrics, total_visitors).as_f64())
-				.unwrap_or(std::cmp::Ordering::Equal)
-		}),
+		None if !matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..)) => {
+			rows.sort_by(|a, b| {
+				compute(metrics[0], &b.metrics)
+					.as_f64()
+					.partial_cmp(&compute(metrics[0], &a.metrics).as_f64())
+					.unwrap_or(std::cmp::Ordering::Equal)
+			})
+		}
 		None => {}
 	}
 
 	let total_rows = rows.len();
-	let time_labels: Vec<Value> = match grouping {
-		Grouping::Time(_) => rows
+	let mut time_labels: Vec<Value> = match grouping {
+		Grouping::Time(_) | Grouping::TimeField(..) => rows
 			.iter()
 			.filter_map(|row| row.dimensions.first().cloned())
 			.collect(),
 		_ => Vec::new(),
 	};
+	time_labels.dedup();
 	let results: Vec<Value> = rows
 		.into_iter()
 		.skip(request.pagination.offset)
 		.take(request.pagination.limit)
 		.map(|row| {
 			json!({
-				"metrics": metrics.iter().map(|&m| value(m, &row.metrics, total_visitors)).collect::<Vec<_>>(),
+				"metrics": metrics.iter().map(|&m| compute(m, &row.metrics)).collect::<Vec<_>>(),
 				"dimensions": row.dimensions,
 			})
 		})
@@ -282,18 +334,22 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	}))
 }
 
-fn rows(report: &Report, grouping: Grouping, from: Date) -> Vec<Row> {
+fn rows(report: &Report, grouping: &Grouping, from: Date) -> Vec<Row> {
+	let ranked = |field: &Field, rows: &[(Arc<str>, Metrics)]| -> Vec<(String, Metrics)> {
+		rows.iter()
+			.map(|(value, metrics)| (label(field, value).to_owned(), *metrics))
+			.collect()
+	};
 	match grouping {
-		Grouping::Total => vec![Row {
+		Grouping::Total | Grouping::Goal => vec![Row {
 			dimensions: Vec::new(),
 			metrics: report.total,
 		}],
-		Grouping::Dim(dim) => report
-			.rows
-			.iter()
+		Grouping::Field(field) => ranked(field, &report.rows)
+			.into_iter()
 			.map(|(value, metrics)| Row {
-				dimensions: vec![json!(label(dim, value))],
-				metrics: *metrics,
+				dimensions: vec![json!(value)],
+				metrics,
 			})
 			.collect(),
 		Grouping::Time(Time::Hour) => report
@@ -306,44 +362,66 @@ fn rows(report: &Report, grouping: Grouping, from: Date) -> Vec<Row> {
 			})
 			.collect(),
 		Grouping::Time(unit) => {
-			let mut rows: Vec<Row> = Vec::new();
+			let mut buckets: BTreeMap<String, Metrics> = BTreeMap::new();
 			for (offset, metrics) in report.days.iter().enumerate() {
-				let Ok(day) = from.checked_add((offset as i64).days()) else {
-					continue;
-				};
-				let bucket = match unit {
-					Time::Week => day
-						.checked_sub(i64::from(day.weekday().to_monday_zero_offset()).days())
-						.unwrap_or(day),
-					Time::Month => day.first_of_month(),
-					_ => day,
-				};
-				let label = json!(bucket.to_string());
-				match rows.last_mut() {
-					Some(row) if row.dimensions.first() == Some(&label) => {
-						merge(&mut row.metrics, metrics)
-					}
-					_ => rows.push(Row {
-						dimensions: vec![label],
-						metrics: *metrics,
-					}),
+				merge(
+					buckets.entry(bucket(*unit, from, offset)).or_default(),
+					metrics,
+				);
+			}
+			buckets
+				.into_iter()
+				.map(|(label, metrics)| Row {
+					dimensions: vec![json!(label)],
+					metrics,
+				})
+				.collect()
+		}
+		Grouping::TimeField(unit, field) => {
+			let mut buckets: BTreeMap<(String, String), Metrics> = BTreeMap::new();
+			for (offset, day) in report.daily.iter().enumerate() {
+				for (value, metrics) in ranked(field, day) {
+					merge(
+						buckets
+							.entry((bucket(*unit, from, offset), value))
+							.or_default(),
+						&metrics,
+					);
 				}
 			}
-			rows
+			buckets
+				.into_iter()
+				.map(|((time, value), metrics)| Row {
+					dimensions: vec![json!(time), json!(value)],
+					metrics,
+				})
+				.collect()
 		}
 	}
 }
 
-fn label(dim: Dim, value: &str) -> &str {
-	match (value, dim) {
-		("", Dim::Source) => "Direct / None",
+fn bucket(unit: Time, from: Date, offset: usize) -> String {
+	let day = from.checked_add((offset as i64).days()).unwrap_or(from);
+	match unit {
+		Time::Week => day
+			.checked_sub(i64::from(day.weekday().to_monday_zero_offset()).days())
+			.unwrap_or(day)
+			.to_string(),
+		Time::Month => day.first_of_month().to_string(),
+		Time::Day | Time::Hour => day.to_string(),
+	}
+}
+
+fn label<'a>(field: &Field, value: &'a str) -> &'a str {
+	match (value, field) {
+		("", Field::Dim(Dim::Source)) => "Direct / None",
 		("", _) => "(none)",
 		(value, _) => value,
 	}
 }
 
-fn unlabel(dim: Dim, value: String) -> String {
-	match label(dim, "") == value {
+fn unlabel(field: &Field, value: String) -> String {
+	match label(field, "") == value {
 		true => String::new(),
 		false => value,
 	}
@@ -358,7 +436,7 @@ fn merge(into: &mut Metrics, other: &Metrics) {
 	into.duration += other.duration;
 }
 
-fn value(metric: Metric, metrics: &Metrics, total_visitors: u64) -> Value {
+fn value(metric: Metric, metrics: &Metrics, base: u64) -> Value {
 	let ratio = |a: u64, b: u64| match b {
 		0 => 0.0,
 		_ => a as f64 / b as f64,
@@ -375,9 +453,8 @@ fn value(metric: Metric, metrics: &Metrics, total_visitors: u64) -> Value {
 			json!((ratio(metrics.bounces, metrics.visits) * 100.0).round() as u64)
 		}
 		Metric::VisitDuration => json!(ratio(metrics.duration, metrics.visits).round() as u64),
-		Metric::Percentage => {
-			json!((ratio(metrics.visitors, total_visitors) * 1000.0).round() / 10.0)
-		}
+		Metric::Percentage => json!((ratio(metrics.visitors, base) * 1000.0).round() / 10.0),
+		Metric::ConversionRate => json!((ratio(metrics.visitors, base) * 10000.0).round() / 100.0),
 	}
 }
 
@@ -391,12 +468,18 @@ fn metric(name: &str) -> Option<Metric> {
 		"visit_duration" => Metric::VisitDuration,
 		"events" => Metric::Events,
 		"percentage" => Metric::Percentage,
+		"conversion_rate" => Metric::ConversionRate,
 		_ => return None,
 	})
 }
 
-fn dimension(name: &str) -> Option<Dim> {
-	Some(match name {
+fn dimension(name: &str) -> Option<Field> {
+	if let Some(key) = name.strip_prefix("event:props:") {
+		return Some(Field::Prop(key.to_owned()));
+	}
+	Some(Field::Dim(match name {
+		"visit:entry_page" => return Some(Field::Entry),
+		"visit:exit_page" => return Some(Field::Exit),
 		"event:name" => Dim::Name,
 		"event:hostname" => Dim::Hostname,
 		"event:page" => Dim::Page,
@@ -417,23 +500,44 @@ fn dimension(name: &str) -> Option<Dim> {
 		"visit:os" => Dim::Os,
 		"visit:os_version" => Dim::OsVersion,
 		_ => return None,
+	}))
+}
+
+fn time(name: &str) -> Option<Time> {
+	Some(match name {
+		"time:hour" => Time::Hour,
+		"time" | "time:day" => Time::Day,
+		"time:week" => Time::Week,
+		"time:month" => Time::Month,
+		_ => return None,
 	})
 }
 
-fn grouping(name: &str) -> Result<Grouping, String> {
-	Ok(match name {
-		"time:hour" => Grouping::Time(Time::Hour),
-		"time" | "time:day" => Grouping::Time(Time::Day),
-		"time:week" => Grouping::Time(Time::Week),
-		"time:month" => Grouping::Time(Time::Month),
-		name => Grouping::Dim(
-			dimension(name)
-				.ok_or_else(|| format!("#/dimensions/0: Invalid dimension \"{name}\""))?,
-		),
+fn grouping(names: &[String]) -> Result<Grouping, String> {
+	let field = |name: &str| {
+		dimension(name).ok_or_else(|| format!("#/dimensions: Invalid dimension \"{name}\""))
+	};
+	Ok(match names {
+		[] => Grouping::Total,
+		[name] if name == "event:goal" => Grouping::Goal,
+		[name] => match time(name) {
+			Some(unit) => Grouping::Time(unit),
+			None => Grouping::Field(field(name)?),
+		},
+		[a, b] => match (time(a), time(b)) {
+			(Some(unit), None) => Grouping::TimeField(unit, field(b)?),
+			(None, Some(unit)) => Grouping::TimeField(unit, field(a)?),
+			_ => {
+				return Err(
+					"#/dimensions: Combine one time dimension with one other dimension".into(),
+				);
+			}
+		},
+		_ => return Err("#/dimensions: At most two dimensions are supported".into()),
 	})
 }
 
-fn filters(raw: &Value) -> Result<Vec<Filter>, String> {
+fn filters(raw: &Value, goals: &[Goal]) -> Result<Vec<(Filter, bool)>, String> {
 	let invalid = || format!("#/filters: Invalid filter {raw}");
 	let Value::Array(parts) = raw else {
 		return Err(invalid());
@@ -441,33 +545,56 @@ fn filters(raw: &Value) -> Result<Vec<Filter>, String> {
 	match parts.as_slice() {
 		[Value::String(op), Value::Array(inner)] if op == "and" => Ok(inner
 			.iter()
-			.map(filters)
+			.map(|filter| filters(filter, goals))
 			.collect::<Result<Vec<_>, _>>()?
 			.concat()),
 		[
 			Value::String(op),
-			Value::String(dim),
+			Value::String(name),
 			Value::Array(clauses),
 			..,
 		] => {
+			let values: Vec<String> = clauses
+				.iter()
+				.map(|clause| match clause {
+					Value::String(text) => Ok(text.clone()),
+					Value::Number(number) => Ok(number.to_string()),
+					_ => Err(invalid()),
+				})
+				.collect::<Result<_, _>>()?;
+			if name == "event:goal" {
+				let [value] = values.as_slice() else {
+					return Err("#/filters: Filter by one goal at a time".into());
+				};
+				let goal = goals
+					.iter()
+					.find(|goal| &goal.name == value)
+					.ok_or_else(|| format!("#/filters: Unknown goal \"{value}\""))?;
+				if op != "is" {
+					return Err("#/filters: Goals only support \"is\"".into());
+				}
+				return Ok(goal
+					.filters()
+					.into_iter()
+					.map(|filter| (filter, true))
+					.collect());
+			}
 			let op = match op.as_str() {
 				"is" => Op::Is,
 				"is_not" => Op::IsNot,
 				"contains" => Op::Contains,
 				"contains_not" => Op::ContainsNot,
+				"matches_wildcard" => Op::Matches,
+				"matches_wildcard_not" => Op::MatchesNot,
 				_ => return Err(format!("#/filters: Unsupported filter operator \"{op}\"")),
 			};
-			let dim = dimension(dim)
-				.ok_or_else(|| format!("#/filters: Invalid filter dimension \"{dim}\""))?;
-			let values = clauses
-				.iter()
-				.map(|clause| match clause {
-					Value::String(text) => Ok(unlabel(dim, text.clone())),
-					Value::Number(number) => Ok(number.to_string()),
-					_ => Err(invalid()),
-				})
-				.collect::<Result<_, _>>()?;
-			Ok(vec![Filter { dim, op, values }])
+			let field = dimension(name)
+				.ok_or_else(|| format!("#/filters: Invalid filter dimension \"{name}\""))?;
+			let values = values
+				.into_iter()
+				.map(|value| unlabel(&field, value))
+				.collect();
+			Ok(vec![(Filter { field, op, values }, false)])
 		}
 		_ => Err(invalid()),
 	}
