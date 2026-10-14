@@ -5,7 +5,7 @@ use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::cache::Cache;
@@ -30,18 +30,25 @@ type Key = (u64, i32);
 enum Msg {
 	Event(Box<Event>),
 	Sync(SyncSender<io::Result<()>>),
+	Stop(SyncSender<io::Result<()>>),
 }
 
 pub struct Db {
 	tx: SyncSender<Msg>,
 	shared: Arc<Shared>,
-	writer: JoinHandle<io::Result<()>>,
+	lock: Mutex<Option<fs::File>>,
 }
 
 impl Db {
 	pub fn open(dir: impl Into<PathBuf>) -> io::Result<Self> {
+		let dir = dir.into();
+		fs::create_dir_all(&dir)?;
+		let lock = fs::File::create(dir.join("lock"))?;
+		lock.try_lock().map_err(|_| {
+			io::Error::new(ErrorKind::WouldBlock, "data dir is used by another process")
+		})?;
 		let shared = Arc::new(Shared {
-			dir: dir.into(),
+			dir,
 			dicts: Mutex::default(),
 			live: RwLock::default(),
 			cache: Mutex::new(Cache::new(CACHE)),
@@ -50,10 +57,14 @@ impl Db {
 		});
 		let writer = Writer::open(shared.clone())?;
 		let (tx, rx) = mpsc::sync_channel(QUEUE);
-		let writer = thread::Builder::new()
+		thread::Builder::new()
 			.name("crater".into())
 			.spawn(move || writer.run(&rx))?;
-		Ok(Self { tx, shared, writer })
+		Ok(Self {
+			tx,
+			shared,
+			lock: Mutex::new(Some(lock)),
+		})
 	}
 
 	pub fn insert(&self, event: Event) -> bool {
@@ -64,6 +75,14 @@ impl Db {
 		let (tx, rx) = mpsc::sync_channel(1);
 		self.tx.send(Msg::Sync(tx)).map_err(|_| stopped())?;
 		rx.recv().map_err(|_| stopped())?
+	}
+
+	pub fn close(&self) -> io::Result<()> {
+		let (tx, rx) = mpsc::sync_channel(1);
+		self.tx.send(Msg::Stop(tx)).map_err(|_| stopped())?;
+		let closed = rx.recv().map_err(|_| stopped())?;
+		lock(&self.lock).take();
+		closed
 	}
 
 	pub fn query(&self, query: &Query) -> io::Result<Report> {
@@ -268,12 +287,6 @@ impl Db {
 		lock(&self.shared.cache).insert((key, shape, false), counts.clone());
 		Ok(counts)
 	}
-
-	pub fn close(self) -> io::Result<()> {
-		let Self { tx, writer, .. } = self;
-		drop(tx);
-		writer.join().map_err(|_| stopped())?
-	}
 }
 
 struct Plan {
@@ -442,6 +455,7 @@ impl Writer {
 	fn run(mut self, rx: &Receiver<Msg>) -> io::Result<()> {
 		let mut batch = Vec::new();
 		let mut replies = Vec::new();
+		let mut stop = None;
 		loop {
 			let first = match rx.recv_timeout(TICK) {
 				Ok(msg) => Some(msg),
@@ -452,18 +466,23 @@ impl Writer {
 				match msg {
 					Msg::Event(event) => batch.push(*event),
 					Msg::Sync(reply) => replies.push(reply),
+					Msg::Stop(reply) => stop = Some(reply),
 				}
 			}
 
-			let force = !replies.is_empty();
+			let stop_requested = stop.is_some();
+			let force = !replies.is_empty() || stop_requested;
 			let result = self.write(&mut batch).and_then(|()| self.tick(force));
-			for reply in replies.drain(..) {
+			for reply in replies.drain(..).chain(stop.take()) {
 				let _ = reply.send(match &result {
 					Ok(()) => Ok(()),
 					Err(err) => Err(io::Error::new(err.kind(), err.to_string())),
 				});
 			}
 			result?;
+			if stop_requested {
+				return Ok(());
+			}
 		}
 	}
 
