@@ -19,7 +19,7 @@
 	} = $props();
 </script>
 
-<span class="inline-flex h-7 items-center gap-1 rounded-px border border-edge pr-1 pl-2.5">
+<span class="inline-flex h-9 items-center gap-1 rounded-px border border-edge pr-1 pl-2.5">
 	<button
 		type="button"
 		class="flex min-w-0 items-center gap-2 enabled:cursor-pointer"

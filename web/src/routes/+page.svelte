@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
 	import Chart from "#lib/dither/Chart.svelte";
@@ -6,11 +7,17 @@
 	import { currentTeam, refresh } from "#lib/session.svelte.ts";
 	import { shift, today } from "#lib/period.ts";
 	import { compact, query } from "#lib/stats.ts";
+	import Button from "#lib/ui/Button.svelte";
+	import Dialog from "#lib/ui/Dialog.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
 	import Num from "#lib/ui/Num.svelte";
+	import Message from "#lib/ui/Message.svelte";
+	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
+	import Title from "#lib/ui/Title.svelte";
+	import { ZONES } from "#lib/zones.ts";
 
 	const team = $derived(currentTeam());
 	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
@@ -29,19 +36,43 @@
 		}
 	});
 
+	let adding = $state(false);
+	let timezone = $state(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
 	async function add() {
-		await api("/api/app/sites", {
+		const site = await api<{ domain: string }>("/api/app/sites", {
 			team: team?.id,
 			domain,
-			timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+			timezone
 		});
 		domain = "";
+		adding = false;
 		await refresh();
+		await goto(resolve("/[site]", { site: site.domain }));
 	}
 </script>
 
+<Dialog title="add site" bind:open={adding}>
+	<Form action="add site" submit={add}>
+		<Field label="domain" placeholder="example.com" bind:value={domain} required />
+		<Select
+			label="timezone"
+			value={timezone}
+			options={ZONES}
+			data
+			pick={(zone) => (timezone = zone)}
+		/>
+	</Form>
+</Dialog>
+
 <Shell>
-	<div class="flex flex-col gap-10">
+	<div class="flex flex-col gap-6">
+		<div class="flex min-h-9 items-center justify-between gap-4">
+			<Title>{team?.personal ? "Personal" : (team?.name ?? "")}</Title>
+			{#if editable}
+				<Button onclick={() => (adding = true)}>add site</Button>
+			{/if}
+		</div>
 		{#if team && team.sites.length}
 			<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				{#each team.sites as site (site.id)}
@@ -77,14 +108,8 @@
 					</li>
 				{/each}
 			</ul>
-		{/if}
-
-		{#if editable}
-			<div class="max-w-sm">
-				<Form action="add site" submit={add} inline>
-					<Field label="domain" bind:value={domain} placeholder="example.com" required />
-				</Form>
-			</div>
+		{:else}
+			<Message>No sites yet.</Message>
 		{/if}
 	</div>
 </Shell>

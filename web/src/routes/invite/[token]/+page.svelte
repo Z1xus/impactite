@@ -38,7 +38,7 @@
 
 <Gate>
 	<div class="flex flex-col gap-3">
-		<Form action={session.me || usePassword ? "join" : "join with passkey"} {submit}>
+		<Form block action={session.me || usePassword ? "join" : "join with passkey"} {submit}>
 			{#if !session.me}
 				<Field label="name" bind:value={name} autocomplete="name" required />
 				{#if usePassword}

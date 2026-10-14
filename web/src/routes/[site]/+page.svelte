@@ -481,7 +481,7 @@
 			{#if editable}
 				<a
 					href={resolve("/[site]/settings", { site: domain })}
-					class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
+					class="grid h-9 w-9 place-items-center rounded-px border border-edge text-dim transition-colors duration-100 hover:border-dim hover:text-fg"
 					aria-label="site settings"
 					title="site settings"
 				>

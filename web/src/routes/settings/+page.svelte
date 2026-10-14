@@ -2,33 +2,43 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
+	import { create } from "#lib/passkey.ts";
 	import { adopt, refresh, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
-	import { create } from "#lib/passkey.ts";
 	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Message from "#lib/ui/Message.svelte";
 	import Section from "#lib/ui/Section.svelte";
+	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
+	import Title from "#lib/ui/Title.svelte";
 
 	type Passkey = { id: string; name: string; created_at: number; used_at: number | null };
 	type Key = { id: number; name: string; prefix: string; created: number };
 	type Session = { id: number; current: boolean; device: string; created: number; seen: number };
+
+	const sections = [
+		{ id: "profile", label: "profile" },
+		{ id: "password", label: "password" },
+		{ id: "passkeys", label: "passkeys" },
+		{ id: "sessions", label: "sessions" },
+		{ id: "keys", label: "api keys" },
+		{ id: "danger", label: "danger" }
+	];
 
 	let name = $state(session.me?.name ?? "");
 	let email = $state(session.me?.email ?? "");
 	let current = $state("");
 	let next = $state("");
 	let saved = $state("");
-	let sessions = $state<Session[] | null>(null);
-	let confirm = $state("");
-
 	let passkeys = $state<Passkey[] | null>(null);
+	let sessions = $state<Session[] | null>(null);
 	let keys = $state<Key[] | null>(null);
 	let keyName = $state("");
 	let fresh = $state("");
+	let confirm = $state("");
 	let error = $state("");
 
 	const date = (seconds: number) =>
@@ -39,17 +49,24 @@
 		});
 
 	$effect(() => {
-		api<{ passkeys: Passkey[] }>("/api/app/passkeys").then((result) => {
-			passkeys = result.passkeys;
-		});
-		api<{ keys: Key[] }>("/api/app/keys").then((result) => (keys = result.keys));
+		api<{ passkeys: Passkey[] }>("/api/app/passkeys").then((r) => (passkeys = r.passkeys));
 		api<{ sessions: Session[] }>("/api/app/me/sessions").then((r) => (sessions = r.sessions));
+		api<{ keys: Key[] }>("/api/app/keys").then((r) => (keys = r.keys));
 	});
+
+	async function attempt(action: () => Promise<unknown>) {
+		error = "";
+		try {
+			await action();
+		} catch (err) {
+			error = err instanceof Error ? err.message : "Something went wrong.";
+		}
+	}
 
 	async function saveProfile() {
 		await api("/api/app/me", { name, email }, "PATCH");
 		await refresh();
-		saved = "Saved.";
+		saved = "Profile saved.";
 	}
 
 	async function savePassword() {
@@ -59,22 +76,46 @@
 		saved = "Password saved.";
 	}
 
-	async function endSession(id: string | number) {
-		sessions = (
-			await api<{ sessions: Session[] }>(`/api/app/me/sessions/${id}`, undefined, "DELETE")
-		).sessions;
-	}
+	const addPasskey = () =>
+		attempt(async () => {
+			const { challenge, options } = await api<{ challenge: string; options: never }>(
+				"/api/app/passkeys/new",
+				{}
+			);
+			const credential = await create(options);
+			passkeys = (
+				await api<{ passkeys: Passkey[] }>("/api/app/passkeys", { challenge, credential })
+			).passkeys;
+		});
 
-	async function endOthers() {
-		sessions = (await api<{ sessions: Session[] }>("/api/app/me/sessions", undefined, "DELETE"))
-			.sessions;
-	}
+	const removePasskey = (id: string | number) =>
+		attempt(async () => {
+			passkeys = (
+				await api<{ passkeys: Passkey[] }>(
+					`/api/app/passkeys/${encodeURIComponent(id)}`,
+					undefined,
+					"DELETE"
+				)
+			).passkeys;
+		});
 
-	async function deleteAccount() {
-		await api("/api/app/me", { email: confirm }, "DELETE");
-		adopt(null);
-		await goto(resolve("/login"));
-	}
+	const endSession = (id: string | number) =>
+		attempt(async () => {
+			sessions = (
+				await api<{ sessions: Session[] }>(
+					`/api/app/me/sessions/${id}`,
+					undefined,
+					"DELETE"
+				)
+			).sessions;
+		});
+
+	const endOthers = () =>
+		attempt(async () => {
+			sessions = (
+				await api<{ sessions: Session[] }>("/api/app/me/sessions", undefined, "DELETE")
+			).sessions;
+		});
 
 	async function addKey() {
 		const result = await api<{ keys: Key[]; key: string }>("/api/app/keys", { name: keyName });
@@ -83,84 +124,91 @@
 		keyName = "";
 	}
 
-	async function removeKey(id: string | number) {
-		error = "";
-		try {
+	const removeKey = (id: string | number) =>
+		attempt(async () => {
 			keys = (await api<{ keys: Key[] }>(`/api/app/keys/${id}`, undefined, "DELETE")).keys;
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Something went wrong.";
-		}
-	}
+		});
 
-	async function add() {
-		const { challenge, options } = await api<{ challenge: string; options: never }>(
-			"/api/app/passkeys/new",
-			{}
-		);
-		const credential = await create(options);
-		passkeys = (
-			await api<{ passkeys: Passkey[] }>("/api/app/passkeys", { challenge, credential })
-		).passkeys;
-	}
-
-	async function remove(id: string | number) {
-		error = "";
-		try {
-			passkeys = (
-				await api<{ passkeys: Passkey[] }>(
-					`/api/app/passkeys/${encodeURIComponent(id)}`,
-					undefined,
-					"DELETE"
-				)
-			).passkeys;
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Something went wrong.";
-		}
+	async function deleteAccount() {
+		await api("/api/app/me", { email: confirm }, "DELETE");
+		adopt(null);
+		await goto(resolve("/login"));
 	}
 </script>
 
 <Shell>
-	<div class="flex flex-col gap-12">
-		<Section label="profile">
+	<Settings {sections}>
+		{#snippet title()}
+			<Title>Account</Title>
+			<Message tone="bad">{error}</Message>
+			<Message tone="cyan">{saved}</Message>
+		{/snippet}
+
+		<Section id="profile" label="profile">
 			<Form action="save" submit={saveProfile}>
-				<Field label="name" bind:value={name} autocomplete="name" required />
-				<Field
-					label="email"
-					type="email"
-					bind:value={email}
-					autocomplete="email"
-					required
-				/>
+				<div class="grid gap-4 sm:grid-cols-2">
+					<Field label="name" bind:value={name} autocomplete="name" required />
+					<Field
+						label="email"
+						type="email"
+						bind:value={email}
+						autocomplete="email"
+						required
+					/>
+				</div>
 			</Form>
 		</Section>
 
-		<Section label="password">
+		<Section id="password" label="password">
 			<Form
 				action={session.me?.password ? "change password" : "set password"}
 				submit={savePassword}
 			>
-				{#if session.me?.password}
+				<div class="grid gap-4 sm:grid-cols-2">
+					{#if session.me?.password}
+						<Field
+							label="current password"
+							type="password"
+							bind:value={current}
+							autocomplete="current-password"
+							required
+						/>
+					{/if}
 					<Field
-						label="current password"
+						label="new password"
 						type="password"
-						bind:value={current}
-						autocomplete="current-password"
+						bind:value={next}
+						autocomplete="new-password"
+						minlength={10}
 						required
 					/>
-				{/if}
-				<Field
-					label="new password"
-					type="password"
-					bind:value={next}
-					autocomplete="new-password"
-					minlength={10}
-					required
-				/>
+				</div>
 			</Form>
-			<Message tone="cyan">{saved}</Message>
 		</Section>
 
-		<Section label="sessions">
+		<Section id="passkeys" label="passkeys">
+			{#snippet actions()}
+				<Button variant="quiet" onclick={addPasskey}>add passkey</Button>
+			{/snippet}
+			<List
+				items={passkeys?.map((passkey) => ({
+					key: passkey.id,
+					title: passkey.name,
+					meta: [
+						`added ${date(passkey.created_at)}`,
+						...(passkey.used_at ? [`used ${date(passkey.used_at)}`] : [])
+					]
+				})) ?? null}
+				remove={removePasskey}
+			/>
+		</Section>
+
+		<Section id="sessions" label="sessions">
+			{#snippet actions()}
+				{#if (sessions?.length ?? 0) > 1}
+					<Button variant="quiet" onclick={endOthers}>sign out others</Button>
+				{/if}
+			{/snippet}
 			<List
 				items={sessions?.map((item) => ({
 					key: item.id,
@@ -175,31 +223,9 @@
 				})) ?? null}
 				remove={endSession}
 			/>
-			{#if (sessions?.length ?? 0) > 1}
-				<div class="w-fit">
-					<Button variant="quiet" onclick={endOthers}>sign out other sessions</Button>
-				</div>
-			{/if}
 		</Section>
 
-		<Section label="passkeys">
-			<List
-				items={passkeys?.map((passkey) => ({
-					key: passkey.id,
-					title: passkey.name,
-					meta: [
-						`added ${date(passkey.created_at)}`,
-						...(passkey.used_at ? [`used ${date(passkey.used_at)}`] : [])
-					]
-				})) ?? null}
-				{remove}
-			/>
-			<div class="max-w-60">
-				<Form action="add passkey" submit={add} />
-			</div>
-		</Section>
-
-		<Section label="api keys">
+		<Section id="keys" label="api keys">
 			<List
 				items={keys?.map((key) => ({
 					key: key.id,
@@ -217,12 +243,10 @@
 			</Form>
 		</Section>
 
-		<Section label="delete account">
-			<Form action="delete" submit={deleteAccount} inline>
+		<Section id="danger" label="danger" danger>
+			<Form action="delete account" submit={deleteAccount} inline danger>
 				<Field label="type your email to delete your account" bind:value={confirm} />
 			</Form>
 		</Section>
-
-		<Message tone="bad">{error}</Message>
-	</div>
+	</Settings>
 </Shell>

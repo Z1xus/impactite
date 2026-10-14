@@ -16,7 +16,10 @@
 	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
+	import Settings from "#lib/ui/Settings.svelte";
+	import Title from "#lib/ui/Title.svelte";
 	import Upload from "#lib/ui/Upload.svelte";
+	import { ZONES } from "#lib/zones.ts";
 
 	type Goal = { id: number; page: boolean; value: string; name: string };
 	type Import = { id: number; source: string; first: string; last: string };
@@ -25,7 +28,6 @@
 		invites: { id: number; email: string; role: string }[];
 	};
 
-	const zones = Intl.supportedValuesOf("timeZone").map((zone) => ({ key: zone, label: zone }));
 	const domain = $derived(page.params.site ?? "");
 	const site = $derived(
 		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
@@ -188,35 +190,57 @@
 				)
 			).imports;
 		});
+	const sections = $derived([
+		{ id: "general", label: "general" },
+		{ id: "tracking", label: "tracking" },
+		{ id: "goals", label: "goals" },
+		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
+		{ id: "imports", label: "imports" },
+		...(owner
+			? [
+					{ id: "guests", label: "guests" },
+					{ id: "danger", label: "danger" }
+				]
+			: [])
+	]);
 </script>
 
 <Shell>
 	{#if site}
-		<div class="flex flex-col gap-12">
-			<a
-				href={resolve("/[site]", { site: domain })}
-				class="flex w-fit items-center gap-2.5 text-fg transition-colors duration-100 hover:text-cyan"
-			>
-				<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
-				{domain}
-			</a>
+		<Settings {sections}>
+			{#snippet title()}
+				<Title>
+					<a
+						href={resolve("/[site]", { site: domain })}
+						class="flex items-center gap-3 transition-colors duration-100 hover:text-cyan"
+					>
+						<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
+						{domain}
+					</a>
+				</Title>
+				<Message tone="bad">{error}</Message>
+			{/snippet}
 
-			<Section label="tracking">
-				<Snippet {domain} />
-			</Section>
-
-			<Section label="timezone">
-				<div class="w-fit">
+			<Section id="general" label="general">
+				<div class="grid gap-4 sm:grid-cols-2">
 					<Select
-						value={site?.timezone ?? "UTC"}
-						options={zones}
+						label="timezone"
+						value={site.timezone}
+						options={ZONES}
 						data
 						pick={setTimezone}
 					/>
+					{#if owner && home && targets.length > 1}
+						<Select label="team" value={home.id} options={targets} pick={moveTo} />
+					{/if}
 				</div>
 			</Section>
 
-			<Section label="goals">
+			<Section id="tracking" label="tracking">
+				<Snippet {domain} />
+			</Section>
+
+			<Section id="goals" label="goals">
 				<List
 					items={goals?.map((goal) => ({
 						key: goal.id,
@@ -243,7 +267,7 @@
 			</Section>
 
 			{#if segments?.length}
-				<Section label="segments">
+				<Section id="segments" label="segments">
 					<List
 						items={segments.map((segment) => ({
 							key: segment.id,
@@ -256,7 +280,7 @@
 				</Section>
 			{/if}
 
-			<Section label="imports">
+			<Section id="imports" label="imports">
 				<List
 					items={imports?.map((item) => ({
 						key: item.id,
@@ -279,7 +303,7 @@
 			</Section>
 
 			{#if owner && people}
-				<Section label="guests">
+				<Section id="guests" label="guests">
 					<List
 						items={[
 							...people.guests.map((guest) => ({
@@ -319,19 +343,11 @@
 						<Message>Mail is not set up, so share this link yourself.</Message>
 					{/if}
 				</Section>
-
-				{#if home && targets.length > 1}
-					<Section label="team">
-						<div class="w-fit">
-							<Select value={home.id} options={targets} pick={moveTo} />
-						</div>
-					</Section>
-				{/if}
 			{/if}
 
 			{#if owner}
-				<Section label="delete site">
-					<Form action="delete" submit={destroy} inline>
+				<Section id="danger" label="danger" danger>
+					<Form action="delete site" submit={destroy} inline danger>
 						<Field
 							label="type {domain} to delete it and all its data"
 							bind:value={confirm}
@@ -339,8 +355,6 @@
 					</Form>
 				</Section>
 			{/if}
-
-			<Message tone="bad">{error}</Message>
-		</div>
+		</Settings>
 	{/if}
 </Shell>

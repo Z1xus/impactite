@@ -2,16 +2,19 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
-	import { currentTeam, pickTeam, refresh, session } from "#lib/session.svelte.ts";
+	import { currentTeam, refresh, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Code from "#lib/ui/Code.svelte";
+	import Dialog from "#lib/ui/Dialog.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Message from "#lib/ui/Message.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
+	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
+	import Title from "#lib/ui/Title.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
 
 	type Member = { id: number; name: string; email: string; role: string };
@@ -25,39 +28,42 @@
 	};
 	type Role = "admin" | "editor" | "viewer";
 
-	const ROLES: { key: string; label: string }[] = [
+	const ROLES: { key: Role; label: string }[] = [
 		{ key: "admin", label: "admin" },
 		{ key: "editor", label: "editor" },
 		{ key: "viewer", label: "viewer" }
 	];
 
+	const current = $derived(currentTeam());
 	const id = $derived(session.team);
-	const role = $derived(currentTeam()?.role ?? "");
+	const role = $derived(current?.role ?? "");
 	const manager = $derived(role === "owner" || role === "admin");
-
 	const editable = (member: Member) =>
 		manager && member.role !== "owner" && member.id !== session.me?.id;
+	const sections = $derived([
+		...(manager ? [{ id: "general", label: "general" }] : []),
+		{ id: "members", label: "members" },
+		{ id: "danger", label: "danger" }
+	]);
 
 	let team = $state<Team | null>(null);
 	let name = $state("");
+	let inviting = $state(false);
 	let email = $state("");
 	let inviteRole = $state<Role>("editor");
 	let link = $state("");
 	let confirm = $state("");
-	let newTeam = $state("");
 	let error = $state("");
 
+	$effect(() => {
+		if (current && (current.personal || current.id === 0)) goto(resolve("/"));
+		else if (id) load();
+	});
+
 	async function load() {
-		if (!id) return;
 		team = await api<Team>(`/api/app/teams/${id}`);
 		name = team.name;
 	}
-
-	$effect(() => {
-		void id;
-		link = "";
-		load();
-	});
 
 	async function attempt(action: () => Promise<unknown>) {
 		error = "";
@@ -73,14 +79,19 @@
 		await refresh();
 	}
 
-	async function invite() {
+	async function send(to: string, as: string) {
 		const result = await api<{ link: string; sent: boolean }>(`/api/app/teams/${id}/invites`, {
-			email,
-			role: inviteRole
+			email: to,
+			role: as
 		});
 		link = result.sent ? "" : result.link;
-		email = "";
 		await load();
+	}
+
+	async function invite() {
+		await send(email, inviteRole);
+		email = "";
+		if (!link) inviting = false;
 	}
 
 	const setRole = (user: number, next: string) =>
@@ -95,30 +106,19 @@
 			await load();
 		});
 
-	const removeMember = (user: string | number) =>
+	const remove = (key: string | number) =>
 		attempt(async () => {
-			await api(`/api/app/teams/${id}/members/${user}`, undefined, "DELETE");
-			await load();
-		});
-
-	const revoke = (invite: string | number) =>
-		attempt(async () => {
-			await api(`/api/app/teams/${id}/invites/${invite}`, undefined, "DELETE");
+			const [kind, value] = [String(key)[0], String(key).slice(1)];
+			const path = kind === "m" ? "members" : "invites";
+			await api(`/api/app/teams/${id}/${path}/${value}`, undefined, "DELETE");
 			await load();
 		});
 
 	const resend = (invite: Invite) =>
 		attempt(async () => {
 			await api(`/api/app/teams/${id}/invites/${invite.id}`, undefined, "DELETE");
-			const result = await api<{ link: string; sent: boolean }>(
-				`/api/app/teams/${id}/invites`,
-				{
-					email: invite.email,
-					role: invite.role
-				}
-			);
-			link = result.sent ? "" : result.link;
-			await load();
+			await send(invite.email, invite.role);
+			if (link) inviting = true;
 		});
 
 	const leave = () =>
@@ -134,40 +134,70 @@
 		await refresh();
 		await goto(resolve("/"));
 	}
-
-	async function create() {
-		const created = await api<{ id: number }>("/api/app/teams", { name: newTeam });
-		newTeam = "";
-		await refresh();
-		pickTeam(created.id);
-	}
 </script>
 
+<Dialog title="invite to {team?.name ?? 'team'}" bind:open={inviting}>
+	<div class="flex flex-col gap-4">
+		<Form action="send invite" submit={invite}>
+			<Field
+				label="email"
+				type="email"
+				placeholder="ada@example.com"
+				bind:value={email}
+				required
+			/>
+			<Toggle label="role" bind:value={inviteRole} options={ROLES} />
+		</Form>
+		{#if link}
+			<Code code={link} />
+			<Message>Mail is not set up, so share this link yourself.</Message>
+		{/if}
+	</div>
+</Dialog>
+
 <Shell>
-	<div class="flex flex-col gap-12">
-		{#if team && !team.personal}
-			<Section label="team">
-				{#if manager}
+	{#if team && !team.personal}
+		<Settings {sections}>
+			{#snippet title()}
+				<Title>{team?.name}</Title>
+				<Message tone="bad">{error}</Message>
+			{/snippet}
+
+			{#if manager}
+				<Section id="general" label="general">
 					<Form action="rename" submit={rename} inline>
 						<Field label="name" bind:value={name} required />
 					</Form>
-				{:else}
-					<span class="text-fg">{team.name}</span>
-				{/if}
-			</Section>
+				</Section>
+			{/if}
 
-			<Section label="members">
+			<Section id="members" label="members">
+				{#snippet actions()}
+					{#if manager}
+						<Button variant="quiet" onclick={() => ((link = ""), (inviting = true))}
+							>invite</Button
+						>
+					{/if}
+				{/snippet}
 				<List
-					items={team.members.map((member) => ({
-						key: member.id,
-						title: member.name,
-						meta: editable(member) ? [member.email] : [member.email, member.role],
-						removable: editable(member)
-					}))}
-					remove={removeMember}
+					items={[
+						...team.members.map((member) => ({
+							key: `m${member.id}`,
+							title: member.name,
+							meta: editable(member) ? [member.email] : [member.email, member.role],
+							removable: editable(member)
+						})),
+						...(manager ? team.invites : []).map((invite) => ({
+							key: `i${invite.id}`,
+							title: invite.email,
+							meta: ["invited", invite.role]
+						}))
+					]}
+					{remove}
 				>
 					{#snippet control(key)}
-						{@const member = team?.members.find((member) => member.id === key)}
+						{@const member = team?.members.find((member) => `m${member.id}` === key)}
+						{@const invite = team?.invites.find((invite) => `i${invite.id}` === key)}
 						{#if member && editable(member)}
 							<Select
 								align="right"
@@ -177,76 +207,28 @@
 									: ROLES}
 								pick={(next) => setRole(member.id, next)}
 							/>
+						{:else if invite}
+							<Button variant="plain" onclick={() => resend(invite)}>resend</Button>
 						{/if}
 					{/snippet}
 				</List>
 			</Section>
 
-			{#if manager}
-				<Section label="invites">
-					{#if team.invites.length}
-						<List
-							items={team.invites.map((invite) => ({
-								key: invite.id,
-								title: invite.email,
-								meta: [invite.role]
-							}))}
-							remove={revoke}
-						>
-							{#snippet control(key)}
-								{@const invite = team?.invites.find((invite) => invite.id === key)}
-								{#if invite}
-									<Button variant="plain" onclick={() => resend(invite)}
-										>resend</Button
-									>
-								{/if}
-							{/snippet}
-						</List>
-					{/if}
-					<Form action="invite" submit={invite} inline>
-						<Field
-							label="email"
-							type="email"
-							placeholder="ada@example.com"
-							bind:value={email}
-							required
-						/>
-						<Toggle
-							bind:value={inviteRole}
-							options={ROLES as { key: Role; label: string }[]}
-						/>
-					</Form>
-					{#if link}
-						<Code code={link} />
-						<Message>Mail is not set up, so share this link yourself.</Message>
-					{/if}
-				</Section>
-			{/if}
-
-			{#if role === "owner"}
-				<Section label="delete team">
-					<Form action="delete" submit={destroy} inline>
+			<Section id="danger" label="danger" danger>
+				{#if role === "owner"}
+					<Form action="delete team" submit={destroy} inline danger>
 						<Field
 							label="type {team.name} to delete it and all its sites"
 							bind:value={confirm}
 						/>
 					</Form>
-				</Section>
-			{:else}
-				<Section label="leave team">
-					<div class="w-fit">
-						<Button variant="quiet" onclick={leave}>leave {team.name}</Button>
+				{:else}
+					<div class="flex items-center justify-between gap-4">
+						<span class="text-[14px] text-dim">You lose access to its sites.</span>
+						<Button variant="danger" onclick={leave}>leave {team.name}</Button>
 					</div>
-				</Section>
-			{/if}
-		{/if}
-
-		<Section label="new team">
-			<Form action="create team" submit={create} inline>
-				<Field label="name" placeholder="Acme" bind:value={newTeam} required />
-			</Form>
-		</Section>
-
-		<Message tone="bad">{error}</Message>
-	</div>
+				{/if}
+			</Section>
+		</Settings>
+	{/if}
 </Shell>

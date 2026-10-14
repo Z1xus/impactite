@@ -2,26 +2,57 @@
 	import type { Snippet } from "svelte";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
-	import logout from "pixelarticons/svg/logout.svg?raw";
-	import server from "pixelarticons/svg/server.svg?raw";
-	import settings from "pixelarticons/svg/settings-cog.svg?raw";
-	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import user from "pixelarticons/svg/user.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
-	import { currentTeam } from "#lib/session.svelte.ts";
 	import { api } from "#lib/api.ts";
-	import { adopt, pickTeam, session } from "#lib/session.svelte.ts";
-	import Icon from "./Icon.svelte";
-	import Select from "./Select.svelte";
+	import { adopt, currentTeam, pickTeam, refresh, session } from "#lib/session.svelte.ts";
+	import Dialog from "./Dialog.svelte";
+	import Field from "./Field.svelte";
+	import Form from "./Form.svelte";
+	import Menu from "./Menu.svelte";
 
 	let { children, actions }: { children: Snippet; actions?: Snippet } = $props();
 
-	const teams = $derived(
-		(session.me?.teams ?? []).map((team) => ({
-			key: team.id,
-			label: team.personal ? "personal" : team.name
-		}))
-	);
+	let creating = $state(false);
+	let name = $state("");
+
+	const team = $derived(currentTeam());
+	const workspace = $derived([
+		...(session.me?.teams ?? []).map((item) => ({
+			label: item.personal ? "personal" : item.name,
+			icon: item.personal ? user : users,
+			current: item.id === session.team,
+			onclick: (): void => {
+				pickTeam(item.id);
+				goto(resolve("/"));
+			}
+		})),
+		"divider" as const,
+		...(team && team.id !== 0 && !team.personal
+			? [{ label: "team settings", href: resolve("/team") }]
+			: []),
+		{
+			label: "new team",
+			onclick: (): void => {
+				creating = true;
+			}
+		}
+	]);
+	const account = $derived([
+		{ label: "account", href: resolve("/settings") },
+		...(session.me?.admin ? [{ label: "instance", href: resolve("/admin") }] : []),
+		"divider" as const,
+		{ label: "sign out", onclick: (): void => void signOut() }
+	]);
+
+	async function create() {
+		const created = await api<{ id: number }>("/api/app/teams", { name });
+		name = "";
+		creating = false;
+		await refresh();
+		pickTeam(created.id);
+		await goto(resolve("/"));
+	}
 
 	async function signOut() {
 		await api("/api/app/logout", {});
@@ -30,57 +61,28 @@
 	}
 </script>
 
+<Dialog title="new team" bind:open={creating}>
+	<Form action="create team" submit={create}>
+		<Field label="name" placeholder="Acme" bind:value={name} required />
+	</Form>
+</Dialog>
+
 <div class="min-h-dvh">
 	<header class="border-b border-line">
-		<div class="mx-auto flex h-14 max-w-6xl items-center gap-4 px-6">
-			<a href={resolve("/")} class="font-mono text-[15px] text-fg">impactite</a>
-			{#if session.team !== null}
-				<Select
-					value={session.team}
-					options={teams}
-					pick={pickTeam}
-					icon={currentTeam()?.personal ? user : users}
+		<div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-6">
+			<a href={resolve("/")} class="mr-1 font-mono text-[15px] text-fg">impactite</a>
+			{#if team}
+				<Menu
+					label={team.personal ? "personal" : team.name}
+					icon={team.personal ? user : users}
+					items={workspace}
 				/>
-				{#if session.team !== 0}
-					<a
-						href={resolve("/team")}
-						class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
-						aria-label="team settings"
-						title="team settings"
-					>
-						<Icon svg={sliders} size={14} />
-					</a>
-				{/if}
 			{/if}
 			<div class="ml-auto flex items-center gap-3">
 				{@render actions?.()}
-				{#if session.me?.admin}
-					<a
-						href={resolve("/admin")}
-						class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
-						aria-label="instance admin"
-						title="instance admin"
-					>
-						<Icon svg={server} size={16} />
-					</a>
+				{#if session.me}
+					<Menu label={session.me.name} data align="right" items={account} />
 				{/if}
-				<a
-					href={resolve("/settings")}
-					class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
-					aria-label="settings"
-					title="settings"
-				>
-					<Icon svg={settings} size={16} />
-				</a>
-				<button
-					type="button"
-					class="grid h-8 w-8 cursor-pointer place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
-					aria-label="sign out"
-					title="sign out"
-					onclick={signOut}
-				>
-					<Icon svg={logout} size={16} />
-				</button>
 			</div>
 		</div>
 	</header>

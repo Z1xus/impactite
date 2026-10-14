@@ -49,7 +49,7 @@
 <Gate>
 	<div class="flex flex-col gap-3">
 		{#if mode === "password"}
-			<Form action="sign in" submit={withPassword}>
+			<Form block action="sign in" submit={withPassword}>
 				<Field
 					label="email"
 					type="email"
@@ -66,7 +66,7 @@
 				/>
 			</Form>
 		{:else if mode === "link"}
-			<Form action="email me a link" submit={withLink}>
+			<Form block action="email me a link" submit={withLink}>
 				<Field
 					label="email"
 					type="email"
@@ -79,7 +79,7 @@
 				<Message tone="cyan">If the account exists, the link is on its way.</Message>
 			{/if}
 		{:else}
-			<Form action="sign in with passkey" submit={withPasskey} />
+			<Form block action="sign in with passkey" submit={withPasskey} />
 		{/if}
 		<div class="flex flex-wrap justify-center gap-x-4">
 			{#each MODES.filter((item) => item.key !== mode) as item (item.key)}
@@ -90,7 +90,7 @@
 			{#if session.signup}
 				<a
 					href={resolve("/signup")}
-					class="inline-flex h-7 items-center px-1 label text-dim transition-colors duration-100 hover:text-fg"
+					class="inline-flex h-9 items-center px-1 label text-dim transition-colors duration-100 hover:text-fg"
 					>create an account</a
 				>
 			{/if}

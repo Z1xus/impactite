@@ -7,6 +7,8 @@
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
+	import Settings from "#lib/ui/Settings.svelte";
+	import Title from "#lib/ui/Title.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
 
 	type User = {
@@ -61,13 +63,25 @@
 				return Promise.resolve();
 			return api<Admin>(`/api/app/admin/users/${user}`, undefined, "DELETE");
 		});
+	const sections = [
+		{ id: "signup", label: "sign-up" },
+		{ id: "mail", label: "mail" },
+		{ id: "users", label: "users" }
+	];
 </script>
 
 <Shell>
 	{#if info}
-		<div class="flex flex-col gap-12">
-			<Section label="sign-up">
-				<div class="w-fit">
+		<Settings {sections}>
+			{#snippet title()}
+				<Title>Instance</Title>
+				<Message tone="bad">{error}</Message>
+				<Message tone="cyan">{note}</Message>
+			{/snippet}
+
+			<Section id="signup" label="sign-up">
+				<div class="flex items-center justify-between gap-4">
+					<span class="text-[14px] text-dim">Who can create an account.</span>
 					<Toggle
 						bind:value={
 							() => (info?.signup ? "open" : "invite"),
@@ -81,20 +95,20 @@
 				</div>
 			</Section>
 
-			<Section label="mail">
-				<Message tone={info.mail ? "cyan" : "dim"}>
+			<Section id="mail" label="mail">
+				{#snippet actions()}
+					{#if info?.mail}
+						<Button variant="quiet" onclick={testMail}>send test mail</Button>
+					{/if}
+				{/snippet}
+				<span class="text-[14px] {info.mail ? 'text-fg' : 'text-dim'}">
 					{info.mail
 						? "Mail is set up."
 						: "Mail is off. Start the server with --mail to send invites and sign-in links."}
-				</Message>
-				{#if info.mail}
-					<div class="w-fit">
-						<Button variant="quiet" onclick={testMail}>send me a test mail</Button>
-					</div>
-				{/if}
+				</span>
 			</Section>
 
-			<Section label="users">
+			<Section id="users" label="users">
 				<List
 					items={info.users.map((user) => ({
 						key: user.id,
@@ -122,9 +136,6 @@
 					{/snippet}
 				</List>
 			</Section>
-
-			<Message tone="cyan">{note}</Message>
-			<Message tone="bad">{error}</Message>
-		</div>
+		</Settings>
 	{/if}
 </Shell>

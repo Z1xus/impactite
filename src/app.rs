@@ -134,6 +134,10 @@ const MIGRATIONS: &[&str] = &[
 		created_at integer not null
 	);
 	",
+	"
+	update sessions set created_at = expires_at - 2592000, seen_at = expires_at - 2592000
+	where created_at = 0;
+	",
 ];
 
 #[derive(Debug, Clone)]

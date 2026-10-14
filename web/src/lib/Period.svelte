@@ -66,7 +66,7 @@
 		<div class="flex">
 			<button
 				type="button"
-				class="grid h-8 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
+				class="grid h-9 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
 				aria-label="earlier"
 				title="earlier"
 				disabled={!back}
@@ -76,7 +76,7 @@
 			</button>
 			<button
 				type="button"
-				class="grid h-8 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
+				class="grid h-9 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
 				aria-label="later"
 				title="later"
 				disabled={!forward}

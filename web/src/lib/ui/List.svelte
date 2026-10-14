@@ -39,7 +39,7 @@
 					{#if remove && item.removable !== false}
 						<button
 							type="button"
-							class="grid h-8 w-8 shrink-0 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-bad"
+							class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-bad"
 							aria-label="remove {item.title}"
 							onclick={() => remove(item.key)}
 						>

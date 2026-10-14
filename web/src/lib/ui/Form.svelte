@@ -7,11 +7,15 @@
 		action,
 		submit,
 		inline = false,
+		block = false,
+		danger = false,
 		children
 	}: {
 		action: string;
 		submit: () => Promise<unknown>;
 		inline?: boolean;
+		block?: boolean;
+		danger?: boolean;
 		children?: Snippet;
 	} = $props();
 
@@ -32,15 +36,20 @@
 	}
 </script>
 
-<form {onsubmit} class="flex flex-col {inline ? 'gap-2' : 'gap-5'}">
+<form {onsubmit} class="flex flex-col {inline ? 'gap-2' : 'gap-4'}">
 	{#if inline}
 		<div class="flex items-end gap-2 [&>*:first-child]:flex-1">
 			{@render children?.()}
-			<Button type="submit" variant="quiet" {busy} class="h-10">{action}</Button>
+			<Button type="submit" variant={danger ? "danger" : "quiet"} {busy}>{action}</Button>
 		</div>
 	{:else}
 		{@render children?.()}
-		<Button type="submit" {busy}>{action}</Button>
+		<Button
+			type="submit"
+			variant={danger ? "danger" : "primary"}
+			{busy}
+			class={block ? "w-full" : "self-end"}>{action}</Button
+		>
 	{/if}
 	<Message tone="bad">{error}</Message>
 </form>

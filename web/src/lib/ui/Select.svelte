@@ -11,7 +11,8 @@
 		data = false,
 		icon,
 		text: shown,
-		align = "left"
+		align = "left",
+		label
 	}: {
 		value: T;
 		options: { key: T; label: string; glyph?: Spec | null }[];
@@ -20,6 +21,7 @@
 		icon?: string;
 		text?: string;
 		align?: "left" | "right";
+		label?: string;
 	} = $props();
 
 	const text = $derived(data ? "normal-case tracking-normal" : "");
@@ -44,10 +46,13 @@
 	onkeydown={(event) => event.key === "Escape" && (open = false)}
 />
 
-<div class="relative" bind:this={root}>
+<div class="relative flex flex-col gap-2" bind:this={root}>
+	{#if label}
+		<span class="label">{label}</span>
+	{/if}
 	<button
 		type="button"
-		class="flex h-8 cursor-pointer items-center gap-2 rounded-px border border-edge px-3 label whitespace-nowrap {text} text-fg transition-colors duration-100 hover:border-dim"
+		class="flex h-9 cursor-pointer items-center gap-2 rounded-px border border-edge px-3 label whitespace-nowrap {text} text-fg transition-colors duration-100 hover:border-dim"
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
@@ -57,7 +62,7 @@
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
 		{shown ?? current?.label}
-		<Icon svg={chevron} size={12} class="text-dim" />
+		<Icon svg={chevron} size={12} class="ml-auto text-dim" />
 	</button>
 	{#if open}
 		<ul

@@ -38,7 +38,7 @@
 <Gate>
 	{#if token}
 		<div class="flex flex-col gap-3">
-			<Form action={usePassword ? "create account" : "create passkey"} {submit}>
+			<Form block action={usePassword ? "create account" : "create passkey"} {submit}>
 				<Field label="name" bind:value={name} autocomplete="name" required />
 				<Field
 					label="email"

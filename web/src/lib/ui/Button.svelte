@@ -10,14 +10,16 @@
 		...rest
 	}: HTMLButtonAttributes & {
 		children: Snippet;
-		variant?: "primary" | "quiet" | "plain";
+		variant?: "primary" | "quiet" | "danger" | "icon" | "plain";
 		busy?: boolean;
 	} = $props();
 
 	const variants = {
 		primary: "h-9 border border-cyan bg-cyan px-4 text-ink hover:border-fg hover:bg-fg",
-		quiet: "h-8 border border-edge px-3 text-fg hover:border-dim",
-		plain: "h-7 px-1 text-dim hover:text-fg"
+		quiet: "h-9 border border-edge px-3 text-fg hover:border-dim",
+		danger: "h-9 border border-bad/50 px-3 text-bad hover:border-bad hover:bg-bad/10",
+		icon: "h-9 w-9 border border-edge text-dim hover:border-dim hover:text-fg",
+		plain: "h-9 px-1 text-dim hover:text-fg"
 	};
 </script>
 
