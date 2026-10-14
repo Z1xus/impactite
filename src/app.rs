@@ -60,6 +60,18 @@ const MIGRATIONS: &[&str] = &[
 	);
 	alter table sites add column team integer references teams (id) on delete cascade;
 	",
+	"
+	create table passkeys (
+		id blob primary key,
+		user integer not null references users (id) on delete cascade,
+		alg integer not null,
+		key blob not null,
+		counter integer not null default 0,
+		name text not null,
+		created_at integer not null,
+		used_at integer
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

@@ -15,7 +15,9 @@ use serde_json::{Value, json};
 use crate::app::{App, key_hash, token};
 use crate::ingest::Ingest;
 use crate::mail::Mail;
+use crate::passkeys::{Failure, Proof, Purpose, device, registered};
 use crate::stats::Stats;
+use crate::webauthn::Relying;
 
 const COOKIE: &str = "impactite_session";
 const SESSION_SECS: i64 = 30 * 86_400;
@@ -30,7 +32,9 @@ pub struct Web {
 	pub http: reqwest::Client,
 	pub data: std::path::PathBuf,
 	pub url: String,
+	pub rp: Relying,
 	pub setup: Mutex<Option<String>>,
+	pub ceremonies: Mutex<std::collections::HashMap<String, (Purpose, i64)>>,
 }
 
 pub struct Viewer {
@@ -100,7 +104,8 @@ struct Setup {
 	token: String,
 	name: String,
 	email: String,
-	password: String,
+	password: Option<String>,
+	passkey: Option<Proof>,
 }
 
 async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
@@ -123,23 +128,59 @@ async fn setup(
 	if expected.as_deref() != Some(body.token.as_str()) || web.app.users_exist().unwrap_or(true) {
 		return fail(StatusCode::FORBIDDEN, "This setup link is no longer valid.");
 	}
-	if let Err(message) = valid_account(&body.name, &body.email, &body.password) {
-		return fail(StatusCode::BAD_REQUEST, message);
-	}
-	let created = web
+	let user = match new_account(
+		&web,
+		&headers,
+		(&body.name, &body.email),
+		body.password.as_deref(),
+		body.passkey.as_ref(),
+		&Purpose::Setup,
+	) {
+		Ok(user) => user,
+		Err((status, message)) => return fail(status, message),
+	};
+	let adopted = web
 		.app
-		.create_user(&body.name, &body.email, &body.password)
-		.and_then(|user| {
-			let team = web.app.personal_team(user)?;
-			web.app.adopt_sites(team)?;
+		.personal_team(user)
+		.and_then(|team| web.app.adopt_sites(team));
+	if let Err(err) = adopted {
+		return internal(err);
+	}
+	*web.setup.lock().unwrap_or_else(PoisonError::into_inner) = None;
+	signed_in(&web, user, &headers)
+}
+
+fn new_account(
+	web: &Web,
+	headers: &HeaderMap,
+	(name, email): (&str, &str),
+	password: Option<&str>,
+	passkey: Option<&Proof>,
+	purpose: &Purpose,
+) -> Result<i64, Failure> {
+	let broken = |err: rusqlite::Error| {
+		tracing::error!(%err, "accounts");
+		(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
+	};
+	valid_identity(name, email).map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+	match (passkey, password) {
+		(Some(proof), _) => {
+			let key = registered(web, proof, purpose)?;
+			let user = web.app.create_user(name, email, None).map_err(broken)?;
+			web.app
+				.add_passkey(user, &key, &device(headers))
+				.map_err(broken)?;
 			Ok(user)
-		});
-	match created {
-		Ok(user) => {
-			*web.setup.lock().unwrap_or_else(PoisonError::into_inner) = None;
-			signed_in(&web, user, &headers)
 		}
-		Err(err) => internal(err),
+		(None, Some(password)) if password.chars().count() >= 10 => web
+			.app
+			.create_user(name, email, Some(password))
+			.map_err(broken),
+		(None, Some(_)) => Err((
+			StatusCode::BAD_REQUEST,
+			"Use at least 10 characters for the password.",
+		)),
+		(None, None) => Err((StatusCode::BAD_REQUEST, "Create a passkey to continue.")),
 	}
 }
 
@@ -247,6 +288,7 @@ struct Accept {
 	token: String,
 	name: Option<String>,
 	password: Option<String>,
+	passkey: Option<Proof>,
 }
 
 async fn accept(
@@ -261,17 +303,19 @@ async fn accept(
 		);
 	};
 	let signed = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
-	let user = match (signed, &body.name, &body.password) {
-		(Some(user), _, _) => user,
-		(None, Some(name), Some(password)) => {
-			if let Err(message) = valid_account(name, &email, password) {
-				return fail(StatusCode::BAD_REQUEST, message);
-			}
-			match web.app.create_user(name, &email, password) {
-				Ok(user) => user,
-				Err(err) => return internal(err),
-			}
-		}
+	let user = match (signed, &body.name) {
+		(Some(user), _) => user,
+		(None, Some(name)) => match new_account(
+			&web,
+			&headers,
+			(name, &email),
+			body.password.as_deref(),
+			body.passkey.as_ref(),
+			&Purpose::Invite(body.token.clone()),
+		) {
+			Ok(user) => user,
+			Err((status, message)) => return fail(status, message),
+		},
 		_ => {
 			return fail(
 				StatusCode::UNAUTHORIZED,
@@ -339,20 +383,17 @@ async fn add_site(
 	}
 }
 
-fn valid_account(name: &str, email: &str, password: &str) -> Result<(), &'static str> {
+fn valid_identity(name: &str, email: &str) -> Result<(), &'static str> {
 	if name.trim().is_empty() {
 		return Err("Tell us your name.");
 	}
 	if !email.contains('@') {
 		return Err("Use a valid email.");
 	}
-	if password.chars().count() < 10 {
-		return Err("Use at least 10 characters for the password.");
-	}
 	Ok(())
 }
 
-fn signed_in(web: &Web, user: i64, headers: &HeaderMap) -> Response {
+pub(crate) fn signed_in(web: &Web, user: i64, headers: &HeaderMap) -> Response {
 	let (token, me) = match (web.app.start_session(user), web.app.me(user)) {
 		(Ok(token), Ok(me)) => (token, me),
 		(Err(err), _) | (_, Err(err)) => return internal(err),
@@ -411,11 +452,19 @@ impl App {
 			.query_row("select exists (select 1 from users)", [], |row| row.get(0))
 	}
 
-	pub fn create_user(&self, name: &str, email: &str, password: &str) -> rusqlite::Result<i64> {
-		let hash = Argon2::default()
-			.hash_password(password.as_bytes())
-			.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.to_string().into()))?
-			.to_string();
+	pub fn create_user(
+		&self,
+		name: &str,
+		email: &str,
+		password: Option<&str>,
+	) -> rusqlite::Result<i64> {
+		let hash = match password {
+			Some(password) => Argon2::default()
+				.hash_password(password.as_bytes())
+				.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.to_string().into()))?
+				.to_string(),
+			None => String::new(),
+		};
 		let user = {
 			let conn = self.conn();
 			conn.execute(
@@ -439,9 +488,10 @@ impl App {
 			.optional()?;
 		Ok(found
 			.filter(|(_, hash)| {
-				Argon2::default()
-					.verify_password(password.as_bytes(), hash.as_str())
-					.is_ok()
+				!hash.is_empty()
+					&& Argon2::default()
+						.verify_password(password.as_bytes(), hash.as_str())
+						.is_ok()
 			})
 			.map(|(user, _)| user))
 	}

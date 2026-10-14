@@ -5,8 +5,10 @@ mod geo;
 mod icons;
 mod ingest;
 mod mail;
+mod passkeys;
 mod server;
 mod stats;
+mod webauthn;
 
 use std::fs;
 use std::net::SocketAddr;
@@ -221,8 +223,10 @@ async fn serve(
 		mail,
 		http: reqwest::Client::new(),
 		data: data.to_path_buf(),
+		rp: webauthn::Relying::from_url(&url).context("invalid --url")?,
 		url,
 		setup: Mutex::new(setup),
+		ceremonies: Mutex::default(),
 	});
 
 	let sweeper = tokio::spawn({

@@ -1,7 +1,7 @@
 pub mod goatcounter;
 pub mod plausible;
 pub(crate) mod referrer;
-mod ua;
+pub(crate) mod ua;
 
 use std::collections::HashMap;
 use std::net::IpAddr;
