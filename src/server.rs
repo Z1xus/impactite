@@ -1,8 +1,7 @@
-use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use axum::Router;
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -59,21 +58,4 @@ async fn cors(mut response: Response) -> Response {
 		HeaderValue::from_static("*"),
 	);
 	response
-}
-
-pub fn client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
-	let peer_ip = peer.ip().to_canonical();
-	let trusted = match peer_ip {
-		IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
-		IpAddr::V6(ip) => ip.is_loopback() || ip.is_unique_local(),
-	};
-	if !trusted {
-		return peer_ip;
-	}
-	["cf-connecting-ip", "x-forwarded-for", "x-real-ip"]
-		.into_iter()
-		.filter_map(|name| headers.get(name)?.to_str().ok())
-		.filter_map(|value| value.split(',').next()?.trim().parse().ok())
-		.next()
-		.unwrap_or(peer_ip)
 }

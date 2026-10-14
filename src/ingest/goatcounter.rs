@@ -6,7 +6,6 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 use super::{Client, Hit, Ingest};
-use crate::server::client_ip;
 
 const GIF: &[u8; 43] = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;";
 
@@ -76,9 +75,11 @@ pub async fn count(
 		.get(header::USER_AGENT)
 		.and_then(|ua| ua.to_str().ok())
 		.unwrap_or_default();
+	let visitor = ingest.proxies.visitor(peer, &headers);
 	let client = Client {
-		ip: client_ip(peer, &headers),
+		ip: visitor.ip,
 		ua,
+		country: visitor.country,
 	};
 
 	let _ = ingest.track(&site, hit, &client);

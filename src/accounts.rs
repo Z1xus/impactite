@@ -147,7 +147,7 @@ async fn setup(
 		return internal(err);
 	}
 	*web.setup.lock().unwrap_or_else(PoisonError::into_inner) = None;
-	signed_in(&web, user, &headers)
+	signed_in(&web, user)
 }
 
 fn new_account(
@@ -184,13 +184,9 @@ fn new_account(
 	}
 }
 
-async fn login(
-	State(web): State<Arc<Web>>,
-	headers: HeaderMap,
-	Json(body): Json<Credentials>,
-) -> Response {
+async fn login(State(web): State<Arc<Web>>, Json(body): Json<Credentials>) -> Response {
 	match web.app.verify(&body.email, &body.password) {
-		Ok(Some(user)) => signed_in(&web, user, &headers),
+		Ok(Some(user)) => signed_in(&web, user),
 		Ok(None) => fail(StatusCode::UNAUTHORIZED, "Wrong email or password."),
 		Err(err) => internal(err),
 	}
@@ -201,7 +197,7 @@ async fn logout(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 		let _ = web.app.end_session(&token);
 	}
 	let mut response = StatusCode::NO_CONTENT.into_response();
-	set_cookie(&mut response, &headers, "", 0);
+	set_cookie(&mut response, &web, "", 0);
 	response
 }
 
@@ -326,7 +322,7 @@ async fn accept(
 	if let Err(err) = web.app.join(team, user, &role, &body.token) {
 		return internal(err);
 	}
-	signed_in(&web, user, &headers)
+	signed_in(&web, user)
 }
 
 async fn remove_member(
@@ -393,13 +389,13 @@ fn valid_identity(name: &str, email: &str) -> Result<(), &'static str> {
 	Ok(())
 }
 
-pub(crate) fn signed_in(web: &Web, user: i64, headers: &HeaderMap) -> Response {
+pub(crate) fn signed_in(web: &Web, user: i64) -> Response {
 	let (token, me) = match (web.app.start_session(user), web.app.me(user)) {
 		(Ok(token), Ok(me)) => (token, me),
 		(Err(err), _) | (_, Err(err)) => return internal(err),
 	};
 	let mut response = Json(json!({ "me": me })).into_response();
-	set_cookie(&mut response, headers, &token, SESSION_SECS);
+	set_cookie(&mut response, web, &token, SESSION_SECS);
 	response
 }
 
@@ -415,10 +411,8 @@ fn cookie(headers: &HeaderMap) -> Option<String> {
 		.filter(|value| !value.is_empty())
 }
 
-fn set_cookie(response: &mut Response, headers: &HeaderMap, value: &str, max_age: i64) {
-	let secure = headers
-		.get("x-forwarded-proto")
-		.is_some_and(|proto| proto == "https");
+fn set_cookie(response: &mut Response, web: &Web, value: &str, max_age: i64) {
+	let secure = web.url.starts_with("https://");
 	let cookie = format!(
 		"{COOKIE}={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Lax{}",
 		if secure { "; Secure" } else { "" }

@@ -9,7 +9,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{Client, Hit, Ingest};
-use crate::server::client_ip;
 
 #[derive(Deserialize)]
 struct Payload {
@@ -98,9 +97,11 @@ pub async fn event(
 		.get(header::USER_AGENT)
 		.and_then(|ua| ua.to_str().ok())
 		.unwrap_or_default();
+	let visitor = ingest.proxies.visitor(peer, &headers);
 	let client = Client {
-		ip: client_ip(peer, &headers),
+		ip: visitor.ip,
 		ua,
+		country: visitor.country,
 	};
 	let domains = payload.d.unwrap_or_else(|| hostname.clone());
 	let mut dropped = 0;

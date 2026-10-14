@@ -13,6 +13,7 @@ use jiff::tz::TimeZone;
 
 use crate::app::{App, Site};
 use crate::geo::Geo;
+use crate::net::Proxies;
 
 const SESSION_SECS: i64 = 30 * 60;
 const SHARDS: usize = 64;
@@ -38,6 +39,7 @@ pub struct Hit {
 pub struct Client<'a> {
 	pub ip: IpAddr,
 	pub ua: &'a str,
+	pub country: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,17 +61,19 @@ pub struct Ingest {
 	db: Arc<Db>,
 	app: Arc<App>,
 	geo: Arc<Geo>,
+	pub proxies: Proxies,
 	sites: RwLock<HashMap<String, Arc<Tracked>>>,
 	salts: Mutex<HashMap<(u64, i32), [u8; 32]>>,
 	sessions: Vec<Shard>,
 }
 
 impl Ingest {
-	pub fn new(db: Arc<Db>, app: Arc<App>, geo: Arc<Geo>) -> Self {
+	pub fn new(db: Arc<Db>, app: Arc<App>, geo: Arc<Geo>, proxies: Proxies) -> Self {
 		Self {
 			db,
 			app,
 			geo,
+			proxies,
 			sites: RwLock::default(),
 			salts: Mutex::default(),
 			sessions: (0..SHARDS).map(|_| Mutex::default()).collect(),
@@ -145,7 +149,12 @@ impl Ingest {
 			click_id: click_id.is_some(),
 		});
 		let agent = ua::parse(client.ua);
-		let location = self.geo.locate(client.ip);
+		let mut location = self.geo.locate(client.ip);
+		if location.country.is_empty()
+			&& let Some(country) = &client.country
+		{
+			location.country = country.clone();
+		}
 
 		let mut event = Event {
 			site: site.site.id,

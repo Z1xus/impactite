@@ -210,11 +210,7 @@ struct Login {
 	credential: Assertion,
 }
 
-async fn login(
-	State(web): State<Arc<Web>>,
-	headers: HeaderMap,
-	Json(body): Json<Login>,
-) -> Response {
+async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Response {
 	let unknown = || {
 		fail(
 			StatusCode::UNAUTHORIZED,
@@ -233,7 +229,7 @@ async fn login(
 	match webauthn::verify(&web.rp, &body.challenge, &body.credential, &key) {
 		Ok(counter) => {
 			let _ = web.app.touch_passkey(&id, counter);
-			signed_in(&web, user, &headers)
+			signed_in(&web, user)
 		}
 		Err(err) => {
 			tracing::warn!(err, "passkey login");

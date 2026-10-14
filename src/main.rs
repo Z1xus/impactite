@@ -6,6 +6,7 @@ mod geo;
 mod icons;
 mod ingest;
 mod mail;
+mod net;
 mod passkeys;
 mod server;
 mod stats;
@@ -18,9 +19,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use clap::{Parser, Subcommand};
+use axum_server::tls_rustls::RustlsConfig;
+use clap::{Args, Parser, Subcommand};
 use crater::Db;
+use futures_util::StreamExt;
 use mimalloc::MiMalloc;
+use rustls_acme::AcmeConfig;
+use rustls_acme::caches::DirCache;
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
@@ -30,6 +35,7 @@ use crate::app::App;
 use crate::geo::Geo;
 use crate::ingest::Ingest;
 use crate::mail::Mail;
+use crate::net::Proxies;
 use crate::stats::Stats;
 
 #[global_allocator]
@@ -54,14 +60,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-	Serve {
-		#[arg(long, env = "IMPACTITE_LISTEN", default_value = "127.0.0.1:8000")]
-		listen: SocketAddr,
-		#[arg(long, env = "IMPACTITE_GEOIP")]
-		geoip: Option<PathBuf>,
-		#[arg(long, env = "IMPACTITE_URL")]
-		url: Option<String>,
-	},
+	Serve(Serve),
 	Site {
 		#[command(subcommand)]
 		command: SiteCommand,
@@ -93,6 +92,28 @@ enum KeyCommand {
 	Create { name: String },
 }
 
+#[derive(Args)]
+struct Serve {
+	#[arg(long, env = "IMPACTITE_LISTEN", default_value = "127.0.0.1:8000")]
+	listen: SocketAddr,
+	#[arg(long, env = "IMPACTITE_URL")]
+	url: Option<String>,
+	#[arg(long, env = "IMPACTITE_GEOIP")]
+	geoip: Option<PathBuf>,
+	#[arg(long, env = "IMPACTITE_TRUSTED_PROXIES")]
+	trusted_proxies: Option<String>,
+	#[arg(long, env = "IMPACTITE_ACME", conflicts_with_all = ["cert", "key"])]
+	acme: bool,
+	#[arg(long, env = "IMPACTITE_ACME_EMAIL")]
+	acme_email: Option<String>,
+	#[arg(long, env = "IMPACTITE_ACME_STAGING", hide = true)]
+	acme_staging: bool,
+	#[arg(long, env = "IMPACTITE_CERT", requires = "key")]
+	cert: Option<PathBuf>,
+	#[arg(long, env = "IMPACTITE_KEY", requires = "cert")]
+	key: Option<PathBuf>,
+}
+
 #[derive(Subcommand)]
 enum SiteCommand {
 	Add {
@@ -115,10 +136,7 @@ async fn main() -> anyhow::Result<()> {
 	let mail = Arc::new(Mail::new(cli.mail.as_deref(), &cli.mail_from)?);
 
 	match cli.command {
-		Command::Serve { listen, geoip, url } => {
-			let url = url.unwrap_or_else(|| format!("http://{listen}"));
-			serve(app, mail, &cli.data, listen, geoip, url).await
-		}
+		Command::Serve(serve_args) => serve(app, mail, &cli.data, serve_args).await,
 		Command::Mail {
 			command: MailCommand::Test { to },
 		} => {
@@ -181,19 +199,25 @@ async fn main() -> anyhow::Result<()> {
 	}
 }
 
-async fn serve(
-	app: Arc<App>,
-	mail: Arc<Mail>,
-	data: &Path,
-	listen: SocketAddr,
-	geoip: Option<PathBuf>,
-	url: String,
-) -> anyhow::Result<()> {
+async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyhow::Result<()> {
+	let scheme = if args.acme || args.cert.is_some() {
+		"https"
+	} else {
+		"http"
+	};
+	let url = args
+		.url
+		.clone()
+		.unwrap_or_else(|| format!("{scheme}://{}", args.listen));
+	if args.acme && !url.starts_with("https://") {
+		bail!("--acme needs an https --url");
+	}
+	let proxies = Proxies::parse(args.trusted_proxies.as_deref())?;
 	let db = Arc::new(Db::open(data.join("events")).context("open event store")?);
 	let geo = Arc::new(Geo::default());
-	let geo_task = match geoip {
+	let geo_task = match &args.geoip {
 		Some(path) => {
-			geo.load(&path).context("load geoip database")?;
+			geo.load(path).context("load geoip database")?;
 			None
 		}
 		None => Some(tokio::spawn({
@@ -216,7 +240,7 @@ async fn serve(
 			url.trim_end_matches('/')
 		);
 	}
-	let ingest = Arc::new(Ingest::new(db.clone(), app.clone(), geo));
+	let ingest = Arc::new(Ingest::new(db.clone(), app.clone(), geo, proxies));
 	let web = Arc::new(Web {
 		app,
 		stats: stats.clone(),
@@ -225,7 +249,7 @@ async fn serve(
 		http: reqwest::Client::new(),
 		data: data.to_path_buf(),
 		rp: webauthn::Relying::from_url(&url).context("invalid --url")?,
-		url,
+		url: url.clone(),
 		setup: Mutex::new(setup),
 		ceremonies: Mutex::default(),
 	});
@@ -241,27 +265,71 @@ async fn serve(
 		}
 	});
 
-	let listener = TcpListener::bind(listen).await.context("bind")?;
-	tracing::info!(%listen, "listening");
-	let stop = Arc::new(tokio::sync::Notify::new());
-	let server = axum::serve(
-		listener,
-		server::router(ingest.clone(), stats.clone(), web.clone())
-			.into_make_service_with_connect_info::<SocketAddr>(),
-	)
-	.with_graceful_shutdown({
-		let stop = stop.clone();
+	let handle = axum_server::Handle::new();
+	tokio::spawn({
+		let handle = handle.clone();
 		async move {
 			shutdown().await;
-			stop.notify_one();
+			handle.graceful_shutdown(Some(Duration::from_secs(3)));
 		}
 	});
-	tokio::select! {
-		served = server => served?,
-		() = async {
-			stop.notified().await;
-			tokio::time::sleep(Duration::from_secs(3)).await;
-		} => {}
+	let service =
+		server::router(ingest, stats, web).into_make_service_with_connect_info::<SocketAddr>();
+	tracing::info!(listen = %args.listen, %url, "listening");
+
+	if let (Some(cert), Some(key)) = (&args.cert, &args.key) {
+		let config = RustlsConfig::from_pem_file(cert, key)
+			.await
+			.context("load tls certificate")?;
+		tokio::spawn({
+			let (config, cert, key) = (config.clone(), cert.clone(), key.clone());
+			async move {
+				loop {
+					tokio::time::sleep(Duration::from_secs(6 * 3600)).await;
+					if let Err(err) = config.reload_from_pem_file(&cert, &key).await {
+						tracing::warn!(%err, "tls certificate reload");
+					}
+				}
+			}
+		});
+		axum_server::bind_rustls(args.listen, config)
+			.handle(handle)
+			.serve(service)
+			.await?;
+	} else if args.acme {
+		let host = url::Url::parse(&url)?
+			.host_str()
+			.context("--url has no host")?
+			.to_owned();
+		let mut state = AcmeConfig::new([host])
+			.contact(
+				args.acme_email
+					.iter()
+					.map(|email| format!("mailto:{email}")),
+			)
+			.cache(DirCache::new(data.join("acme")))
+			.directory_lets_encrypt(!args.acme_staging)
+			.state();
+		let acceptor = state.axum_acceptor(state.default_rustls_config());
+		tokio::spawn(async move {
+			while let Some(event) = state.next().await {
+				match event {
+					Ok(event) => tracing::info!(?event, "acme"),
+					Err(err) => tracing::warn!(%err, "acme"),
+				}
+			}
+		});
+		tokio::spawn(redirect(url.clone()));
+		axum_server::bind(args.listen)
+			.acceptor(acceptor)
+			.handle(handle)
+			.serve(service)
+			.await?;
+	} else {
+		axum_server::bind(args.listen)
+			.handle(handle)
+			.serve(service)
+			.await?;
 	}
 
 	sweeper.abort();
@@ -272,6 +340,20 @@ async fn serve(
 	}
 	db.close().context("close event store")?;
 	Ok(())
+}
+
+async fn redirect(url: String) {
+	let base = url.trim_end_matches('/').to_owned();
+	let app = axum::Router::new().fallback(move |uri: axum::http::Uri| {
+		let target = format!("{base}{uri}");
+		async move { axum::response::Redirect::permanent(&target) }
+	});
+	match TcpListener::bind(("0.0.0.0", 80)).await {
+		Ok(listener) => {
+			let _ = axum::serve(listener, app).await;
+		}
+		Err(err) => tracing::warn!(%err, "http redirect on port 80"),
+	}
 }
 
 async fn shutdown() {
