@@ -64,6 +64,7 @@
 			type="button"
 			class="grid h-7 w-7 cursor-pointer place-items-center text-dim hover:text-fg"
 			aria-label="previous month"
+			title="previous month"
 			onclick={() => move(-1)}
 		>
 			<Icon svg={left} size={12} />
@@ -73,6 +74,7 @@
 			type="button"
 			class="grid h-7 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
 			aria-label="next month"
+			title="next month"
 			disabled={month >= max.slice(0, 7)}
 			onclick={() => move(1)}
 		>

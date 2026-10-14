@@ -46,6 +46,7 @@
 						href={resolve("/team")}
 						class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
 						aria-label="team settings"
+						title="team settings"
 					>
 						<Icon svg={sliders} size={14} />
 					</a>
@@ -58,6 +59,7 @@
 						href={resolve("/admin")}
 						class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
 						aria-label="instance admin"
+						title="instance admin"
 					>
 						<Icon svg={server} size={16} />
 					</a>
@@ -66,6 +68,7 @@
 					href={resolve("/settings")}
 					class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
 					aria-label="settings"
+					title="settings"
 				>
 					<Icon svg={settings} size={16} />
 				</a>
@@ -73,6 +76,7 @@
 					type="button"
 					class="grid h-8 w-8 cursor-pointer place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
 					aria-label="sign out"
+					title="sign out"
 					onclick={signOut}
 				>
 					<Icon svg={logout} size={16} />

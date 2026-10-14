@@ -3,7 +3,7 @@
 		$props();
 </script>
 
-<div class="flex h-10 shrink-0 gap-0.5 rounded-px border border-line p-0.5" role="radiogroup">
+<div class="flex h-10 shrink-0 gap-0.5 rounded-px border border-edge p-0.5" role="radiogroup">
 	{#each options as option (option.key)}
 		<button
 			type="button"
@@ -11,7 +11,7 @@
 			aria-checked={value === option.key}
 			class="cursor-pointer rounded-px px-3 label transition-colors duration-100 {value ===
 			option.key
-				? 'bg-raised text-fg'
+				? 'bg-edge text-fg'
 				: 'hover:text-fg'}"
 			onclick={() => (value = option.key)}
 		>

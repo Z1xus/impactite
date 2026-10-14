@@ -36,6 +36,7 @@
 		type="button"
 		class="grid h-5 w-5 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
 		aria-label="remove filter"
+		title="remove filter"
 		onclick={remove}
 	>
 		<Icon svg={close} size={12} />

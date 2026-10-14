@@ -394,6 +394,7 @@
 </script>
 
 <Dialog
+	title={editing ? "edit filter" : "filter"}
 	bind:open={
 		() => editing !== undefined,
 		(open) => {
@@ -414,7 +415,7 @@
 	{/if}
 </Dialog>
 
-<Dialog bind:open={saving}>
+<Dialog title="save segment" bind:open={saving}>
 	<Form action="save segment" submit={saveSegment}>
 		<Field label="segment name" bind:value={segmentName} required />
 		{#if editable}
@@ -428,6 +429,7 @@
 
 <Dialog
 	wide
+	title={details?.title ?? ""}
 	bind:open={
 		() => details !== null,
 		(open) => {
@@ -439,7 +441,6 @@
 		<Details
 			{domain}
 			dim={details.dim}
-			title={details.title}
 			range={dates.current}
 			filters={toQueryFilters(filters)}
 			imports={withImports}
@@ -456,6 +457,7 @@
 
 {#snippet picker()}
 	<Select
+		align="right"
 		value={propKey}
 		options={propKeys.map((key) => ({ key, label: key }))}
 		data
@@ -481,6 +483,7 @@
 					href={resolve("/[site]/settings", { site: domain })}
 					class="grid h-8 w-8 place-items-center rounded-px text-dim transition-colors duration-100 hover:text-fg"
 					aria-label="site settings"
+					title="site settings"
 				>
 					<Icon svg={sliders} size={14} />
 				</a>
@@ -498,7 +501,7 @@
 					remove={() => removeFilter(filter.dim)}
 				/>
 			{/each}
-			{#if segments.length || filters.length}
+			{#if !empty && (segments.length || filters.length)}
 				<Select
 					value={active ? String(active.id) : ""}
 					text={active?.name ?? "segments"}
@@ -516,10 +519,12 @@
 					pick={pickSegment}
 				/>
 			{/if}
-			<Button variant="plain" onclick={() => (editing = null)}>
-				<Icon svg={funnel} size={12} />
-				filter
-			</Button>
+			{#if !empty}
+				<Button variant="quiet" onclick={() => (editing = null)}>
+					<Icon svg={funnel} size={12} />
+					filter
+				</Button>
+			{/if}
 			<div class="ml-auto flex flex-wrap items-center gap-3">
 				{#if hasImports}
 					<Checks
@@ -535,7 +540,7 @@
 						options={[{ key: "imports", label: "imported data" }]}
 					/>
 				{/if}
-				{#if view}
+				{#if view && !empty}
 					<Period {view} {go} />
 				{/if}
 			</div>
@@ -569,6 +574,7 @@
 					{#if dates && dates.choices.length > 1}
 						<div class="absolute top-3 right-4 z-10">
 							<Select
+								align="right"
 								value={dates.interval}
 								options={dates.choices.map((key) => ({ key, label: key }))}
 								pick={(key) => go({ interval: key })}

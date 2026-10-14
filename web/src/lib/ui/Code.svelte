@@ -22,6 +22,7 @@
 		type="button"
 		class="grid h-6 w-6 shrink-0 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
 		aria-label="copy"
+		title="copy"
 		onclick={write}
 	>
 		<Icon svg={copied ? check : copy} size={12} />

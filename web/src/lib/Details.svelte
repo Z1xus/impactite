@@ -9,7 +9,6 @@
 	let {
 		domain,
 		dim,
-		title,
 		range,
 		filters,
 		imports,
@@ -19,7 +18,6 @@
 	}: {
 		domain: string;
 		dim: string;
-		title: string;
 		range: Range;
 		filters: unknown[];
 		imports: boolean;
@@ -132,11 +130,8 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<div class="flex items-end justify-between gap-4">
-		<span class="label text-fg">{title}</span>
-		<div class="w-60">
-			<Field label="search" bind:value={search} />
-		</div>
+	<div class="w-72">
+		<Field label="search" bind:value={search} />
 	</div>
 	<div class="max-h-[60vh] overflow-y-auto">
 		<Table {columns} {rows} bind:sort {pick} />

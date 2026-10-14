@@ -16,7 +16,7 @@
 
 	const variants = {
 		primary: "h-9 border border-cyan bg-cyan px-4 text-ink hover:border-fg hover:bg-fg",
-		quiet: "h-9 border border-edge px-4 text-fg hover:border-dim",
+		quiet: "h-8 border border-edge px-3 text-fg hover:border-dim",
 		plain: "h-7 px-1 text-dim hover:text-fg"
 	};
 </script>

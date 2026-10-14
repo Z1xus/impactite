@@ -108,6 +108,7 @@
 						{@const user = info?.users.find((user) => user.id === key)}
 						{#if user && user.id !== session.me?.id}
 							<Select
+								align="right"
 								value={user.admin ? "admin" : "user"}
 								options={[
 									{ key: "user", label: "user" },

@@ -10,7 +10,8 @@
 		pick,
 		data = false,
 		icon,
-		text: shown
+		text: shown,
+		align = "left"
 	}: {
 		value: T;
 		options: { key: T; label: string; glyph?: Spec | null }[];
@@ -18,6 +19,7 @@
 		data?: boolean;
 		icon?: string;
 		text?: string;
+		align?: "left" | "right";
 	} = $props();
 
 	const text = $derived(data ? "normal-case tracking-normal" : "");
@@ -45,7 +47,7 @@
 <div class="relative" bind:this={root}>
 	<button
 		type="button"
-		class="flex h-8 cursor-pointer items-center gap-2 rounded-px border border-line px-3 label whitespace-nowrap {text} text-fg transition-colors duration-100 hover:border-edge"
+		class="flex h-8 cursor-pointer items-center gap-2 rounded-px border border-edge px-3 label whitespace-nowrap {text} text-fg transition-colors duration-100 hover:border-dim"
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
@@ -59,7 +61,9 @@
 	</button>
 	{#if open}
 		<ul
-			class="absolute top-full right-0 z-20 mt-1 max-h-80 min-w-full overflow-y-auto rounded-px border border-edge bg-raised py-1"
+			class="absolute top-full {align === 'right'
+				? 'right-0'
+				: 'left-0'} z-20 mt-1 max-h-80 min-w-full overflow-y-auto rounded-px border border-edge bg-raised py-1"
 		>
 			{#each options as option (option.key)}
 				<li>

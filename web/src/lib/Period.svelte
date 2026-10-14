@@ -68,6 +68,7 @@
 				type="button"
 				class="grid h-8 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
 				aria-label="earlier"
+				title="earlier"
 				disabled={!back}
 				onclick={() => back && go({ date: back })}
 			>
@@ -77,6 +78,7 @@
 				type="button"
 				class="grid h-8 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
 				aria-label="later"
+				title="later"
 				disabled={!forward}
 				onclick={() => forward && go({ date: forward })}
 			>
@@ -85,6 +87,7 @@
 		</div>
 	{/if}
 	<Select
+		align="right"
 		value={selected}
 		text={label(view)}
 		icon={calendar}
@@ -95,7 +98,7 @@
 		pick={choose}
 	/>
 	{#if view.period !== "all" && view.period !== "realtime"}
-		<Select value={view.compare} options={COMPARE} pick={compare} />
+		<Select align="right" value={view.compare} options={COMPARE} pick={compare} />
 		{#if view.compare === "previous" || view.compare === "year"}
 			<Checks
 				bind:value={
