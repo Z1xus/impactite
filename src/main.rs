@@ -192,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
 			let site = find_or_create(&app, &site, &timezone)?;
 			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let started = std::time::Instant::now();
-			let count = match source.starts_with("http") {
+			let (count, first) = match source.starts_with("http") {
 				true => {
 					let id = plausible_site_id
 						.context("--plausible-site-id is needed for clickhouse")?;
@@ -202,6 +202,9 @@ async fn main() -> anyhow::Result<()> {
 			};
 			db.sync()?;
 			db.close()?;
+			if let Some(first) = first {
+				app.backdate(site.id, first)?;
+			}
 			cli::say(
 				'+',
 				&format!(

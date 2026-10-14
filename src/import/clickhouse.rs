@@ -41,14 +41,23 @@ struct Row {
 	operating_system_version: String,
 	keys: Vec<String>,
 	values: Vec<String>,
+	interactive: u8,
 	scroll_depth: u8,
 	engagement_time: u32,
 }
 
-pub async fn import(db: &Db, site: &Site, url: &str, plausible_site: u64) -> anyhow::Result<u64> {
+pub async fn import(
+	db: &Db,
+	site: &Site,
+	url: &str,
+	plausible_site: u64,
+) -> anyhow::Result<(u64, Option<i64>)> {
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
+	// events_v2 drops the interactive flag, so it is recovered from bounced sessions
 	let query = format!(
-		"SELECT {COLUMNS} FROM events_v2 WHERE site_id = {plausible_site} ORDER BY timestamp FORMAT JSONEachRow"
+		"SELECT {COLUMNS}, name = 'pageview' OR session_id NOT IN (SELECT session_id FROM sessions_v2 \
+		WHERE site_id = {plausible_site} GROUP BY session_id HAVING sum(sign * is_bounce) > 0) AS interactive \
+		FROM events_v2 WHERE site_id = {plausible_site} ORDER BY timestamp FORMAT JSONEachRow"
 	);
 	let mut response = reqwest::Client::new()
 		.post(url)
@@ -66,6 +75,7 @@ pub async fn import(db: &Db, site: &Site, url: &str, plausible_site: u64) -> any
 	let started = Instant::now();
 	let mut buffer = Vec::new();
 	let mut count = 0u64;
+	let mut first = None;
 	while let Some(chunk) = response.chunk().await? {
 		buffer.extend_from_slice(&chunk);
 		let mut start = 0;
@@ -73,6 +83,7 @@ pub async fn import(db: &Db, site: &Site, url: &str, plausible_site: u64) -> any
 			let line = &buffer[start..start + end];
 			start += end + 1;
 			let row: Row = serde_json::from_slice(line).context("unexpected clickhouse row")?;
+			first.get_or_insert(row.ts);
 			insert(db, event(site.id, &tz, row)?);
 			count += 1;
 			if count.is_multiple_of(250_000) {
@@ -84,7 +95,7 @@ pub async fn import(db: &Db, site: &Site, url: &str, plausible_site: u64) -> any
 		}
 		buffer.drain(..start);
 	}
-	Ok(count)
+	Ok((count, first))
 }
 
 fn event(site: u64, tz: &TimeZone, row: Row) -> anyhow::Result<Event> {
@@ -102,7 +113,7 @@ fn event(site: u64, tz: &TimeZone, row: Row) -> anyhow::Result<Event> {
 		offset,
 		visitor: id(&row.user_id).context("bad user_id")?,
 		session: id(&row.session_id).context("bad session_id")?,
-		interactive: true,
+		interactive: row.interactive == 1,
 		scroll_depth: (row.scroll_depth <= 100).then_some(row.scroll_depth),
 		engagement_ms: row.engagement_time,
 		props: row.keys.into_iter().zip(row.values).collect(),

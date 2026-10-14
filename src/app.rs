@@ -131,6 +131,14 @@ impl App {
 		})
 	}
 
+	pub fn backdate(&self, site: u64, ts: i64) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set created_at = min(created_at, ?2) where id = ?1",
+			params![site as i64, ts],
+		)?;
+		Ok(())
+	}
+
 	pub fn site(&self, domain: &str) -> rusqlite::Result<Option<Site>> {
 		self.conn()
 			.query_row(
