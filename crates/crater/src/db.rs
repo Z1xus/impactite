@@ -10,8 +10,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::cache::Cache;
 use crate::dict::Dict;
-use crate::event::{Dim, Event};
-use crate::query::{Matcher, Query, Report};
+use crate::event::Event;
+use crate::query::{Matcher, Query, Report, Slot};
 use crate::rollup::{Counts, Metrics, Names};
 use crate::segment::{Columns, Dense, Segment};
 use crate::wal::Wal;
@@ -88,20 +88,22 @@ impl Db {
 	pub fn query(&self, query: &Query) -> io::Result<Report> {
 		let site = query.site;
 		let dict = self.shared.dict(site)?;
-		let (matchers, names) = {
+		let plan = {
 			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
-			let matchers: Vec<Matcher> = query
-				.filters
-				.iter()
-				.map(|filter| Matcher::new(filter, &dict))
-				.collect();
-			(matchers, Names::new(&dict))
-		};
-		let plan = Plan {
-			shape: hash(&(&query.filters, query.breakdown)),
-			matchers,
-			names,
-			dims: query.breakdown.into_iter().collect(),
+			Plan {
+				shape: hash(&(&query.filters, &query.breakdown)),
+				matchers: query
+					.filters
+					.iter()
+					.map(|filter| Matcher::new(filter, &dict))
+					.collect(),
+				names: Names::new(&dict),
+				slots: query
+					.breakdown
+					.iter()
+					.map(|field| Slot::resolve(field, &dict))
+					.collect(),
+			}
 		};
 
 		let live: HashSet<i32> = {
@@ -139,7 +141,7 @@ impl Db {
 				hour.merge(other);
 			}
 			days.push(counts.total);
-			for &(id, metrics) in plan.dims.iter().flat_map(|&dim| &counts.dims[dim as usize]) {
+			for &(id, metrics) in plan.rows(&counts) {
 				live_rows.entry(id).or_default().merge(&metrics);
 			}
 		}
@@ -170,15 +172,30 @@ impl Db {
 		sort_rows(&mut rows);
 		rows.truncate(query.limit);
 
+		let daily = match query.daily {
+			true => query
+				.days
+				.clone()
+				.map(|day| {
+					let counts = self.day((site, day), &plan)?;
+					Ok(plan.rows(&counts).take(query.limit).copied().collect())
+				})
+				.collect::<io::Result<Vec<Vec<(u32, Metrics)>>>>()?,
+			false => Vec::new(),
+		};
+
 		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
+		let resolve = |rows: Vec<(u32, Metrics)>| {
+			rows.into_iter()
+				.filter_map(|(id, metrics)| Some((dict.get(id)?.clone(), metrics)))
+				.collect()
+		};
 		Ok(Report {
 			total,
 			days,
 			hours,
-			rows: rows
-				.into_iter()
-				.filter_map(|(id, metrics)| Some((dict.get(id)?.clone(), metrics)))
-				.collect(),
+			rows: resolve(rows),
+			daily: daily.into_iter().map(resolve).collect(),
 		})
 	}
 
@@ -212,7 +229,7 @@ impl Db {
 				hour.merge(other);
 			}
 			merged.days.push(counts.total);
-			for &(id, metrics) in plan.dims.iter().flat_map(|&dim| &counts.dims[dim as usize]) {
+			for &(id, metrics) in plan.rows(&counts) {
 				rows.entry(id).or_default().merge(&metrics);
 			}
 		}
@@ -250,7 +267,7 @@ impl Db {
 				live.sessions,
 				&plan.names,
 				&plan.matchers,
-				&plan.dims,
+				&plan.slots,
 			);
 			counts.seq = live.version;
 			let counts = Arc::new(counts);
@@ -258,33 +275,59 @@ impl Db {
 			return Ok(counts);
 		}
 
-		let shape = match plan.matchers.is_empty() {
-			true => 0,
-			false => plan.shape,
-		};
+		if plan.matchers.is_empty() {
+			let rollup = self.rollup(key)?;
+			if rollup.fields.is_empty()
+				|| plan
+					.slots
+					.iter()
+					.all(|slot| rollup.fields.contains_key(slot))
+			{
+				return Ok(rollup);
+			}
+		}
+
 		let version = lock(&self.shared.versions).get(&key).copied();
-		let cached = lock(&self.shared.cache).get(&(key, shape, false));
+		let cached = lock(&self.shared.cache).get(&(key, plan.shape, false));
 		if let Some(counts) = cached.filter(|counts| version.is_none_or(|seq| seq == counts.seq)) {
 			return Ok(counts);
 		}
+		let counts = Segment::read(&self.shared.path(key, "seg")).map(|seg| {
+			let mut counts = Counts::scan(
+				&[&seg.cols],
+				seg.visitors.len(),
+				seg.sessions.len(),
+				&plan.names,
+				&plan.matchers,
+				&plan.slots,
+			);
+			counts.seq = seg.seq;
+			counts
+		});
+		let counts = Arc::new(missing_as_empty(counts)?);
+		lock(&self.shared.cache).insert((key, plan.shape, false), counts.clone());
+		Ok(counts)
+	}
 
-		let counts = match plan.matchers.is_empty() {
-			true => Counts::read(&self.shared.path(key, "rlp")),
-			false => Segment::read(&self.shared.path(key, "seg")).map(|seg| {
-				let mut counts = Counts::scan(
-					&[&seg.cols],
-					seg.visitors.len(),
-					seg.sessions.len(),
-					&plan.names,
-					&plan.matchers,
-					&plan.dims,
-				);
-				counts.seq = seg.seq;
-				counts
-			}),
+	fn rollup(&self, key: Key) -> io::Result<Arc<Counts>> {
+		let version = lock(&self.shared.versions).get(&key).copied();
+		let cached = lock(&self.shared.cache).get(&(key, 0, false));
+		if let Some(counts) = cached.filter(|counts| version.is_none_or(|seq| seq == counts.seq)) {
+			return Ok(counts);
+		}
+		let path = self.shared.path(key, "rlp");
+		let counts = match Counts::read(&path) {
+			Err(err) if err.kind() == ErrorKind::InvalidData => {
+				let seg = Segment::read(&self.shared.path(key, "seg"))?;
+				let dict = self.shared.dict(key.0)?;
+				let counts = rollup(&seg, &dict.read().unwrap_or_else(PoisonError::into_inner));
+				counts.write(&path)?;
+				Ok(counts)
+			}
+			counts => counts,
 		};
 		let counts = Arc::new(missing_as_empty(counts)?);
-		lock(&self.shared.cache).insert((key, shape, false), counts.clone());
+		lock(&self.shared.cache).insert((key, 0, false), counts.clone());
 		Ok(counts)
 	}
 }
@@ -293,7 +336,16 @@ struct Plan {
 	shape: u64,
 	matchers: Vec<Matcher>,
 	names: Names,
-	dims: Vec<Dim>,
+	slots: Vec<Slot>,
+}
+
+impl Plan {
+	fn rows<'a>(&'a self, counts: &'a Counts) -> impl Iterator<Item = &'a (u32, Metrics)> {
+		self.slots
+			.iter()
+			.filter_map(|slot| counts.fields.get(slot))
+			.flatten()
+	}
 }
 
 struct Merged {
@@ -684,7 +736,7 @@ fn rollup(seg: &Segment, dict: &Dict) -> Counts {
 		seg.sessions.len(),
 		&Names::new(dict),
 		&[],
-		&Dim::ALL,
+		&Counts::rollup_slots(&[&seg.cols]),
 	);
 	counts.seq = seg.seq;
 	counts

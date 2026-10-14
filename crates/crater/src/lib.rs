@@ -13,5 +13,5 @@ mod wal;
 
 pub use db::Db;
 pub use event::{Dim, Dims, Event};
-pub use query::{Filter, Op, Query, Report};
+pub use query::{Field, Filter, Op, Query, Report};
 pub use rollup::Metrics;

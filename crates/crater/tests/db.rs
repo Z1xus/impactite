@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crater::{Db, Dim, Event, Filter, Metrics, Op, Query, Report};
+use crater::{Db, Dim, Event, Field, Filter, Metrics, Op, Query, Report};
 
 const SITE: u64 = 7;
 const DAY: i32 = 20_000;
@@ -46,7 +46,11 @@ fn day() -> Vec<Event> {
 		event(1, 10, 200, "pageview", "/b", "Google"),
 		event(2, 20, 3700, "pageview", "/a", ""),
 		event(3, 10, 7300, "pageview", "/a", "Twitter"),
-		event(3, 10, 7400, "Signup", "/a", "Twitter"),
+		{
+			let mut signup = event(3, 10, 7400, "Signup", "/a", "Twitter");
+			signup.props.push(("plan".into(), "pro".into()));
+			signup
+		},
 		event(4, 30, 10_900, "pageview", "/b", ""),
 		event(4, 30, 11_000, "engagement", "/b", ""),
 	]
@@ -70,13 +74,14 @@ fn metrics(
 	}
 }
 
-fn query(db: &Db, filters: Vec<Filter>, breakdown: Option<Dim>) -> std::io::Result<Report> {
+fn query(db: &Db, filters: Vec<Filter>, breakdown: Option<Field>) -> std::io::Result<Report> {
 	db.query(&Query {
 		site: SITE,
 		days: DAY - 1..=DAY + 1,
 		filters,
 		breakdown,
 		limit: 10,
+		daily: false,
 	})
 }
 
@@ -90,7 +95,7 @@ fn row(report: &Report, value: &str) -> Option<Metrics> {
 
 fn filter(dim: Dim, op: Op, value: &str) -> Filter {
 	Filter {
-		dim,
+		field: Field::Dim(dim),
 		op,
 		values: vec![value.into()],
 	}
@@ -105,7 +110,7 @@ fn seals_past_days() {
 	}
 	db.sync().unwrap();
 
-	let report = query(&db, Vec::new(), Some(Dim::Page)).unwrap();
+	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Page))).unwrap();
 	assert_eq!(report.total, metrics(3, 4, 5, 6, 2, 300));
 	assert_eq!(report.days.len(), 3);
 	assert_eq!(report.days[1], report.total);
@@ -114,13 +119,25 @@ fn seals_past_days() {
 	assert_eq!(row(&report, "/a"), Some(metrics(2, 3, 3, 4, 1, 200)));
 	assert_eq!(row(&report, "/b"), Some(metrics(2, 2, 2, 2, 1, 200)));
 
-	let report = query(&db, Vec::new(), Some(Dim::Source)).unwrap();
+	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Source))).unwrap();
 	assert_eq!(row(&report, "Google"), Some(metrics(1, 1, 2, 2, 0, 100)));
 	assert_eq!(row(&report, ""), Some(metrics(2, 2, 2, 2, 2, 100)));
 	assert_eq!(row(&report, "Twitter"), Some(metrics(1, 1, 1, 2, 0, 100)));
 
-	let report = query(&db, Vec::new(), Some(Dim::Name)).unwrap();
+	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Name))).unwrap();
 	assert_eq!(row(&report, "engagement"), None);
+
+	let report = query(&db, Vec::new(), Some(Field::Entry)).unwrap();
+	assert_eq!(row(&report, "/a"), Some(metrics(2, 3, 4, 5, 1, 200)));
+	assert_eq!(row(&report, "/b"), Some(metrics(1, 1, 1, 1, 1, 100)));
+
+	let report = query(&db, Vec::new(), Some(Field::Exit)).unwrap();
+	assert_eq!(row(&report, "/a"), Some(metrics(2, 2, 2, 3, 1, 100)));
+	assert_eq!(row(&report, "/b"), Some(metrics(2, 2, 3, 3, 1, 200)));
+
+	let report = query(&db, Vec::new(), Some(Field::Prop("plan".into()))).unwrap();
+	assert_eq!(report.rows.len(), 1);
+	assert_eq!(row(&report, "pro"), Some(metrics(1, 1, 0, 1, 0, 100)));
 	db.close().unwrap();
 }
 
@@ -140,7 +157,7 @@ fn filters() {
 	);
 
 	let page_a = vec![filter(Dim::Page, Op::Is, "/a")];
-	let report = query(&db, page_a, Some(Dim::Source)).unwrap();
+	let report = query(&db, page_a, Some(Field::Dim(Dim::Source))).unwrap();
 	assert_eq!(report.total, metrics(2, 3, 3, 4, 1, 200));
 	assert_eq!(row(&report, "Google"), Some(metrics(1, 1, 1, 1, 0, 100)));
 	assert_eq!(row(&report, ""), Some(metrics(1, 1, 1, 1, 1, 0)));
@@ -156,6 +173,12 @@ fn filters() {
 		query(&db, contains_b, None).unwrap().total,
 		metrics(2, 2, 2, 2, 1, 200)
 	);
+
+	let glob = vec![filter(Dim::Page, Op::Matches, "/a*")];
+	assert_eq!(
+		query(&db, glob, None).unwrap().total,
+		metrics(2, 3, 3, 4, 1, 200)
+	);
 	db.close().unwrap();
 }
 
@@ -170,7 +193,7 @@ fn merges_late_events_and_reopens() {
 	assert!(db.insert(event(2, 20, 3800, "pageview", "/c", "")));
 	db.sync().unwrap();
 
-	let report = query(&db, Vec::new(), Some(Dim::Page)).unwrap();
+	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Page))).unwrap();
 	assert_eq!(report.total, metrics(3, 4, 6, 7, 1, 400));
 	assert_eq!(row(&report, "/c"), Some(metrics(1, 1, 1, 1, 0, 100)));
 	db.close().unwrap();
@@ -201,6 +224,7 @@ fn serves_today_live_and_after_restart() {
 		filters: Vec::new(),
 		breakdown: None,
 		limit: 10,
+		daily: false,
 	};
 
 	let db = Db::open(&dir.0).unwrap();
