@@ -232,17 +232,19 @@ async fn upload(
 		let dir = shared.data.join("uploads");
 		fs::create_dir_all(&dir)?;
 		let extension = match (upload.source.as_str(), body.starts_with(&[0x1f, 0x8b])) {
-			("plausible", _) => "zip",
+			("plausible" | "impactite", _) => "zip",
 			("goatcounter", true) => "csv.gz",
 			("goatcounter", false) => "csv",
-			_ => bail!("Choose Plausible or GoatCounter."),
+			_ => bail!("Choose impactite, Plausible or GoatCounter."),
 		};
 		let path = dir.join(format!("{}.{extension}", token()?));
 		fs::write(&path, &body)?;
 		let db = &shared.stats.db;
-		let done = match extension {
-			"zip" => import::plausible_zip(db, &shared.app, &site, &path)
+		let done = match upload.source.as_str() {
+			"plausible" => import::plausible_zip(db, &shared.app, &site, &path)
 				.map(|days| format!("{days} days")),
+			"impactite" => import::native_zip(db, &shared.app, &site, &path)
+				.map(|events| format!("{events} events")),
 			_ => import::goatcounter_csv(db, &shared.app, &site, &path)
 				.map(|events| format!("{events} events")),
 		};

@@ -9,6 +9,7 @@ use axum::routing::{get, post};
 use crate::accounts::{self, Web};
 use crate::admin;
 use crate::assets;
+use crate::export;
 use crate::goals;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
@@ -45,6 +46,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))
+				.route("/api/app/export", post(export::export))
 				.route("/api/app/icon/{host}", get(icons::icon))
 				.with_state(web),
 		)

@@ -47,6 +47,32 @@ impl Dim {
 	];
 	pub const COUNT: usize = Self::ALL.len();
 
+	pub const NAMES: [&str; 19] = [
+		"name",
+		"hostname",
+		"page",
+		"referrer",
+		"source",
+		"channel",
+		"utm_source",
+		"utm_medium",
+		"utm_campaign",
+		"utm_content",
+		"utm_term",
+		"country",
+		"region",
+		"city",
+		"device",
+		"browser",
+		"browser_version",
+		"os",
+		"os_version",
+	];
+
+	pub fn name(self) -> &'static str {
+		Self::NAMES[self as usize]
+	}
+
 	pub fn is_event(self) -> bool {
 		matches!(self, Dim::Name | Dim::Hostname | Dim::Page)
 	}

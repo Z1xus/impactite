@@ -181,15 +181,20 @@ pub async fn props(
 	}
 }
 
-struct Period {
-	site: Site,
+pub(crate) struct Period {
+	pub(crate) site: Site,
 	tz: TimeZone,
-	from: Date,
-	to: Date,
+	pub(crate) from: Date,
+	pub(crate) to: Date,
 	imported: Option<Date>,
 }
 
-fn period(stats: &Stats, site_id: &str, range: &Value, trim: bool) -> Result<Period, String> {
+pub(crate) fn period(
+	stats: &Stats,
+	site_id: &str,
+	range: &Value,
+	trim: bool,
+) -> Result<Period, String> {
 	let site = stats
 		.app
 		.site(site_id)
@@ -691,7 +696,7 @@ fn grouping(names: &[String]) -> Result<Grouping, String> {
 	})
 }
 
-fn filters(raw: &Value, goals: &[Goal]) -> Result<Vec<(Filter, bool)>, String> {
+pub(crate) fn filters(raw: &Value, goals: &[Goal]) -> Result<Vec<(Filter, bool)>, String> {
 	let invalid = || format!("#/filters: Invalid filter {raw}");
 	let Value::Array(parts) = raw else {
 		return Err(invalid());

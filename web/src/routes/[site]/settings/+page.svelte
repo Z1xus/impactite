@@ -37,7 +37,7 @@
 	let imports = $state<Import[] | null>(null);
 	let kind = $state<"event" | "page">("event");
 	let value = $state("");
-	let source = $state<"plausible" | "goatcounter">("plausible");
+	let source = $state<"impactite" | "plausible" | "goatcounter">("impactite");
 	let file = $state<File | null>(null);
 	let imported = $state("");
 	let confirm = $state("");
@@ -290,10 +290,11 @@
 					remove={removeImport}
 				/>
 				<Form action="import" submit={runImport} inline>
-					<Upload bind:file accept={source === "plausible" ? ".zip" : ".csv,.gz"} />
+					<Upload bind:file accept={source === "goatcounter" ? ".csv,.gz" : ".zip"} />
 					<Toggle
 						bind:value={source}
 						options={[
+							{ key: "impactite", label: "impactite" },
 							{ key: "plausible", label: "plausible" },
 							{ key: "goatcounter", label: "goatcounter" }
 						]}

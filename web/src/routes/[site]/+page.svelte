@@ -7,6 +7,7 @@
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
+	import downloadIcon from "pixelarticons/svg/download.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
@@ -31,6 +32,7 @@
 	import Snippet from "#lib/Snippet.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
+	import Menu from "#lib/ui/Menu.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
@@ -217,6 +219,29 @@
 	});
 	let ranked = $state<Record<string, Ranked>>({});
 	let loading = $state<Record<string, boolean>>({});
+
+	async function download(format: string) {
+		if (!dates) return;
+		const range = dates.current === "30m" ? "day" : dates.current;
+		const res = await fetch("/api/app/export", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				site_id: domain,
+				date_range: range,
+				filters: toQueryFilters(filters),
+				format
+			})
+		});
+		if (!res.ok) return;
+		const name =
+			res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "export.zip";
+		const link = document.createElement("a");
+		link.href = URL.createObjectURL(await res.blob());
+		link.download = name;
+		link.click();
+		URL.revokeObjectURL(link.href);
+	}
 
 	function go(change: Record<string, string | null>) {
 		navigate((params) => {
@@ -571,6 +596,19 @@
 					/>
 				{/if}
 				{#if view && !empty}
+					<Menu
+						label="export"
+						icon={downloadIcon}
+						align="right"
+						items={[
+							{
+								label: "impactite, all events",
+								onclick: () => download("impactite")
+							},
+							{ label: "plausible csv", onclick: () => download("plausible") },
+							{ label: "goatcounter csv", onclick: () => download("goatcounter") }
+						]}
+					/>
 					<Period {view} {go} />
 				{/if}
 			</div>

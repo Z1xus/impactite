@@ -4,6 +4,7 @@ mod app;
 mod assets;
 mod cli;
 mod demo;
+mod export;
 mod geo;
 mod goals;
 mod icons;
@@ -114,6 +115,13 @@ enum ImportSource {
 		#[arg(long, default_value = "UTC")]
 		timezone: String,
 	},
+	Impactite {
+		file: PathBuf,
+		#[arg(long)]
+		site: String,
+		#[arg(long, default_value = "UTC")]
+		timezone: String,
+	},
 }
 
 #[derive(Subcommand)]
@@ -197,7 +205,8 @@ async fn main() -> anyhow::Result<()> {
 		Command::Import { source } => {
 			let (domain, timezone) = match &source {
 				ImportSource::Plausible { site, timezone, .. }
-				| ImportSource::Goatcounter { site, timezone, .. } => (site, timezone),
+				| ImportSource::Goatcounter { site, timezone, .. }
+				| ImportSource::Impactite { site, timezone, .. } => (site, timezone),
 			};
 			let site = find_or_create(&app, domain, timezone)?;
 			let db = Db::open(cli.data.join("events")).context("open event store")?;
@@ -223,6 +232,9 @@ async fn main() -> anyhow::Result<()> {
 				),
 				ImportSource::Goatcounter { file, .. } => {
 					(import::goatcounter_csv(&db, &app, &site, &file)?, "events")
+				}
+				ImportSource::Impactite { file, .. } => {
+					(import::native_zip(&db, &app, &site, &file)?, "events")
 				}
 			};
 			db.sync()?;

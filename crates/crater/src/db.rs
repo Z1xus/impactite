@@ -11,7 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::cache::Cache;
 use crate::dict::Dict;
-use crate::event::Event;
+use crate::event::{Dim, Event};
 use crate::query::{Field, Matcher, Query, Report, Slot};
 use crate::rollup::{Counts, Metrics, Names};
 use crate::segment::{Columns, Dense, Segment};
@@ -271,6 +271,62 @@ impl Db {
 		counts.write(&self.shared.path(key, "imp"))?;
 		lock(&self.shared.imports).insert(key, Some(Arc::new(counts)));
 		*lock(&self.shared.ranges) = Cache::new(CACHE);
+		Ok(())
+	}
+
+	// streams stored events with `ts` as local wall time and ids unique per site
+	pub fn events(
+		&self,
+		site: u64,
+		days: RangeInclusive<i32>,
+		mut each: impl FnMut(Event),
+	) -> io::Result<()> {
+		let dict = self.shared.dict(site)?;
+		for day in days {
+			let live = self
+				.shared
+				.live
+				.read()
+				.unwrap_or_else(PoisonError::into_inner)
+				.get(&(site, day))
+				.map(|live| live.parts.clone());
+			let parts = match live {
+				Some(parts) => parts,
+				None => match Segment::read(&self.shared.path((site, day), "seg")) {
+					Ok(seg) => vec![Arc::new(seg.cols)],
+					Err(err) if err.kind() == ErrorKind::NotFound => continue,
+					Err(err) => return Err(err),
+				},
+			};
+			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
+			let text = |id: u32| dict.get(id).map(|s| s.to_string()).unwrap_or_default();
+			let id = |dense: u32| (u64::from(day as u32) << 32) | u64::from(dense);
+			for part in &parts {
+				let mut prop = 0;
+				for row in 0..part.rows() {
+					let mut event = Event {
+						site,
+						ts: i64::from(day) * 86_400 + i64::from(part.time[row]),
+						offset: 0,
+						visitor: id(part.visitor[row]),
+						session: id(part.session[row]),
+						interactive: part.interactive[row] == 1,
+						scroll_depth: part.scroll[row].checked_sub(1).map(|depth| depth as u8),
+						engagement_ms: part.engagement[row],
+						..Event::default()
+					};
+					for dim in Dim::ALL {
+						event.dims[dim] = text(part.dims[dim as usize][row]);
+					}
+					let count = part.props[row] as usize;
+					event.props = (prop..prop + count)
+						.map(|i| (text(part.keys[i]), text(part.values[i])))
+						.collect();
+					prop += count;
+					each(event);
+				}
+			}
+		}
 		Ok(())
 	}
 

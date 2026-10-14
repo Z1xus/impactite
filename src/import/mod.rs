@@ -9,6 +9,7 @@ use crate::app::{App, Site};
 
 pub mod clickhouse;
 pub mod goatcounter;
+pub mod native;
 pub mod plausible;
 
 fn insert(db: &Db, event: Event) {
@@ -31,6 +32,14 @@ pub fn plausible_zip(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Re
 
 pub fn goatcounter_csv(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<u64> {
 	let (count, first) = goatcounter::import(db, site, path)?;
+	if let Some(first) = first {
+		app.backdate(site.id, first)?;
+	}
+	Ok(count)
+}
+
+pub fn native_zip(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<u64> {
+	let (count, first) = native::import(db, app, site, path)?;
 	if let Some(first) = first {
 		app.backdate(site.id, first)?;
 	}
