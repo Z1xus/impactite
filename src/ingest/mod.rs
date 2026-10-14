@@ -192,10 +192,7 @@ impl Ingest {
 		}
 		event.props = hit.props;
 
-		match self.db.insert(event) {
-			true => Ok(()),
-			false => Err(Rejected::Busy),
-		}
+		self.db.insert(Box::new(event)).map_err(|_| Rejected::Busy)
 	}
 
 	pub fn current_visitors(&self, site: u64) -> usize {

@@ -197,7 +197,9 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 					] {
 						event.dims[dim] = value.to_owned();
 					}
-					while !db.insert(event.clone()) {
+					let mut event = Box::new(event);
+					while let Err(back) = db.insert(event) {
+						event = back;
 						thread::yield_now();
 					}
 					inserted += 1;

@@ -1,10 +1,12 @@
 mod accounts;
 mod app;
 mod assets;
+mod cli;
 mod demo;
 mod geo;
 mod goals;
 mod icons;
+mod import;
 mod ingest;
 mod mail;
 mod net;
@@ -74,11 +76,28 @@ enum Command {
 		#[command(subcommand)]
 		command: MailCommand,
 	},
+	Import {
+		#[command(subcommand)]
+		source: ImportSource,
+	},
 	Demo {
 		domain: String,
 		#[arg(long, default_value_t = 90)]
 		days: i64,
 		#[arg(long, default_value = "Europe/Berlin")]
+		timezone: String,
+	},
+}
+
+#[derive(Subcommand)]
+enum ImportSource {
+	Plausible {
+		source: String,
+		#[arg(long)]
+		site: String,
+		#[arg(long)]
+		plausible_site_id: Option<u64>,
+		#[arg(long, default_value = "UTC")]
 		timezone: String,
 	},
 }
@@ -161,21 +180,44 @@ async fn main() -> anyhow::Result<()> {
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
+		Command::Import {
+			source:
+				ImportSource::Plausible {
+					source,
+					site,
+					plausible_site_id,
+					timezone,
+				},
+		} => {
+			let site = find_or_create(&app, &site, &timezone)?;
+			let db = Db::open(cli.data.join("events")).context("open event store")?;
+			let started = std::time::Instant::now();
+			let count = match source.starts_with("http") {
+				true => {
+					let id = plausible_site_id
+						.context("--plausible-site-id is needed for clickhouse")?;
+					import::clickhouse::import(&db, &site, &source, id).await?
+				}
+				false => bail!("plausible csv import comes next"),
+			};
+			db.sync()?;
+			db.close()?;
+			cli::say(
+				'+',
+				&format!(
+					"{count} events  |  {}  |  {:.1?}",
+					site.domain,
+					started.elapsed()
+				),
+			);
+			Ok(())
+		}
 		Command::Demo {
 			domain,
 			days,
 			timezone,
 		} => {
-			let site = match app.site(&domain)? {
-				Some(site) => site,
-				None => {
-					let team = match app.first_user()? {
-						Some(user) => Some(app.personal_team(user)?),
-						None => None,
-					};
-					app.add_site(&domain, &timezone, team)?
-				}
-			};
+			let site = find_or_create(&app, &domain, &timezone)?;
 			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let count = demo::seed(&db, site.id, &site.domain, &site.timezone, days);
 			db.sync()?;
@@ -341,6 +383,17 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 	}
 	db.close().context("close event store")?;
 	Ok(())
+}
+
+fn find_or_create(app: &App, domain: &str, timezone: &str) -> anyhow::Result<app::Site> {
+	if let Some(site) = app.site(domain)? {
+		return Ok(site);
+	}
+	let team = match app.first_user()? {
+		Some(user) => Some(app.personal_team(user)?),
+		None => None,
+	};
+	Ok(app.add_site(domain, timezone, team)?)
 }
 
 async fn redirect(url: String) {

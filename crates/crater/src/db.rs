@@ -3,7 +3,7 @@ use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -67,8 +67,14 @@ impl Db {
 		})
 	}
 
-	pub fn insert(&self, event: Event) -> bool {
-		self.tx.try_send(Msg::Event(Box::new(event))).is_ok()
+	pub fn insert(&self, event: Box<Event>) -> Result<(), Box<Event>> {
+		self.tx
+			.try_send(Msg::Event(event))
+			.map_err(|err| match err {
+				TrySendError::Full(Msg::Event(event))
+				| TrySendError::Disconnected(Msg::Event(event)) => event,
+				_ => Box::default(),
+			})
 	}
 
 	pub fn sync(&self) -> io::Result<()> {

@@ -106,7 +106,7 @@ fn seals_past_days() {
 	let dir = TempDir::new("seal").unwrap();
 	let db = Db::open(&dir.0).unwrap();
 	for event in day() {
-		assert!(db.insert(event));
+		db.insert(Box::new(event)).unwrap();
 	}
 	db.sync().unwrap();
 
@@ -146,7 +146,7 @@ fn filters() {
 	let dir = TempDir::new("filters").unwrap();
 	let db = Db::open(&dir.0).unwrap();
 	for event in day() {
-		assert!(db.insert(event));
+		db.insert(Box::new(event)).unwrap();
 	}
 	db.sync().unwrap();
 
@@ -187,10 +187,11 @@ fn merges_late_events_and_reopens() {
 	let dir = TempDir::new("late").unwrap();
 	let db = Db::open(&dir.0).unwrap();
 	for event in day() {
-		assert!(db.insert(event));
+		db.insert(Box::new(event)).unwrap();
 	}
 	db.sync().unwrap();
-	assert!(db.insert(event(2, 20, 3800, "pageview", "/c", "")));
+	db.insert(Box::new(event(2, 20, 3800, "pageview", "/c", "")))
+		.unwrap();
 	db.sync().unwrap();
 
 	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Page))).unwrap();
@@ -228,9 +229,9 @@ fn serves_today_live_and_after_restart() {
 	};
 
 	let db = Db::open(&dir.0).unwrap();
-	assert!(db.insert(live(1, now - 60)));
-	assert!(db.insert(live(1, now - 30)));
-	assert!(db.insert(live(2, now - 10)));
+	db.insert(Box::new(live(1, now - 60))).unwrap();
+	db.insert(Box::new(live(1, now - 30))).unwrap();
+	db.insert(Box::new(live(2, now - 10))).unwrap();
 	db.sync().unwrap();
 	let expected = metrics(2, 2, 3, 3, 1, 30);
 	assert_eq!(db.query(&today_query).unwrap().total, expected);
