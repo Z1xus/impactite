@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import Chart from "#lib/dither/Chart.svelte";
+	import WorldMap from "#lib/dither/Map.svelte";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
@@ -146,7 +147,7 @@
 			tabs: [
 				{ key: "visit:source", label: "sources" },
 				{ key: "visit:channel", label: "channels" },
-				{ key: "visit:utm_campaign", label: "campaigns" }
+				{ key: "utm", label: "utm" }
 			]
 		},
 		{
@@ -161,6 +162,7 @@
 		{
 			id: "locations",
 			tabs: [
+				{ key: "map", label: "map" },
 				{ key: "visit:country", label: "countries" },
 				{ key: "visit:region", label: "regions" },
 				{ key: "visit:city", label: "cities" }
@@ -233,7 +235,31 @@
 	let editing = $state<Filter | null | undefined>(undefined);
 	let details = $state<{ dim: string; title: string } | null>(null);
 	const converting = $derived(filters.some((filter) => filter.dim === "event:goal"));
-	const dimOf = (id: string) => (tabs[id] === "props" ? `event:props:${propKey}` : tabs[id]);
+	const UTM = [
+		{ key: "visit:utm_campaign", label: "campaign" },
+		{ key: "visit:utm_source", label: "source" },
+		{ key: "visit:utm_medium", label: "medium" },
+		{ key: "visit:utm_content", label: "content" },
+		{ key: "visit:utm_term", label: "term" }
+	];
+	// one value filtered on these shows the level below, like plausible
+	const DRILL: Record<string, { dim: string; label: string }> = {
+		"visit:source": { dim: "visit:referrer", label: "referrers" },
+		"visit:browser": { dim: "visit:browser_version", label: "versions" },
+		"visit:os": { dim: "visit:os_version", label: "versions" }
+	};
+	let utmKey = $state("visit:utm_campaign");
+	const drilled = (tab: string) => {
+		const filter = filters.find((item) => item.dim === tab);
+		return filter?.op === "is" && filter.values.length === 1 ? DRILL[tab] : undefined;
+	};
+	const dimOf = (id: string) => {
+		const tab = tabs[id];
+		if (tab === "props") return `event:props:${propKey}`;
+		if (tab === "utm") return utmKey;
+		if (tab === "map") return "visit:country";
+		return drilled(tab)?.dim ?? tab;
+	};
 
 	type Segment = { id: number; name: string; filters: string[]; shared: boolean; mine: boolean };
 	let segments = $state<Segment[]>([]);
@@ -353,7 +379,7 @@
 		const cleanups: (() => void)[] = [];
 		for (const panel of panels) {
 			if (!panel.tabs.length) continue;
-			const dim = tabs[panel.id] === "props" ? `event:props:${propKey}` : tabs[panel.id];
+			const dim = dimOf(panel.id);
 			let stale = false;
 			loading[panel.id] = true;
 			ask({
@@ -364,7 +390,7 @@
 				date_range: dates.current,
 				dimensions: [dim],
 				filters: where,
-				pagination: { limit: 9 }
+				pagination: { limit: tabs[panel.id] === "map" ? 300 : 9 }
 			}).then((result) => {
 				if (stale) return;
 				ranked[panel.id] = result.results.map((row) => {
@@ -454,6 +480,10 @@
 		/>
 	{/if}
 </Dialog>
+
+{#snippet utmPicker()}
+	<Select align="right" value={utmKey} options={UTM} pick={(key) => (utmKey = key)} />
+{/snippet}
 
 {#snippet picker()}
 	<Select
@@ -594,9 +624,16 @@
 				{#each panels.filter((panel) => panel.tabs.length) as panel (panel.id)}
 					<div class={panel.id === "goals" ? "md:col-span-2" : ""}>
 						<Panel
-							tabs={panel.tabs}
+							tabs={panel.tabs.map((tab) => ({
+								...tab,
+								label: drilled(tab.key)?.label ?? tab.label
+							}))}
 							bind:tab={tabs[panel.id]}
-							actions={tabs[panel.id] === "props" ? picker : undefined}
+							actions={tabs[panel.id] === "props"
+								? picker
+								: tabs[panel.id] === "utm"
+									? utmPicker
+									: undefined}
 						>
 							{#snippet footer()}
 								<Button
@@ -612,12 +649,23 @@
 									details
 								</Button>
 							{/snippet}
-							<Rows
-								rows={ranked[panel.id] ?? null}
-								loading={loading[panel.id]}
-								format={(value) => format("visitors", value)}
-								pick={(key) => addFilter(dimOf(panel.id), key)}
-							/>
+							{#if tabs[panel.id] === "map"}
+								<WorldMap
+									values={Object.fromEntries(
+										(ranked[panel.id] ?? []).map((row) => [row.key, row.value])
+									)}
+									label={(code) => display("visit:country", code)}
+									format={(value) => format("visitors", value)}
+									pick={(code) => addFilter("visit:country", code)}
+								/>
+							{:else}
+								<Rows
+									rows={ranked[panel.id] ?? null}
+									loading={loading[panel.id]}
+									format={(value) => format("visitors", value)}
+									pick={(key) => addFilter(dimOf(panel.id), key)}
+								/>
+							{/if}
 						</Panel>
 					</div>
 				{/each}

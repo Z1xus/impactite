@@ -10,7 +10,10 @@
 	{#if label}
 		<span class="label">{label}</span>
 	{/if}
-	<div class="flex h-9 w-fit shrink-0 gap-0.5 rounded-px border border-edge p-0.5" role="radiogroup">
+	<div
+		class="flex h-9 w-fit shrink-0 gap-0.5 rounded-px border border-edge p-0.5"
+		role="radiogroup"
+	>
 		{#each options as option (option.key)}
 			<button
 				type="button"
