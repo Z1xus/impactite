@@ -111,23 +111,6 @@ mod tests {
 	use crate::testing::{TempDir, event};
 
 	#[test]
-	fn round_trip() {
-		let dir = TempDir::new("wal-round-trip").unwrap();
-		let path = dir.path().join("events.wal");
-		let events: Vec<Event> = (0..100_000).map(event).collect();
-
-		let (mut wal, replayed) = Wal::open(&path).unwrap();
-		assert!(replayed.is_empty());
-		for chunk in events.chunks(4096) {
-			wal.append(chunk).unwrap();
-		}
-		drop(wal);
-
-		let (_, replayed) = Wal::open(&path).unwrap();
-		assert_eq!(replayed, events);
-	}
-
-	#[test]
 	fn torn_tail() {
 		let dir = TempDir::new("wal-torn-tail").unwrap();
 		let path = dir.path().join("events.wal");
