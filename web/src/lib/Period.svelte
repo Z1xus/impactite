@@ -94,7 +94,7 @@
 		]}
 		pick={choose}
 	/>
-	{#if view.period !== "all"}
+	{#if view.period !== "all" && view.period !== "realtime"}
 		<Select value={view.compare} options={COMPARE} pick={compare} />
 		{#if view.compare === "previous" || view.compare === "year"}
 			<Checks

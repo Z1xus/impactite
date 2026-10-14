@@ -106,7 +106,8 @@ impl Db {
 		let plan = {
 			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
 			Plan {
-				shape: hash(&(&query.filters, &query.breakdown, query.imports)),
+				shape: hash(&(&query.filters, &query.breakdown, query.imports, query.since)),
+				since: query.since,
 				imports: query.imports && query.filters.is_empty(),
 				matchers: query
 					.filters
@@ -146,6 +147,7 @@ impl Db {
 		let mut days = Vec::new();
 		let mut sealed_days = merged.days.iter();
 		let mut live_rows: HashMap<u32, Metrics> = HashMap::new();
+		let mut minutes = Vec::new();
 		for day in query.days.clone() {
 			if !live.contains(&day) {
 				days.push(sealed_days.next().copied().unwrap_or_default());
@@ -157,6 +159,7 @@ impl Db {
 				hour.merge(other);
 			}
 			days.push(counts.total);
+			minutes.clone_from(&counts.minutes);
 			for &(id, metrics) in plan.rows(&counts) {
 				live_rows.entry(id).or_default().merge(&metrics);
 			}
@@ -223,6 +226,7 @@ impl Db {
 			hours,
 			rows: resolve(rows),
 			daily: daily.into_iter().map(resolve).collect(),
+			minutes,
 		})
 	}
 
@@ -417,6 +421,7 @@ impl Db {
 				&plan.names,
 				&plan.matchers,
 				&plan.slots,
+				plan.since,
 			);
 			counts.seq = live.version;
 			let counts = Arc::new(counts);
@@ -424,7 +429,7 @@ impl Db {
 			return Ok(counts);
 		}
 
-		if plan.matchers.is_empty() {
+		if plan.matchers.is_empty() && plan.since.is_none() {
 			let rollup = self.rollup(key)?;
 			if rollup.fields.is_empty()
 				|| plan
@@ -449,6 +454,7 @@ impl Db {
 				&plan.names,
 				&plan.matchers,
 				&plan.slots,
+				plan.since,
 			);
 			counts.seq = seg.seq;
 			counts
@@ -483,6 +489,7 @@ impl Db {
 
 struct Plan {
 	shape: u64,
+	since: Option<u32>,
 	imports: bool,
 	matchers: Vec<Matcher>,
 	names: Names,
@@ -937,6 +944,7 @@ fn rollup(seg: &Segment, dict: &Dict) -> Counts {
 		&Names::new(dict),
 		&[],
 		&Counts::rollup_slots(&[&seg.cols]),
+		None,
 	);
 	counts.seq = seg.seq;
 	counts

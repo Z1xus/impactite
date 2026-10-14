@@ -103,20 +103,24 @@ pub(crate) struct Counts {
 	pub(crate) total: Metrics,
 	pub(crate) hours: [Metrics; 24],
 	pub(crate) fields: HashMap<Slot, Vec<(u32, Metrics)>>,
+	// pageviews per minute from `since`, only for windowed scans
+	pub(crate) minutes: Vec<u64>,
 }
 
 struct Scan<'a> {
 	parts: &'a [&'a Columns],
 	offsets: Vec<Vec<u32>>,
 	names: &'a Names,
+	since: u32,
 }
 
 impl Scan<'_> {
 	fn rows(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
-		self.parts
-			.iter()
-			.enumerate()
-			.flat_map(|(p, part)| (0..part.rows()).map(move |row| (p, row)))
+		self.parts.iter().enumerate().flat_map(move |(p, part)| {
+			(0..part.rows())
+				.filter(move |&row| part.time[row] >= self.since)
+				.map(move |row| (p, row))
+		})
 	}
 
 	fn name(&self, p: usize, row: usize) -> Option<u32> {
@@ -166,6 +170,7 @@ impl Counts {
 			total: Metrics::default(),
 			hours: [Metrics::default(); 24],
 			fields: HashMap::new(),
+			minutes: Vec::new(),
 		}
 	}
 
@@ -197,6 +202,7 @@ impl Counts {
 		names: &Names,
 		filters: &[Matcher],
 		slots: &[Slot],
+		since: Option<u32>,
 	) -> Self {
 		let scan = Scan {
 			parts,
@@ -214,6 +220,7 @@ impl Counts {
 				})
 				.collect(),
 			names,
+			since: since.unwrap_or(0),
 		};
 		let (event_filters, visit_filters): (Vec<&Matcher>, Vec<&Matcher>) =
 			filters.iter().partition(|m| m.slot.is_event());
@@ -275,6 +282,7 @@ impl Counts {
 					.all(|m| m.matches(scan.event_value(m.slot, p, row)))
 		};
 		let mut hours = [Metrics::default(); 24];
+		let mut minutes = vec![0; since.map_or(0, |since| ((86_400 - since) / 60 + 1) as usize)];
 		let mut visitor_hours = vec![0u32; visitors];
 		for (p, row) in scan.rows() {
 			if !is_hit(&visits, p, row) {
@@ -288,6 +296,9 @@ impl Counts {
 			visit.hit_pageviews += pageview;
 			hours[hour].events += 1;
 			hours[hour].pageviews += pageview;
+			if let Some(since) = since {
+				minutes[((part.time[row] - since) / 60) as usize] += pageview;
+			}
 			visitor_hours[part.visitor[row] as usize] |= 1 << hour;
 		}
 		for visit in &mut visits {
@@ -349,6 +360,7 @@ impl Counts {
 			total,
 			hours,
 			fields,
+			minutes,
 		}
 	}
 
@@ -457,5 +469,6 @@ fn decode(buf: &[u8]) -> Option<Counts> {
 		total,
 		hours,
 		fields,
+		minutes: Vec::new(),
 	})
 }

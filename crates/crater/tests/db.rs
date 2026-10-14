@@ -83,6 +83,7 @@ fn query(db: &Db, filters: Vec<Filter>, breakdown: Option<Field>) -> std::io::Re
 		limit: 10,
 		daily: false,
 		imports: false,
+		since: None,
 	})
 }
 
@@ -228,6 +229,7 @@ fn serves_today_live_and_after_restart() {
 		limit: 10,
 		daily: false,
 		imports: false,
+		since: None,
 	};
 
 	let db = Db::open(&dir.0).unwrap();
@@ -268,6 +270,7 @@ fn dropped_site_stays_gone_after_restart() {
 			limit: 10,
 			daily: false,
 			imports: false,
+			since: None,
 		})
 		.unwrap()
 		.total

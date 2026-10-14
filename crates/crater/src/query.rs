@@ -69,6 +69,8 @@ pub struct Query {
 	pub limit: usize,
 	pub daily: bool,
 	pub imports: bool,
+	// local seconds of day, keeps only later events and fills `Report::minutes`
+	pub since: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -78,6 +80,7 @@ pub struct Report {
 	pub hours: [Metrics; 24],
 	pub rows: Vec<(Arc<str>, Metrics)>,
 	pub daily: Vec<Vec<(Arc<str>, Metrics)>>,
+	pub minutes: Vec<u64>,
 }
 
 pub(crate) struct Matcher {

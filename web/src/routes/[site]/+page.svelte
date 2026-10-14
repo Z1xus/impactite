@@ -91,6 +91,15 @@
 	const withImports = $derived(page.url.searchParams.get("imports") !== "0");
 	const ask = (body: Record<string, unknown>) => query(domain, body, withImports);
 
+	const realtime = $derived(view?.period === "realtime");
+	const chartMetric = $derived(realtime ? "pageviews" : metric);
+
+	$effect(() => {
+		if (!realtime) return;
+		const timer = setInterval(() => version++, 30_000);
+		return () => clearInterval(timer);
+	});
+
 	let hasImports = $state(false);
 	let quiet = $state(false);
 	let empty = $state(false);
@@ -188,12 +197,11 @@
 	$effect(() => {
 		void version;
 		if (!dates) return;
-		api<string[]>("/api/app/props", { site_id: domain, date_range: dates.current }).then(
-			(keys) => {
-				propKeys = keys;
-				if (!keys.includes(propKey)) propKey = keys[0] ?? "";
-			}
-		);
+		const range = dates.current === "30m" ? "day" : dates.current;
+		api<string[]>("/api/app/props", { site_id: domain, date_range: range }).then((keys) => {
+			propKeys = keys;
+			if (!keys.includes(propKey)) propKey = keys[0] ?? "";
+		});
 	});
 	let ranked = $state<Record<string, Ranked>>({});
 	let loading = $state<Record<string, boolean>>({});
@@ -230,7 +238,7 @@
 
 	function label(raw: string, grain: string) {
 		const date = new Date(raw.replace(" ", "T") + (raw.length === 10 ? "T00:00:00" : ""));
-		if (grain === "time:hour") return raw.slice(11, 16);
+		if (grain === "time:hour" || grain === "time:minute") return raw.slice(11, 16);
 		const options: Intl.DateTimeFormatOptions =
 			grain === "time:month"
 				? { month: "short", year: "2-digit" }
@@ -249,14 +257,19 @@
 			ask({ metrics: keys, date_range: dates.current, filters: where }),
 			before && ask({ metrics: keys, date_range: before, filters: where }),
 			ask({
-				metrics: [metric],
+				metrics: [chartMetric],
 				date_range: dates.current,
 				dimensions: [grain],
 				filters: where
 			}),
 			before &&
 				dates.overlay &&
-				ask({ metrics: [metric], date_range: before, dimensions: [grain], filters: where })
+				ask({
+					metrics: [chartMetric],
+					date_range: before,
+					dimensions: [grain],
+					filters: where
+				})
 		]).then(([now, before, line, previousLine]) => {
 			if (stale) return;
 			quiet = !now.results[0]?.metrics[0];
@@ -392,7 +405,7 @@
 								: null}
 							unit={item.key === "bounce_rate" ? "pt" : "%"}
 							format={(value) => format(item.key, value)}
-							active={metric === item.key}
+							active={chartMetric === item.key}
 							pick={() => navigate((params) => params.set("metric", item.key))}
 						/>
 					{/each}
@@ -411,7 +424,7 @@
 						values={series}
 						previous={previousSeries}
 						{labels}
-						format={(value) => format(metric, value)}
+						format={(value) => format(chartMetric, value)}
 					/>
 				</div>
 			</section>

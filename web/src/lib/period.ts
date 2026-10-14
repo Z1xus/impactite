@@ -1,7 +1,8 @@
-export type Period = "day" | "7d" | "28d" | "91d" | "month" | "year" | "12mo" | "all" | "custom";
+export type Period =
+	"realtime" | "day" | "7d" | "28d" | "91d" | "month" | "year" | "12mo" | "all" | "custom";
 export type Compare = "off" | "previous" | "year" | "custom";
-export type Interval = "hour" | "day" | "week" | "month";
-export type Range = [string, string] | "all";
+export type Interval = "minute" | "hour" | "day" | "week" | "month";
+export type Range = [string, string] | "all" | "30m";
 
 export const PRESETS: {
 	key: string;
@@ -12,6 +13,7 @@ export const PRESETS: {
 }[] = [
 	{ key: "day", label: "today", period: "day", hotkey: "d" },
 	{ key: "yesterday", label: "yesterday", period: "day", back: 1, hotkey: "e" },
+	{ key: "realtime", label: "realtime", period: "realtime", hotkey: "r" },
 	{ key: "7d", label: "last 7 days", period: "7d", hotkey: "w" },
 	{ key: "28d", label: "last 28 days", period: "28d", hotkey: "f" },
 	{ key: "91d", label: "last 91 days", period: "91d", hotkey: "n" },
@@ -91,11 +93,13 @@ export function current(view: View): Range {
 			return [view.from, view.to];
 		case "all":
 			return "all";
+		case "realtime":
+			return "30m";
 	}
 }
 
 export function previous(view: View, range: Range): Range | null {
-	if (range === "all") return null;
+	if (range === "all" || range === "30m") return null;
 	const [from, to] = range;
 	const days = length(from, to);
 	switch (view.compare) {
@@ -119,6 +123,7 @@ function shiftYears(date: string, years: number) {
 }
 
 export function intervals(range: Range): Interval[] {
+	if (range === "30m") return ["minute"];
 	if (range === "all") return ["week", "month"];
 	const days = length(...range);
 	if (days === 1) return ["hour"];
@@ -131,6 +136,7 @@ export function interval(view: View, range: Range): Interval {
 	const allowed = intervals(range);
 	if (view.interval && allowed.includes(view.interval)) return view.interval;
 	if (range === "all" || view.period === "year" || view.period === "12mo") return "month";
+	if (range === "30m") return "minute";
 	return allowed[0];
 }
 

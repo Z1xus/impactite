@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use axum::Json;
@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use crater::{Db, Dim, Field, Filter, Metrics, Op, Query, Report};
-use jiff::civil::Date;
+use jiff::civil::{Date, DateTime};
 use jiff::tz::TimeZone;
 use jiff::{Span, Timestamp, ToSpan};
 use serde::Deserialize;
@@ -89,6 +89,7 @@ enum Metric {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Time {
+	Minute,
 	Hour,
 	Day,
 	Week,
@@ -215,6 +216,8 @@ fn period(stats: &Stats, site_id: &str, range: &Value, trim: bool) -> Result<Per
 
 fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let request: Request = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
+	let realtime = request.date_range == json!("30m");
+	let day = json!("day");
 	let Period {
 		site,
 		tz,
@@ -224,9 +227,31 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	} = period(
 		stats,
 		&request.site_id,
-		&request.date_range,
+		if realtime { &day } else { &request.date_range },
 		request.include.trim_relative_date_range,
 	)?;
+	let today = day_number(from);
+	let (windows, start) = match realtime {
+		false => (vec![(today..=day_number(to), None)], None),
+		true => {
+			let now = Timestamp::now().to_zoned(tz.clone()).datetime();
+			let start = (now - 30.minutes())
+				.with()
+				.second(0)
+				.subsec_nanosecond(0)
+				.build()
+				.map_err(|err| err.to_string())?;
+			let since = start.time().hour() as u32 * 3600 + start.time().minute() as u32 * 60;
+			let windows = match start.date() == now.date() {
+				true => vec![(today..=today, Some(since))],
+				false => vec![
+					(today - 1..=today - 1, Some(since)),
+					(today..=today, Some(0)),
+				],
+			};
+			(windows, Some(start))
+		}
+	};
 
 	let metrics = request
 		.metrics
@@ -240,9 +265,14 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	if matches!(
 		grouping,
 		Grouping::Time(Time::Hour) | Grouping::TimeField(Time::Hour, _)
-	) && from != to
+	) && (from != to || realtime)
 	{
 		return Err("#/dimensions: time:hour needs a single day date_range".into());
+	}
+	if matches!(grouping, Grouping::Time(Time::Minute)) != realtime
+		&& matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..))
+	{
+		return Err("#/dimensions: time:minute goes with the 30m date_range only".into());
 	}
 
 	let goals = stats.app.goals(site.id).map_err(|err| err.to_string())?;
@@ -261,20 +291,28 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 		Some(_) => imports_skip(&grouping, !request.filters.is_empty()).unwrap_or_default(),
 	};
 	let imports = request.include.imports && skip.is_empty();
-	let days = day_number(from)..=day_number(to);
 	let run = |filters: Vec<Filter>, breakdown: Option<Field>, daily: bool| {
-		stats
-			.db
-			.query(&Query {
-				site: site.id,
-				days: days.clone(),
-				filters,
-				breakdown,
-				limit: usize::MAX,
-				daily,
-				imports,
-			})
-			.map_err(|err| err.to_string())
+		let mut merged: Option<Report> = None;
+		for (days, since) in &windows {
+			let next = stats
+				.db
+				.query(&Query {
+					site: site.id,
+					days: days.clone(),
+					filters: filters.clone(),
+					breakdown: breakdown.clone(),
+					limit: usize::MAX,
+					daily,
+					imports,
+					since: *since,
+				})
+				.map_err(|err| err.to_string())?;
+			merged = Some(match merged {
+				Some(report) => combine(report, next),
+				None => next,
+			});
+		}
+		merged.ok_or_else(|| "empty date range".to_string())
 	};
 	let filtered = || {
 		base_filters
@@ -315,7 +353,7 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 				true => report.total.visitors,
 				false => run(base_filters.clone(), None, false)?.total.visitors,
 			};
-			(rows(&report, grouping, from), base)
+			(rows(&report, grouping, from, start), base)
 		}
 	};
 
@@ -408,7 +446,21 @@ fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	}))
 }
 
-fn rows(report: &Report, grouping: &Grouping, from: Date) -> Vec<Row> {
+fn combine(mut report: Report, next: Report) -> Report {
+	report.total.merge(&next.total);
+	report.minutes.extend(next.minutes);
+	let mut rows: HashMap<Arc<str>, Metrics> = report.rows.into_iter().collect();
+	for (value, metrics) in next.rows {
+		rows.entry(value).or_default().merge(&metrics);
+	}
+	report.rows = rows.into_iter().collect();
+	report
+		.rows
+		.sort_unstable_by(|a, b| b.1.visitors.cmp(&a.1.visitors).then(a.0.cmp(&b.0)));
+	report
+}
+
+fn rows(report: &Report, grouping: &Grouping, from: Date, start: Option<DateTime>) -> Vec<Row> {
 	let ranked = |field: &Field, rows: &[(Arc<str>, Metrics)]| -> Vec<(String, Metrics)> {
 		rows.iter()
 			.map(|(value, metrics)| (label(field, value).to_owned(), *metrics))
@@ -424,6 +476,18 @@ fn rows(report: &Report, grouping: &Grouping, from: Date) -> Vec<Row> {
 			.map(|(value, metrics)| Row {
 				dimensions: vec![json!(value)],
 				metrics,
+			})
+			.collect(),
+		Grouping::Time(Time::Minute) => (0..=30)
+			.filter_map(|minute| {
+				let at = start?.checked_add(minute.minutes()).ok()?;
+				Some(Row {
+					dimensions: vec![json!(at.strftime("%Y-%m-%d %H:%M:00").to_string())],
+					metrics: Metrics {
+						pageviews: report.minutes.get(minute as usize).copied().unwrap_or(0),
+						..Metrics::default()
+					},
+				})
 			})
 			.collect(),
 		Grouping::Time(Time::Hour) => report
@@ -482,7 +546,7 @@ fn bucket(unit: Time, from: Date, offset: usize) -> String {
 			.unwrap_or(day)
 			.to_string(),
 		Time::Month => day.first_of_month().to_string(),
-		Time::Day | Time::Hour => day.to_string(),
+		Time::Minute | Time::Day | Time::Hour => day.to_string(),
 	}
 }
 
@@ -579,6 +643,7 @@ fn dimension(name: &str) -> Option<Field> {
 
 fn time(name: &str) -> Option<Time> {
 	Some(match name {
+		"time:minute" => Time::Minute,
 		"time:hour" => Time::Hour,
 		"time" | "time:day" => Time::Day,
 		"time:week" => Time::Week,
