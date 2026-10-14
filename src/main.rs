@@ -100,6 +100,13 @@ enum ImportSource {
 		#[arg(long, default_value = "UTC")]
 		timezone: String,
 	},
+	Goatcounter {
+		file: PathBuf,
+		#[arg(long)]
+		site: String,
+		#[arg(long, default_value = "UTC")]
+		timezone: String,
+	},
 }
 
 #[derive(Subcommand)]
@@ -180,25 +187,30 @@ async fn main() -> anyhow::Result<()> {
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
-		Command::Import {
-			source:
-				ImportSource::Plausible {
-					source,
-					site,
-					plausible_site_id,
-					timezone,
-				},
-		} => {
-			let site = find_or_create(&app, &site, &timezone)?;
+		Command::Import { source } => {
+			let (domain, timezone) = match &source {
+				ImportSource::Plausible { site, timezone, .. }
+				| ImportSource::Goatcounter { site, timezone, .. } => (site, timezone),
+			};
+			let site = find_or_create(&app, domain, timezone)?;
 			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let started = std::time::Instant::now();
-			let (count, first) = match source.starts_with("http") {
-				true => {
-					let id = plausible_site_id
-						.context("--plausible-site-id is needed for clickhouse")?;
-					import::clickhouse::import(&db, &site, &source, id).await?
+			let (count, first) = match source {
+				ImportSource::Plausible {
+					source,
+					plausible_site_id,
+					..
+				} => match source.starts_with("http") {
+					true => {
+						let id = plausible_site_id
+							.context("--plausible-site-id is needed for clickhouse")?;
+						import::clickhouse::import(&db, &site, &source, id).await?
+					}
+					false => bail!("plausible csv import comes next"),
+				},
+				ImportSource::Goatcounter { file, .. } => {
+					import::goatcounter::import(&db, &site, &file)?
 				}
-				false => bail!("plausible csv import comes next"),
 			};
 			db.sync()?;
 			db.close()?;

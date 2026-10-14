@@ -10,6 +10,8 @@ use serde_json::Value;
 use crate::app::Site;
 use crate::cli::say;
 
+use super::insert;
+
 const COLUMNS: &str = "toUnixTimestamp(timestamp) AS ts, name, user_id, session_id, hostname, pathname, \
 	referrer, referrer_source, utm_medium, utm_source, utm_campaign, utm_content, utm_term, \
 	acquisition_channel, country_code, subdivision1_code, screen_size, browser, browser_version, \
@@ -142,12 +144,4 @@ fn event(site: u64, tz: &TimeZone, row: Row) -> anyhow::Result<Event> {
 		event.dims[dim] = value;
 	}
 	Ok(event)
-}
-
-fn insert(db: &Db, event: Event) {
-	let mut event = Box::new(event);
-	while let Err(back) = db.insert(event) {
-		event = back;
-		std::thread::yield_now();
-	}
 }
