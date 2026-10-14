@@ -1,3 +1,4 @@
+mod accounts;
 mod app;
 mod geo;
 mod ingest;
@@ -7,7 +8,7 @@ mod stats;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -18,6 +19,7 @@ use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
+use crate::accounts::Web;
 use crate::app::App;
 use crate::geo::Geo;
 use crate::ingest::Ingest;
@@ -86,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
 			if jiff::tz::TimeZone::get(&timezone).is_err() {
 				bail!("unknown timezone {timezone}");
 			}
-			let site = app.add_site(&domain, &timezone)?;
+			let site = app.add_site(&domain, &timezone, None)?;
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
@@ -130,6 +132,18 @@ async fn serve(
 		db: db.clone(),
 		app: app.clone(),
 	});
+	let setup = match app.users_exist()? {
+		true => None,
+		false => Some(app::token()?),
+	};
+	if let Some(token) = &setup {
+		tracing::info!("finish setup at http://{listen}/setup?token={token}");
+	}
+	let web = Arc::new(Web {
+		app: app.clone(),
+		stats: stats.clone(),
+		setup: Mutex::new(setup),
+	});
 	let ingest = Arc::new(Ingest::new(db.clone(), app, geo));
 
 	let sweeper = tokio::spawn({
@@ -147,7 +161,7 @@ async fn serve(
 	tracing::info!(%listen, "listening");
 	axum::serve(
 		listener,
-		server::router(ingest.clone(), stats.clone())
+		server::router(ingest.clone(), stats.clone(), web.clone())
 			.into_make_service_with_connect_info::<SocketAddr>(),
 	)
 	.with_graceful_shutdown(shutdown())
@@ -161,6 +175,7 @@ async fn serve(
 	}
 	drop(ingest);
 	drop(stats);
+	drop(web);
 	let db = Arc::try_unwrap(db).map_err(|_| anyhow::anyhow!("event store still in use"))?;
 	db.close().context("close event store")?;
 	Ok(())

@@ -7,20 +7,26 @@ use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
+use crate::accounts::{self, Web};
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::stats::{self, Stats};
 
-pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>) -> Router {
+pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 	Router::new()
 		.route("/api/event", post(plausible::event).options(preflight))
 		.route("/count", get(goatcounter::count).post(goatcounter::count))
 		.with_state(ingest)
+		.layer(map_response(cors))
 		.merge(
 			Router::new()
 				.route("/api/v2/query", post(stats::query))
 				.with_state(stats),
 		)
-		.layer(map_response(cors))
+		.merge(
+			accounts::routes()
+				.route("/api/app/query", post(stats::dashboard))
+				.with_state(web),
+		)
 }
 
 async fn preflight() -> Response {

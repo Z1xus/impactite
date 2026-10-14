@@ -26,6 +26,40 @@ const MIGRATIONS: &[&str] = &[
 		created_at integer not null
 	);
 	",
+	"
+	create table users (
+		id integer primary key,
+		email text not null unique collate nocase,
+		name text not null,
+		password text not null,
+		created_at integer not null
+	);
+	create table teams (
+		id integer primary key,
+		name text not null,
+		personal integer not null default 0,
+		created_at integer not null
+	);
+	create table members (
+		team integer not null references teams (id) on delete cascade,
+		user integer not null references users (id) on delete cascade,
+		role text not null,
+		primary key (team, user)
+	);
+	create table sessions (
+		hash text primary key,
+		user integer not null references users (id) on delete cascade,
+		expires_at integer not null
+	);
+	create table invites (
+		hash text primary key,
+		team integer not null references teams (id) on delete cascade,
+		email text not null,
+		role text not null,
+		expires_at integer not null
+	);
+	alter table sites add column team integer references teams (id) on delete cascade;
+	",
 ];
 
 #[derive(Debug, Clone)]
@@ -51,15 +85,20 @@ impl App {
 		})
 	}
 
-	fn conn(&self) -> MutexGuard<'_, Connection> {
+	pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
 		self.conn.lock().unwrap_or_else(PoisonError::into_inner)
 	}
 
-	pub fn add_site(&self, domain: &str, timezone: &str) -> rusqlite::Result<Site> {
+	pub fn add_site(
+		&self,
+		domain: &str,
+		timezone: &str,
+		team: Option<i64>,
+	) -> rusqlite::Result<Site> {
 		let conn = self.conn();
 		conn.execute(
-			"insert into sites (domain, timezone, created_at) values (?1, ?2, unixepoch())",
-			params![domain, timezone],
+			"insert into sites (domain, timezone, team, created_at) values (?1, ?2, ?3, unixepoch())",
+			params![domain, timezone, team],
 		)?;
 		Ok(Site {
 			id: conn.last_insert_rowid() as u64,
@@ -107,10 +146,7 @@ impl App {
 	}
 
 	pub fn create_key(&self, name: &str) -> rusqlite::Result<String> {
-		let mut secret = [0; 32];
-		getrandom::fill(&mut secret)
-			.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.into()))?;
-		let key: String = secret.iter().map(|byte| format!("{byte:02x}")).collect();
+		let key = token()?;
 		self.conn().execute(
 			"insert into api_keys (hash, name, prefix, created_at) values (?1, ?2, ?3, unixepoch())",
 			params![key_hash(&key), name, &key[..8]],
@@ -130,7 +166,14 @@ impl App {
 	}
 }
 
-fn key_hash(key: &str) -> String {
+pub(crate) fn token() -> rusqlite::Result<String> {
+	let mut secret = [0; 32];
+	getrandom::fill(&mut secret)
+		.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.into()))?;
+	Ok(secret.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+pub(crate) fn key_hash(key: &str) -> String {
 	blake3::hash(key.as_bytes()).to_hex().to_string()
 }
 

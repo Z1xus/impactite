@@ -11,6 +11,7 @@ use jiff::{Span, Timestamp, ToSpan};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::accounts::{Viewer, Web, fail};
 use crate::app::App;
 
 pub struct Stats {
@@ -122,6 +123,17 @@ pub async fn query(
 	match run(&stats, body.0) {
 		Ok(value) => Json(value).into_response(),
 		Err(message) => error(StatusCode::BAD_REQUEST, &message),
+	}
+}
+
+pub async fn dashboard(State(web): State<Arc<Web>>, viewer: Viewer, body: Json<Value>) -> Response {
+	let domain = body.0["site_id"].as_str().unwrap_or_default();
+	if !matches!(web.app.site_role(viewer.user, domain), Ok(Some(_))) {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	}
+	match run(&web.stats, body.0) {
+		Ok(value) => Json(value).into_response(),
+		Err(message) => fail(StatusCode::BAD_REQUEST, &message),
 	}
 }
 
