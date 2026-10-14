@@ -65,12 +65,16 @@ pub fn import(
 				events: num("pageviews"),
 				bounces: num("bounces"),
 				duration: num("visit_duration"),
+				..Metrics::default()
 			};
 			let day = days.entry(date).or_default();
 			let dim = Field::Dim;
 			match table.as_str() {
 				"visitors" => {
-					day.total.merge(&visit);
+					day.total.merge(&Metrics {
+						exits: visit.visits,
+						..visit
+					});
 					day.add(visit, [(dim(Dim::Name), "pageview")]);
 				}
 				"custom_events" => {
@@ -110,13 +114,18 @@ pub fn import(
 						],
 					);
 				}
-				"pages" => day.add(
-					visit,
-					[
-						(dim(Dim::Page), get("page")),
-						(dim(Dim::Hostname), get("hostname")),
-					],
-				),
+				"pages" => {
+					// plausible exports time on page in seconds
+					let page = Metrics {
+						engaged: num("total_time_on_page") * 1000,
+						engaged_views: num("total_time_on_page_visits"),
+						scroll: num("total_scroll_depth"),
+						scrolled: num("total_scroll_depth_visits"),
+						..visit
+					};
+					day.add(page, [(dim(Dim::Page), get("page"))]);
+					day.add(visit, [(dim(Dim::Hostname), get("hostname"))]);
+				}
 				"entry_pages" => day.add(
 					Metrics {
 						visits: num("entrances"),
@@ -124,13 +133,24 @@ pub fn import(
 					},
 					[(Field::Entry, get("entry_page"))],
 				),
-				"exit_pages" => day.add(
-					Metrics {
-						visits: num("exits"),
-						..visit
-					},
-					[(Field::Exit, get("exit_page"))],
-				),
+				"exit_pages" => {
+					day.add(
+						Metrics {
+							visits: num("exits"),
+							..visit
+						},
+						[(Field::Exit, get("exit_page"))],
+					);
+					if !get("exit_page").is_empty() {
+						day.add(
+							Metrics {
+								exits: num("exits"),
+								..Metrics::default()
+							},
+							[(dim(Dim::Page), get("exit_page"))],
+						);
+					}
+				}
 				"locations" => day.add(
 					visit,
 					[

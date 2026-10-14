@@ -52,7 +52,12 @@ fn day() -> Vec<Event> {
 			signup
 		},
 		event(4, 30, 10_900, "pageview", "/b", ""),
-		event(4, 30, 11_000, "engagement", "/b", ""),
+		{
+			let mut engagement = event(4, 30, 11_000, "engagement", "/b", "");
+			engagement.engagement_ms = 5000;
+			engagement.scroll_depth = Some(60);
+			engagement
+		},
 	]
 }
 
@@ -71,6 +76,18 @@ fn metrics(
 		events,
 		bounces,
 		duration,
+		..Metrics::default()
+	}
+}
+
+fn core(metrics: Metrics) -> Metrics {
+	Metrics {
+		exits: 0,
+		engaged: 0,
+		engaged_views: 0,
+		scroll: 0,
+		scrolled: 0,
+		..metrics
 	}
 }
 
@@ -92,7 +109,7 @@ fn row(report: &Report, value: &str) -> Option<Metrics> {
 		.rows
 		.iter()
 		.find(|(name, _)| &**name == value)
-		.map(|&(_, metrics)| metrics)
+		.map(|&(_, metrics)| core(metrics))
 }
 
 fn filter(dim: Dim, op: Op, value: &str) -> Filter {
@@ -113,13 +130,28 @@ fn seals_past_days() {
 	db.sync().unwrap();
 
 	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Page))).unwrap();
-	assert_eq!(report.total, metrics(3, 4, 5, 6, 2, 300));
+	assert_eq!(core(report.total), metrics(3, 4, 5, 6, 2, 300));
 	assert_eq!(report.days.len(), 3);
 	assert_eq!(report.days[1], report.total);
-	assert_eq!(report.hours[0], metrics(1, 1, 2, 2, 0, 100));
-	assert_eq!(report.hours[3], metrics(1, 1, 1, 1, 1, 100));
+	assert_eq!(core(report.hours[0]), metrics(1, 1, 2, 2, 0, 100));
+	assert_eq!(core(report.hours[3]), metrics(1, 1, 1, 1, 1, 100));
 	assert_eq!(row(&report, "/a"), Some(metrics(2, 3, 3, 4, 1, 200)));
 	assert_eq!(row(&report, "/b"), Some(metrics(2, 2, 2, 2, 1, 200)));
+	let page = |value: &str| {
+		report
+			.rows
+			.iter()
+			.find(|(name, _)| &**name == value)
+			.unwrap()
+			.1
+	};
+	let b = page("/b");
+	assert_eq!(
+		(b.engaged, b.engaged_views, b.scroll, b.scrolled, b.exits),
+		(5000, 1, 60, 1, 2)
+	);
+	assert_eq!(page("/a").exits, 2);
+	assert_eq!((report.total.engaged, report.total.exits), (5000, 4));
 
 	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Source))).unwrap();
 	assert_eq!(row(&report, "Google"), Some(metrics(1, 1, 2, 2, 0, 100)));
@@ -154,13 +186,13 @@ fn filters() {
 
 	let google = vec![filter(Dim::Source, Op::Is, "Google")];
 	assert_eq!(
-		query(&db, google, None).unwrap().total,
+		core(query(&db, google, None).unwrap().total),
 		metrics(1, 1, 2, 2, 0, 100)
 	);
 
 	let page_a = vec![filter(Dim::Page, Op::Is, "/a")];
 	let report = query(&db, page_a, Some(Field::Dim(Dim::Source))).unwrap();
-	assert_eq!(report.total, metrics(2, 3, 3, 4, 1, 200));
+	assert_eq!(core(report.total), metrics(2, 3, 3, 4, 1, 200));
 	assert_eq!(row(&report, "Google"), Some(metrics(1, 1, 1, 1, 0, 100)));
 	assert_eq!(row(&report, ""), Some(metrics(1, 1, 1, 1, 1, 0)));
 	assert_eq!(row(&report, "Twitter"), Some(metrics(1, 1, 1, 2, 0, 100)));
@@ -168,17 +200,17 @@ fn filters() {
 	let not_a = vec![filter(Dim::Page, Op::IsNot, "/a")];
 	let contains_b = vec![filter(Dim::Page, Op::Contains, "b")];
 	assert_eq!(
-		query(&db, not_a, None).unwrap().total,
+		core(query(&db, not_a, None).unwrap().total),
 		metrics(2, 2, 2, 2, 1, 200)
 	);
 	assert_eq!(
-		query(&db, contains_b, None).unwrap().total,
+		core(query(&db, contains_b, None).unwrap().total),
 		metrics(2, 2, 2, 2, 1, 200)
 	);
 
 	let glob = vec![filter(Dim::Page, Op::Matches, "/a*")];
 	assert_eq!(
-		query(&db, glob, None).unwrap().total,
+		core(query(&db, glob, None).unwrap().total),
 		metrics(2, 3, 3, 4, 1, 200)
 	);
 	db.close().unwrap();
@@ -197,7 +229,7 @@ fn merges_late_events_and_reopens() {
 	db.sync().unwrap();
 
 	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Page))).unwrap();
-	assert_eq!(report.total, metrics(3, 4, 6, 7, 1, 400));
+	assert_eq!(core(report.total), metrics(3, 4, 6, 7, 1, 400));
 	assert_eq!(row(&report, "/c"), Some(metrics(1, 1, 1, 1, 0, 100)));
 	db.close().unwrap();
 
@@ -238,11 +270,11 @@ fn serves_today_live_and_after_restart() {
 	db.insert(Box::new(live(2, now - 10))).unwrap();
 	db.sync().unwrap();
 	let expected = metrics(2, 2, 3, 3, 1, 30);
-	assert_eq!(db.query(&today_query).unwrap().total, expected);
+	assert_eq!(core(db.query(&today_query).unwrap().total), expected);
 	db.close().unwrap();
 
 	let db = Db::open(&dir.0).unwrap();
-	assert_eq!(db.query(&today_query).unwrap().total, expected);
+	assert_eq!(core(db.query(&today_query).unwrap().total), expected);
 	db.close().unwrap();
 }
 

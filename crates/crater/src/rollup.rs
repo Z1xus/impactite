@@ -9,7 +9,9 @@ use crate::frame::{self, invalid};
 use crate::query::{MISSING, Matcher, Slot};
 use crate::segment::Columns;
 
-const MAGIC: &[u8; 5] = b"CRRU\x02";
+const MAGIC: &[u8; 5] = b"CRRU\x03";
+// v2 had no page metrics, imported days still use it
+const LEGACY: &[u8; 5] = b"CRRU\x02";
 const PROP_KEYS: usize = 64;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -20,6 +22,11 @@ pub struct Metrics {
 	pub events: u64,
 	pub bounces: u64,
 	pub duration: u64,
+	pub exits: u64,
+	pub engaged: u64,
+	pub engaged_views: u64,
+	pub scroll: u64,
+	pub scrolled: u64,
 }
 
 impl Metrics {
@@ -30,6 +37,20 @@ impl Metrics {
 		self.events += other.events;
 		self.bounces += other.bounces;
 		self.duration += other.duration;
+		self.exits += other.exits;
+		self.engaged += other.engaged;
+		self.engaged_views += other.engaged_views;
+		self.scroll += other.scroll;
+		self.scrolled += other.scrolled;
+	}
+
+	fn engage(&mut self, (ms, scroll): (u64, u32)) {
+		self.engaged += ms;
+		self.engaged_views += u64::from(ms > 0);
+		if scroll > 0 {
+			self.scroll += u64::from(scroll - 1);
+			self.scrolled += 1;
+		}
 	}
 
 	fn add_visit(&mut self, visit: &Visit) {
@@ -46,20 +67,34 @@ impl Metrics {
 			self.events,
 			self.bounces,
 			self.duration,
+			self.exits,
+			self.engaged,
+			self.engaged_views,
+			self.scroll,
+			self.scrolled,
 		] {
 			put_uvar(buf, value);
 		}
 	}
 
-	fn read(r: &mut Reader) -> Option<Self> {
-		Some(Self {
+	fn read(r: &mut Reader, legacy: bool) -> Option<Self> {
+		let mut metrics = Self {
 			visitors: r.uvar()?,
 			visits: r.uvar()?,
 			pageviews: r.uvar()?,
 			events: r.uvar()?,
 			bounces: r.uvar()?,
 			duration: r.uvar()?,
-		})
+			..Self::default()
+		};
+		if !legacy {
+			metrics.exits = r.uvar()?;
+			metrics.engaged = r.uvar()?;
+			metrics.engaged_views = r.uvar()?;
+			metrics.scroll = r.uvar()?;
+			metrics.scrolled = r.uvar()?;
+		}
+		Some(metrics)
 	}
 }
 
@@ -319,6 +354,29 @@ impl Counts {
 			}
 		}
 
+		// max scroll and summed engagement per (page, session), only for pages and totals
+		let mut engaged: HashMap<(u32, u32), (u64, u32)> = HashMap::new();
+		for (p, row) in scan.rows() {
+			let part = parts[p];
+			let session = part.session[row];
+			if !visits[session as usize].selected
+				|| !scan.is_engagement(p, row)
+				|| !event_filters
+					.iter()
+					.all(|m| m.matches(scan.event_value(m.slot, p, row)))
+			{
+				continue;
+			}
+			let page = part.dims[Dim::Page as usize][row];
+			let entry = engaged.entry((page, session)).or_default();
+			entry.0 += u64::from(part.engagement[row]);
+			entry.1 = entry.1.max(part.scroll[row]);
+		}
+		for &pair in engaged.values() {
+			total.engage(pair);
+		}
+		total.exits = total.visits;
+
 		let mut fields = HashMap::new();
 		for &slot in slots {
 			let mut entries = match slot.is_event() {
@@ -346,6 +404,23 @@ impl Counts {
 						.collect(),
 				),
 			};
+			if slot == Slot::Dim(Dim::Page) {
+				let index: HashMap<u32, usize> = entries
+					.iter()
+					.enumerate()
+					.map(|(i, &(id, _))| (id, i))
+					.collect();
+				for (&(page, _), &pair) in &engaged {
+					if let Some(&i) = index.get(&page) {
+						entries[i].1.engage(pair);
+					}
+				}
+				for visit in visits.iter().filter(|visit| visit.selected) {
+					if let Some(&i) = index.get(&visit.exit.1) {
+						entries[i].1.exits += 1;
+					}
+				}
+			}
 			entries.sort_unstable_by(|a, b| {
 				b.1.visitors
 					.cmp(&a.1.visitors)
@@ -397,8 +472,21 @@ impl Counts {
 		let frames = frame::read_file(path, MAGIC, 1)?;
 		frames
 			.first()
-			.and_then(|buf| decode(buf))
+			.and_then(|buf| decode(buf, false))
 			.ok_or_else(|| invalid("bad rollup"))
+	}
+
+	pub(crate) fn read_any(path: &Path) -> io::Result<Self> {
+		match Self::read(path) {
+			Err(err) if err.kind() == io::ErrorKind::InvalidData => {
+				let frames = frame::read_file(path, LEGACY, 1)?;
+				frames
+					.first()
+					.and_then(|buf| decode(buf, true))
+					.ok_or_else(|| invalid("bad rollup"))
+			}
+			read => read,
+		}
 	}
 }
 
@@ -442,13 +530,13 @@ fn event_breakdown(mut hits: Vec<(u32, u32, bool)>, visits: &[Visit]) -> Vec<(u3
 		.collect()
 }
 
-fn decode(buf: &[u8]) -> Option<Counts> {
+fn decode(buf: &[u8], legacy: bool) -> Option<Counts> {
 	let mut r = Reader::new(buf);
 	let seq = r.uvar()?;
-	let total = Metrics::read(&mut r)?;
+	let total = Metrics::read(&mut r, legacy)?;
 	let mut hours = [Metrics::default(); 24];
 	for hour in &mut hours {
-		*hour = Metrics::read(&mut r)?;
+		*hour = Metrics::read(&mut r, legacy)?;
 	}
 	let mut fields = HashMap::new();
 	for _ in 0..r.uvar()? {
@@ -460,7 +548,12 @@ fn decode(buf: &[u8]) -> Option<Counts> {
 			_ => return None,
 		};
 		let entries = (0..r.uvar()?)
-			.map(|_| Some((u32::try_from(r.uvar()?).ok()?, Metrics::read(&mut r)?)))
+			.map(|_| {
+				Some((
+					u32::try_from(r.uvar()?).ok()?,
+					Metrics::read(&mut r, legacy)?,
+				))
+			})
 			.collect::<Option<Vec<_>>>()?;
 		fields.insert(slot, entries);
 	}

@@ -85,6 +85,9 @@ enum Metric {
 	Events,
 	Percentage,
 	ConversionRate,
+	TimeOnPage,
+	ScrollDepth,
+	ExitRate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -593,6 +596,15 @@ fn value(metric: Metric, metrics: &Metrics, base: u64) -> Value {
 		Metric::VisitDuration => json!(ratio(metrics.duration, metrics.visits).round() as u64),
 		Metric::Percentage => json!((ratio(metrics.visitors, base) * 1000.0).round() / 10.0),
 		Metric::ConversionRate => json!((ratio(metrics.visitors, base) * 10000.0).round() / 100.0),
+		Metric::TimeOnPage => match metrics.engaged_views {
+			0 => Value::Null,
+			views => json!((metrics.engaged as f64 / views as f64 / 1000.0).round() as u64),
+		},
+		Metric::ScrollDepth => match metrics.scrolled {
+			0 => Value::Null,
+			views => json!((metrics.scroll as f64 / views as f64).round() as u64),
+		},
+		Metric::ExitRate => json!((ratio(metrics.exits, metrics.visits) * 1000.0).round() / 10.0),
 	}
 }
 
@@ -607,6 +619,9 @@ fn metric(name: &str) -> Option<Metric> {
 		"events" => Metric::Events,
 		"percentage" => Metric::Percentage,
 		"conversion_rate" => Metric::ConversionRate,
+		"time_on_page" => Metric::TimeOnPage,
+		"scroll_depth" => Metric::ScrollDepth,
+		"exit_rate" => Metric::ExitRate,
 		_ => return None,
 	})
 }

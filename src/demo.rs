@@ -163,7 +163,7 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 				} else {
 					rng.pick(PAGES, |p| p.1).0
 				};
-				let mut names = vec![("pageview", page)];
+				let mut names = vec![("pageview", page), ("engagement", page)];
 				if page == "/pricing" && rng.unit() < 0.18 {
 					names.push(("Signup", page));
 				}
@@ -196,6 +196,11 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 						(Dim::OsVersion, os_version),
 					] {
 						event.dims[dim] = value.to_owned();
+					}
+					if name == "engagement" {
+						event.interactive = false;
+						event.engagement_ms = 2_000 + rng.below(90_000) as u32;
+						event.scroll_depth = Some(10 + rng.below(91) as u8);
 					}
 					if name == "Signup" {
 						let plan = rng.pick(&[("free", 6), ("pro", 3), ("team", 1)], |p| p.1).0;

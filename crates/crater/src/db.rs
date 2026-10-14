@@ -332,7 +332,7 @@ impl Db {
 		if let Some(counts) = lock(&self.shared.imports).get(&key) {
 			return Ok(counts);
 		}
-		let counts = match Counts::read(&self.shared.path(key, "imp")) {
+		let counts = match Counts::read_any(&self.shared.path(key, "imp")) {
 			Ok(counts) => Some(Arc::new(counts)),
 			Err(err) if err.kind() == ErrorKind::NotFound => None,
 			Err(err) => return Err(err),
