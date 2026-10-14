@@ -46,6 +46,10 @@ impl Dim {
 		Dim::OsVersion,
 	];
 	pub const COUNT: usize = Self::ALL.len();
+
+	pub fn is_event(self) -> bool {
+		matches!(self, Dim::Name | Dim::Hostname | Dim::Page)
+	}
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -77,4 +81,10 @@ pub struct Event {
 	pub scroll_depth: Option<u8>,
 	pub engagement_ms: u32,
 	pub props: Vec<(String, String)>,
+}
+
+impl Event {
+	pub fn day(&self) -> i32 {
+		(self.ts + i64::from(self.offset)).div_euclid(86_400) as i32
+	}
 }

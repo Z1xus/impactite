@@ -15,6 +15,31 @@ pub(crate) fn put_str(buf: &mut Vec<u8>, s: &str) {
 	buf.extend_from_slice(s.as_bytes());
 }
 
+pub(crate) fn put_packed(buf: &mut Vec<u8>, values: &[u32]) {
+	let width = values
+		.iter()
+		.max()
+		.map_or(0, |max| 32 - max.leading_zeros());
+	put_uvar(buf, width.into());
+	put_uvar(buf, values.len() as u64);
+	if width == 0 {
+		return;
+	}
+	let (mut acc, mut bits) = (0u64, 0);
+	for &value in values {
+		acc |= u64::from(value) << bits;
+		bits += width;
+		while bits >= 8 {
+			buf.push(acc as u8);
+			acc >>= 8;
+			bits -= 8;
+		}
+	}
+	if bits > 0 {
+		buf.push(acc as u8);
+	}
+}
+
 pub(crate) struct Reader<'a> {
 	buf: &'a [u8],
 }
@@ -63,6 +88,31 @@ impl<'a> Reader<'a> {
 	pub(crate) fn ivar(&mut self) -> Option<i64> {
 		let v = self.uvar()?;
 		Some((v >> 1) as i64 ^ -((v & 1) as i64))
+	}
+
+	pub(crate) fn packed(&mut self) -> Option<Vec<u32>> {
+		let width = u32::try_from(self.uvar()?)
+			.ok()
+			.filter(|&width| width <= 32)?;
+		let len = usize::try_from(self.uvar()?).ok()?;
+		if width == 0 {
+			return Some(vec![0; len]);
+		}
+		let bytes = self.bytes(len.checked_mul(width as usize)?.div_ceil(8))?;
+		let mask = (1u64 << width) - 1;
+		let (mut acc, mut bits) = (0u64, 0);
+		let mut bytes = bytes.iter();
+		let mut values = Vec::with_capacity(len);
+		for _ in 0..len {
+			while bits < width {
+				acc |= u64::from(*bytes.next()?) << bits;
+				bits += 8;
+			}
+			values.push((acc & mask) as u32);
+			acc >>= width;
+			bits -= width;
+		}
+		Some(values)
 	}
 
 	pub(crate) fn str(&mut self) -> Option<String> {

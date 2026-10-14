@@ -1,100 +1,42 @@
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::fs::File;
+use std::io::{self, Write};
 use std::path::Path;
 
 use crate::codec::{Reader, put_ivar, put_str, put_uvar};
 use crate::event::{Dim, Event};
+use crate::frame;
 
 const MAGIC: &[u8; 5] = b"CRWL\x01";
-const MAX_RECORD: usize = 1 << 24;
 
-pub struct Wal {
+pub(crate) struct Wal {
 	file: File,
 	buf: Vec<u8>,
+	pub(crate) size: u64,
 }
 
 impl Wal {
-	pub fn open(path: &Path) -> io::Result<(Self, Vec<Event>)> {
-		let mut file = OpenOptions::new()
-			.read(true)
-			.write(true)
-			.create(true)
-			.truncate(false)
-			.open(path)?;
+	pub(crate) fn open(path: &Path) -> io::Result<(Self, Vec<Event>)> {
 		let mut events = Vec::new();
-
-		if file.metadata()?.len() == 0 {
-			file.write_all(MAGIC)?;
-			file.sync_data()?;
-		} else {
-			let end = replay(&file, &mut events)?;
-			file.set_len(end)?;
-			file.seek(SeekFrom::Start(end))?;
-		}
-
-		Ok((
-			Self {
-				file,
-				buf: Vec::new(),
-			},
-			events,
-		))
+		let file = frame::open_log(path, MAGIC, |payload| {
+			decode(payload).map(|event| events.push(event)).is_some()
+		})?;
+		let size = file.metadata()?.len();
+		let wal = Self {
+			file,
+			buf: Vec::new(),
+			size,
+		};
+		Ok((wal, events))
 	}
 
-	pub fn append(&mut self, events: &[Event]) -> io::Result<()> {
+	pub(crate) fn append(&mut self, events: &[Event]) -> io::Result<()> {
 		self.buf.clear();
 		for event in events {
-			let start = self.buf.len();
-			self.buf.extend_from_slice(&[0; 8]);
-			encode(&mut self.buf, event);
-			let payload = &self.buf[start + 8..];
-			let len = (payload.len() as u32).to_le_bytes();
-			let crc = crc32fast::hash(payload).to_le_bytes();
-			self.buf[start..start + 4].copy_from_slice(&len);
-			self.buf[start + 4..start + 8].copy_from_slice(&crc);
+			frame::put(&mut self.buf, |buf| encode(buf, event));
 		}
 		self.file.write_all(&self.buf)?;
+		self.size += self.buf.len() as u64;
 		self.file.sync_data()
-	}
-}
-
-fn replay(file: &File, events: &mut Vec<Event>) -> io::Result<u64> {
-	let mut reader = BufReader::new(file);
-	let mut magic = [0; MAGIC.len()];
-	if !read_full(&mut reader, &mut magic)? || &magic != MAGIC {
-		return Err(io::Error::new(ErrorKind::InvalidData, "not a crater wal"));
-	}
-
-	let mut end = MAGIC.len() as u64;
-	let mut head = [0; 8];
-	let mut payload = Vec::new();
-	while read_full(&mut reader, &mut head)? {
-		let mut r = Reader::new(&head);
-		let (Some(len), Some(crc)) = (r.u32(), r.u32()) else {
-			break;
-		};
-		let len = len as usize;
-		if len > MAX_RECORD {
-			break;
-		}
-		payload.resize(len, 0);
-		if !read_full(&mut reader, &mut payload)? || crc32fast::hash(&payload) != crc {
-			break;
-		}
-		let Some(event) = decode(&payload) else {
-			break;
-		};
-		events.push(event);
-		end += 8 + len as u64;
-	}
-	Ok(end)
-}
-
-fn read_full(reader: &mut impl Read, buf: &mut [u8]) -> io::Result<bool> {
-	match reader.read_exact(buf) {
-		Ok(()) => Ok(true),
-		Err(err) if err.kind() == ErrorKind::UnexpectedEof => Ok(false),
-		Err(err) => Err(err),
 	}
 }
 
@@ -159,4 +101,54 @@ fn decode(buf: &[u8]) -> Option<Event> {
 	}
 
 	r.is_empty().then_some(event)
+}
+
+#[cfg(test)]
+mod tests {
+	use std::fs::{self, OpenOptions};
+
+	use super::*;
+	use crate::testing::{TempDir, event};
+
+	#[test]
+	fn round_trip() {
+		let dir = TempDir::new("wal-round-trip").unwrap();
+		let path = dir.path().join("events.wal");
+		let events: Vec<Event> = (0..100_000).map(event).collect();
+
+		let (mut wal, replayed) = Wal::open(&path).unwrap();
+		assert!(replayed.is_empty());
+		for chunk in events.chunks(4096) {
+			wal.append(chunk).unwrap();
+		}
+		drop(wal);
+
+		let (_, replayed) = Wal::open(&path).unwrap();
+		assert_eq!(replayed, events);
+	}
+
+	#[test]
+	fn torn_tail() {
+		let dir = TempDir::new("wal-torn-tail").unwrap();
+		let path = dir.path().join("events.wal");
+		let events: Vec<Event> = (0..1000).map(event).collect();
+
+		let (mut wal, _) = Wal::open(&path).unwrap();
+		wal.append(&events).unwrap();
+		drop(wal);
+		let intact = fs::metadata(&path).unwrap().len();
+
+		let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+		file.write_all(&[200, 0, 0, 0, 1, 2, 3]).unwrap();
+		drop(file);
+
+		let (mut wal, replayed) = Wal::open(&path).unwrap();
+		assert_eq!(replayed, events);
+		assert_eq!(fs::metadata(&path).unwrap().len(), intact);
+		wal.append(&[event(1000)]).unwrap();
+		drop(wal);
+
+		let (_, replayed) = Wal::open(&path).unwrap();
+		assert_eq!(replayed.len(), 1001);
+	}
 }
