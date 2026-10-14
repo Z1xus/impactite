@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
@@ -7,17 +8,20 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::cache::Cache;
 use crate::dict::Dict;
-use crate::event::Event;
-use crate::rollup::{Counts, Rollup};
-use crate::segment::Segment;
+use crate::event::{Dim, Event};
+use crate::query::{Matcher, Query, Report};
+use crate::rollup::{Counts, Metrics, Names};
+use crate::segment::{Columns, Dense, Segment};
 use crate::wal::Wal;
 
 const QUEUE: usize = 1 << 16;
+const CACHE: usize = 1 << 14;
 const BATCH: usize = 1 << 14;
 const TICK: Duration = Duration::from_secs(1);
-const LATE: i64 = 2 * 3600;
 const QUIET: Duration = Duration::from_secs(10);
+const LATE: i64 = 2 * 3600;
 const WAL_BYTES: u64 = 64 << 20;
 const WAL_AGE: Duration = Duration::from_secs(3600);
 
@@ -39,6 +43,10 @@ impl Db {
 		let shared = Arc::new(Shared {
 			dir: dir.into(),
 			dicts: Mutex::default(),
+			live: RwLock::default(),
+			cache: Mutex::new(Cache::new(CACHE)),
+			ranges: Mutex::new(Cache::new(CACHE)),
+			versions: Mutex::default(),
 		});
 		let writer = Writer::open(shared.clone())?;
 		let (tx, rx) = mpsc::sync_channel(QUEUE);
@@ -58,15 +66,207 @@ impl Db {
 		rx.recv().map_err(|_| stopped())?
 	}
 
-	pub fn rollup(&self, site: u64, day: i32) -> io::Result<Option<Rollup>> {
-		let counts = match Counts::read(&self.shared.path((site, day), "rlp")) {
-			Ok(counts) => counts,
-			Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
-			Err(err) => return Err(err),
-		};
+	pub fn query(&self, query: &Query) -> io::Result<Report> {
+		let site = query.site;
 		let dict = self.shared.dict(site)?;
+		let (matchers, names) = {
+			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
+			let matchers: Vec<Matcher> = query
+				.filters
+				.iter()
+				.map(|filter| Matcher::new(filter, &dict))
+				.collect();
+			(matchers, Names::new(&dict))
+		};
+		let plan = Plan {
+			shape: hash(&(&query.filters, query.breakdown)),
+			matchers,
+			names,
+			dims: query.breakdown.into_iter().collect(),
+		};
+
+		let live: HashSet<i32> = {
+			let live = self
+				.shared
+				.live
+				.read()
+				.unwrap_or_else(PoisonError::into_inner);
+			query
+				.days
+				.clone()
+				.filter(|&day| live.contains_key(&(site, day)))
+				.collect()
+		};
+		let sealed: Vec<i32> = query
+			.days
+			.clone()
+			.filter(|day| !live.contains(day))
+			.collect();
+		let merged = self.merged(site, &sealed, &plan)?;
+
+		let mut total = merged.total;
+		let mut hours = merged.hours;
+		let mut days = Vec::new();
+		let mut sealed_days = merged.days.iter();
+		let mut live_rows: HashMap<u32, Metrics> = HashMap::new();
+		for day in query.days.clone() {
+			if !live.contains(&day) {
+				days.push(sealed_days.next().copied().unwrap_or_default());
+				continue;
+			}
+			let counts = self.day((site, day), &plan)?;
+			total.merge(&counts.total);
+			for (hour, other) in hours.iter_mut().zip(&counts.hours) {
+				hour.merge(other);
+			}
+			days.push(counts.total);
+			for &(id, metrics) in plan.dims.iter().flat_map(|&dim| &counts.dims[dim as usize]) {
+				live_rows.entry(id).or_default().merge(&metrics);
+			}
+		}
+
+		let mut candidates: Vec<u32> = merged
+			.rows
+			.iter()
+			.take(query.limit)
+			.map(|&(id, _)| id)
+			.chain(live_rows.keys().copied())
+			.collect();
+		candidates.sort_unstable();
+		candidates.dedup();
+		let mut rows: Vec<(u32, Metrics)> = candidates
+			.into_iter()
+			.map(|id| {
+				let mut metrics = merged
+					.index
+					.get(&id)
+					.map(|&i| merged.rows[i].1)
+					.unwrap_or_default();
+				if let Some(live) = live_rows.get(&id) {
+					metrics.merge(live);
+				}
+				(id, metrics)
+			})
+			.collect();
+		sort_rows(&mut rows);
+		rows.truncate(query.limit);
+
 		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
-		counts.resolve(&dict).map(Some)
+		Ok(Report {
+			total,
+			days,
+			hours,
+			rows: rows
+				.into_iter()
+				.filter_map(|(id, metrics)| Some((dict.get(id)?.clone(), metrics)))
+				.collect(),
+		})
+	}
+
+	fn merged(&self, site: u64, days: &[i32], plan: &Plan) -> io::Result<Arc<Merged>> {
+		let id = hash(&(site, days, plan.shape));
+		if let Some(merged) = lock(&self.shared.ranges).get(&id) {
+			let versions = lock(&self.shared.versions);
+			let fresh = merged
+				.seqs
+				.iter()
+				.all(|(key, seq)| versions.get(key).is_none_or(|version| version == seq));
+			if fresh {
+				return Ok(merged);
+			}
+		}
+
+		let mut merged = Merged {
+			seqs: Vec::with_capacity(days.len()),
+			total: Metrics::default(),
+			hours: [Metrics::default(); 24],
+			days: Vec::with_capacity(days.len()),
+			rows: Vec::new(),
+			index: HashMap::new(),
+		};
+		let mut rows: HashMap<u32, Metrics> = HashMap::new();
+		for &day in days {
+			let counts = self.day((site, day), plan)?;
+			merged.seqs.push(((site, day), counts.seq));
+			merged.total.merge(&counts.total);
+			for (hour, other) in merged.hours.iter_mut().zip(&counts.hours) {
+				hour.merge(other);
+			}
+			merged.days.push(counts.total);
+			for &(id, metrics) in plan.dims.iter().flat_map(|&dim| &counts.dims[dim as usize]) {
+				rows.entry(id).or_default().merge(&metrics);
+			}
+		}
+		merged.rows = rows.into_iter().collect();
+		sort_rows(&mut merged.rows);
+		merged.index = merged
+			.rows
+			.iter()
+			.enumerate()
+			.map(|(i, &(id, _))| (id, i))
+			.collect();
+
+		let merged = Arc::new(merged);
+		lock(&self.shared.ranges).insert(id, merged.clone());
+		Ok(merged)
+	}
+
+	fn day(&self, key: Key, plan: &Plan) -> io::Result<Arc<Counts>> {
+		let live = self
+			.shared
+			.live
+			.read()
+			.unwrap_or_else(PoisonError::into_inner)
+			.get(&key)
+			.cloned();
+		if let Some(live) = live {
+			let cached = lock(&self.shared.cache).get(&(key, plan.shape, true));
+			if let Some(counts) = cached.filter(|counts| counts.seq == live.version) {
+				return Ok(counts);
+			}
+			let parts: Vec<&Columns> = live.parts.iter().map(|part| &**part).collect();
+			let mut counts = Counts::scan(
+				&parts,
+				live.visitors,
+				live.sessions,
+				&plan.names,
+				&plan.matchers,
+				&plan.dims,
+			);
+			counts.seq = live.version;
+			let counts = Arc::new(counts);
+			lock(&self.shared.cache).insert((key, plan.shape, true), counts.clone());
+			return Ok(counts);
+		}
+
+		let shape = match plan.matchers.is_empty() {
+			true => 0,
+			false => plan.shape,
+		};
+		let version = lock(&self.shared.versions).get(&key).copied();
+		let cached = lock(&self.shared.cache).get(&(key, shape, false));
+		if let Some(counts) = cached.filter(|counts| version.is_none_or(|seq| seq == counts.seq)) {
+			return Ok(counts);
+		}
+
+		let counts = match plan.matchers.is_empty() {
+			true => Counts::read(&self.shared.path(key, "rlp")),
+			false => Segment::read(&self.shared.path(key, "seg")).map(|seg| {
+				let mut counts = Counts::scan(
+					&[&seg.cols],
+					seg.visitors.len(),
+					seg.sessions.len(),
+					&plan.names,
+					&plan.matchers,
+					&plan.dims,
+				);
+				counts.seq = seg.seq;
+				counts
+			}),
+		};
+		let counts = Arc::new(missing_as_empty(counts)?);
+		lock(&self.shared.cache).insert((key, shape, false), counts.clone());
+		Ok(counts)
 	}
 
 	pub fn close(self) -> io::Result<()> {
@@ -76,13 +276,67 @@ impl Db {
 	}
 }
 
+struct Plan {
+	shape: u64,
+	matchers: Vec<Matcher>,
+	names: Names,
+	dims: Vec<Dim>,
+}
+
+struct Merged {
+	seqs: Vec<(Key, u64)>,
+	total: Metrics,
+	hours: [Metrics; 24],
+	days: Vec<Metrics>,
+	rows: Vec<(u32, Metrics)>,
+	index: HashMap<u32, usize>,
+}
+
+fn hash(value: &impl Hash) -> u64 {
+	let mut hasher = DefaultHasher::new();
+	value.hash(&mut hasher);
+	hasher.finish()
+}
+
+fn sort_rows(rows: &mut [(u32, Metrics)]) {
+	rows.sort_unstable_by(|a, b| {
+		b.1.visitors
+			.cmp(&a.1.visitors)
+			.then(b.1.pageviews.cmp(&a.1.pageviews))
+			.then(a.0.cmp(&b.0))
+	});
+}
+
+fn missing_as_empty(counts: io::Result<Counts>) -> io::Result<Counts> {
+	match counts {
+		Err(err) if err.kind() == ErrorKind::NotFound => Ok(Counts::empty()),
+		counts => counts,
+	}
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+	mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 fn stopped() -> io::Error {
 	io::Error::other("crater writer stopped")
+}
+
+#[derive(Clone)]
+struct LiveView {
+	version: u64,
+	parts: Vec<Arc<Columns>>,
+	visitors: usize,
+	sessions: usize,
 }
 
 struct Shared {
 	dir: PathBuf,
 	dicts: Mutex<HashMap<u64, Arc<RwLock<Dict>>>>,
+	live: RwLock<HashMap<Key, LiveView>>,
+	cache: Mutex<Cache<(Key, u64, bool), Arc<Counts>>>,
+	ranges: Mutex<Cache<u64, Arc<Merged>>>,
+	versions: Mutex<HashMap<Key, u64>>,
 }
 
 impl Shared {
@@ -95,7 +349,7 @@ impl Shared {
 	}
 
 	fn dict(&self, site: u64) -> io::Result<Arc<RwLock<Dict>>> {
-		let mut dicts = self.dicts.lock().unwrap_or_else(PoisonError::into_inner);
+		let mut dicts = lock(&self.dicts);
 		if let Some(dict) = dicts.get(&site) {
 			return Ok(dict.clone());
 		}
@@ -105,6 +359,21 @@ impl Shared {
 		dicts.insert(site, dict.clone());
 		Ok(dict)
 	}
+
+	fn publish(&self, key: Key, view: Option<LiveView>) {
+		let mut live = self.live.write().unwrap_or_else(PoisonError::into_inner);
+		match view {
+			Some(view) => live.insert(key, view),
+			None => live.remove(&key),
+		};
+	}
+}
+
+struct Live {
+	dense: Dense,
+	parts: Vec<Arc<Columns>>,
+	pending: Vec<Event>,
+	touched: Instant,
 }
 
 struct Writer {
@@ -114,10 +383,10 @@ struct Writer {
 	opened: Instant,
 	checked: Instant,
 	wal_keys: BTreeMap<u64, HashSet<Key>>,
-	memtable: HashMap<Key, Vec<Event>>,
-	touched: HashMap<Key, Instant>,
+	memtable: HashMap<Key, Live>,
 	offsets: HashMap<u64, i32>,
 	sealed: HashMap<Key, u64>,
+	published: u64,
 }
 
 impl Writer {
@@ -143,9 +412,9 @@ impl Writer {
 			checked: Instant::now(),
 			wal_keys: BTreeMap::from([(seq, HashSet::new())]),
 			memtable: HashMap::new(),
-			touched: HashMap::new(),
 			offsets: HashMap::new(),
 			sealed: HashMap::new(),
+			published: 0,
 		};
 
 		for seq in seqs {
@@ -157,9 +426,7 @@ impl Writer {
 				if writer.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq) {
 					continue;
 				}
-				writer.offsets.insert(event.site, event.offset);
-				writer.touched.insert(key, Instant::now());
-				writer.memtable.entry(key).or_default().push(event);
+				writer.stage(event)?;
 			}
 			for &key in &keys {
 				writer.repair(key)?;
@@ -168,6 +435,7 @@ impl Writer {
 		}
 
 		writer.drop_sealed_wals()?;
+		writer.tick(true)?;
 		Ok(writer)
 	}
 
@@ -188,7 +456,7 @@ impl Writer {
 			}
 
 			let force = !replies.is_empty();
-			let result = self.write(&mut batch).and_then(|()| self.seal_due(force));
+			let result = self.write(&mut batch).and_then(|()| self.tick(force));
 			for reply in replies.drain(..) {
 				let _ = reply.send(match &result {
 					Ok(()) => Ok(()),
@@ -204,13 +472,10 @@ impl Writer {
 			return Ok(());
 		}
 		self.wal.append(batch)?;
-		let keys = self.wal_keys.entry(self.seq).or_default();
 		for event in batch.drain(..) {
 			let key = (event.site, event.day());
-			keys.insert(key);
-			self.offsets.insert(event.site, event.offset);
-			self.touched.insert(key, Instant::now());
-			self.memtable.entry(key).or_default().push(event);
+			self.wal_keys.entry(self.seq).or_default().insert(key);
+			self.stage(event)?;
 		}
 		if self.wal.size >= WAL_BYTES || self.opened.elapsed() >= WAL_AGE {
 			self.rotate()?;
@@ -218,25 +483,56 @@ impl Writer {
 		Ok(())
 	}
 
-	fn seal_due(&mut self, force: bool) -> io::Result<()> {
+	fn stage(&mut self, event: Event) -> io::Result<()> {
+		let key = (event.site, event.day());
+		self.offsets.insert(event.site, event.offset);
+		if !self.memtable.contains_key(&key) {
+			let live = self.revive(key)?;
+			self.memtable.insert(key, live);
+		}
+		if let Some(live) = self.memtable.get_mut(&key) {
+			live.pending.push(event);
+			live.touched = Instant::now();
+		}
+		Ok(())
+	}
+
+	fn revive(&mut self, key: Key) -> io::Result<Live> {
+		let mut live = Live {
+			dense: Dense::default(),
+			parts: Vec::new(),
+			pending: Vec::new(),
+			touched: Instant::now(),
+		};
+		if self.sealed_seq(key)?.is_some() {
+			let seg = Segment::read(&self.shared.path(key, "seg"))?;
+			live.dense = Dense::from_lists(seg.visitors, seg.sessions);
+			live.parts.push(Arc::new(seg.cols));
+		}
+		Ok(live)
+	}
+
+	fn tick(&mut self, force: bool) -> io::Result<()> {
 		if !force && self.checked.elapsed() < TICK {
 			return Ok(());
 		}
 		self.checked = Instant::now();
+
+		let keys: Vec<Key> = self.memtable.keys().copied().collect();
+		for &key in &keys {
+			self.flush(key)?;
+		}
+
 		let now = SystemTime::now()
 			.duration_since(UNIX_EPOCH)
 			.map_or(0, |since| since.as_secs() as i64);
-		let due: Vec<Key> = self
-			.memtable
-			.keys()
-			.copied()
-			.filter(|&(site, day)| {
-				let offset = self.offsets.get(&site).copied().unwrap_or_default();
-				let quiet = self
-					.touched
-					.get(&(site, day))
-					.is_none_or(|touched| touched.elapsed() >= QUIET);
-				(force || quiet) && now + i64::from(offset) >= (i64::from(day) + 1) * 86_400 + LATE
+		let due: Vec<Key> = keys
+			.into_iter()
+			.filter(|key| {
+				let offset = self.offsets.get(&key.0).copied().unwrap_or_default();
+				let ended = now + i64::from(offset) >= (i64::from(key.1) + 1) * 86_400 + LATE;
+				let quiet = self.memtable[key].touched.elapsed() >= QUIET;
+				ended && (force || quiet)
 			})
 			.collect();
 		if due.is_empty() {
@@ -249,23 +545,51 @@ impl Writer {
 		self.drop_sealed_wals()
 	}
 
-	fn seal(&mut self, key: Key) -> io::Result<()> {
-		let Some(mut events) = self.memtable.remove(&key) else {
+	fn flush(&mut self, key: Key) -> io::Result<()> {
+		let Some(live) = self.memtable.get_mut(&key) else {
 			return Ok(());
 		};
-		self.touched.remove(&key);
-		let (site, day) = key;
-		let path = self.shared.path(key, "seg");
-		let merge = self.sealed_seq(key)?.is_some();
-		let dict = self.shared.dict(site)?;
-		let mut dict = dict.write().unwrap_or_else(PoisonError::into_inner);
-		if merge {
-			events.extend(Segment::read(&path)?.events(&dict, site, day)?);
+		if live.pending.is_empty() {
+			return Ok(());
 		}
-		let seg = Segment::build(events, &mut dict, self.seq);
+		let dict = self.shared.dict(key.0)?;
+		let mut dict = dict.write().unwrap_or_else(PoisonError::into_inner);
+		let mut cols = Columns::new();
+		for event in live.pending.drain(..) {
+			cols.push(&event, &mut live.dense, &mut dict);
+		}
+		live.parts.push(Arc::new(cols));
+		self.published += 1;
+		self.shared.publish(
+			key,
+			Some(LiveView {
+				version: self.published,
+				parts: live.parts.clone(),
+				visitors: live.dense.visitors.len(),
+				sessions: live.dense.sessions.len(),
+			}),
+		);
+		Ok(())
+	}
+
+	fn seal(&mut self, key: Key) -> io::Result<()> {
+		self.flush(key)?;
+		let Some(live) = self.memtable.remove(&key) else {
+			return Ok(());
+		};
+		let seg = Segment {
+			seq: self.seq,
+			cols: Columns::concat(live.parts.iter().map(|part| &**part)),
+			visitors: live.dense.visitors,
+			sessions: live.dense.sessions,
+		};
+		let dict = self.shared.dict(key.0)?;
+		let mut dict = dict.write().unwrap_or_else(PoisonError::into_inner);
 		dict.flush()?;
-		seg.write(&path)?;
-		Counts::compute(&seg, &dict).write(&self.shared.path(key, "rlp"))?;
+		seg.write(&self.shared.path(key, "seg"))?;
+		rollup(&seg, &dict).write(&self.shared.path(key, "rlp"))?;
+		lock(&self.shared.versions).insert(key, self.seq);
+		self.shared.publish(key, None);
 		self.sealed.insert(key, self.seq);
 		Ok(())
 	}
@@ -281,7 +605,9 @@ impl Writer {
 		let seg = Segment::read(&self.shared.path(key, "seg"))?;
 		let dict = self.shared.dict(key.0)?;
 		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
-		Counts::compute(&seg, &dict).write(&path)
+		rollup(&seg, &dict).write(&path)?;
+		lock(&self.shared.versions).insert(key, sealed);
+		Ok(())
 	}
 
 	fn sealed_seq(&mut self, key: Key) -> io::Result<Option<u64>> {
@@ -330,6 +656,19 @@ impl Writer {
 		}
 		Ok(())
 	}
+}
+
+fn rollup(seg: &Segment, dict: &Dict) -> Counts {
+	let mut counts = Counts::scan(
+		&[&seg.cols],
+		seg.visitors.len(),
+		seg.sessions.len(),
+		&Names::new(dict),
+		&[],
+		&Dim::ALL,
+	);
+	counts.seq = seg.seq;
+	counts
 }
 
 fn wal_path(dir: &Path, seq: u64) -> PathBuf {

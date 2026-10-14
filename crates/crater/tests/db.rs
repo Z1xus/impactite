@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crater::{Db, Dim, Event, Metrics};
+use crater::{Db, Dim, Event, Filter, Metrics, Op, Query, Report};
 
 const SITE: u64 = 7;
 const DAY: i32 = 20_000;
@@ -69,12 +70,30 @@ fn metrics(
 	}
 }
 
-fn find(rollup: &crater::Rollup, dim: Dim, value: &str) -> Option<Metrics> {
-	rollup
-		.dim(dim)
+fn query(db: &Db, filters: Vec<Filter>, breakdown: Option<Dim>) -> std::io::Result<Report> {
+	db.query(&Query {
+		site: SITE,
+		days: DAY - 1..=DAY + 1,
+		filters,
+		breakdown,
+		limit: 10,
+	})
+}
+
+fn row(report: &Report, value: &str) -> Option<Metrics> {
+	report
+		.rows
 		.iter()
 		.find(|(name, _)| &**name == value)
 		.map(|&(_, metrics)| metrics)
+}
+
+fn filter(dim: Dim, op: Op, value: &str) -> Filter {
+	Filter {
+		dim,
+		op,
+		values: vec![value.into()],
+	}
 }
 
 #[test]
@@ -86,32 +105,57 @@ fn seals_past_days() {
 	}
 	db.sync().unwrap();
 
-	let rollup = db.rollup(SITE, DAY).unwrap().unwrap();
-	assert_eq!(rollup.total, metrics(3, 4, 5, 6, 2, 300));
-	assert_eq!(rollup.hours[0], metrics(1, 1, 2, 2, 0, 100));
-	assert_eq!(rollup.hours[3], metrics(1, 1, 1, 1, 1, 100));
+	let report = query(&db, Vec::new(), Some(Dim::Page)).unwrap();
+	assert_eq!(report.total, metrics(3, 4, 5, 6, 2, 300));
+	assert_eq!(report.days.len(), 3);
+	assert_eq!(report.days[1], report.total);
+	assert_eq!(report.hours[0], metrics(1, 1, 2, 2, 0, 100));
+	assert_eq!(report.hours[3], metrics(1, 1, 1, 1, 1, 100));
+	assert_eq!(row(&report, "/a"), Some(metrics(2, 3, 3, 4, 1, 200)));
+	assert_eq!(row(&report, "/b"), Some(metrics(2, 2, 2, 2, 1, 200)));
 
+	let report = query(&db, Vec::new(), Some(Dim::Source)).unwrap();
+	assert_eq!(row(&report, "Google"), Some(metrics(1, 1, 2, 2, 0, 100)));
+	assert_eq!(row(&report, ""), Some(metrics(2, 2, 2, 2, 2, 100)));
+	assert_eq!(row(&report, "Twitter"), Some(metrics(1, 1, 1, 2, 0, 100)));
+
+	let report = query(&db, Vec::new(), Some(Dim::Name)).unwrap();
+	assert_eq!(row(&report, "engagement"), None);
+	db.close().unwrap();
+}
+
+#[test]
+fn filters() {
+	let dir = TempDir::new("filters").unwrap();
+	let db = Db::open(&dir.0).unwrap();
+	for event in day() {
+		assert!(db.insert(event));
+	}
+	db.sync().unwrap();
+
+	let google = vec![filter(Dim::Source, Op::Is, "Google")];
 	assert_eq!(
-		find(&rollup, Dim::Page, "/a"),
-		Some(metrics(2, 3, 3, 4, 1, 200))
+		query(&db, google, None).unwrap().total,
+		metrics(1, 1, 2, 2, 0, 100)
+	);
+
+	let page_a = vec![filter(Dim::Page, Op::Is, "/a")];
+	let report = query(&db, page_a, Some(Dim::Source)).unwrap();
+	assert_eq!(report.total, metrics(2, 3, 3, 4, 1, 200));
+	assert_eq!(row(&report, "Google"), Some(metrics(1, 1, 1, 1, 0, 100)));
+	assert_eq!(row(&report, ""), Some(metrics(1, 1, 1, 1, 1, 0)));
+	assert_eq!(row(&report, "Twitter"), Some(metrics(1, 1, 1, 2, 0, 100)));
+
+	let not_a = vec![filter(Dim::Page, Op::IsNot, "/a")];
+	let contains_b = vec![filter(Dim::Page, Op::Contains, "b")];
+	assert_eq!(
+		query(&db, not_a, None).unwrap().total,
+		metrics(2, 2, 2, 2, 1, 200)
 	);
 	assert_eq!(
-		find(&rollup, Dim::Page, "/b"),
-		Some(metrics(2, 2, 2, 2, 1, 200))
+		query(&db, contains_b, None).unwrap().total,
+		metrics(2, 2, 2, 2, 1, 200)
 	);
-	assert_eq!(
-		find(&rollup, Dim::Source, "Google"),
-		Some(metrics(1, 1, 2, 2, 0, 100))
-	);
-	assert_eq!(
-		find(&rollup, Dim::Source, ""),
-		Some(metrics(2, 2, 2, 2, 2, 100))
-	);
-	assert_eq!(
-		find(&rollup, Dim::Source, "Twitter"),
-		Some(metrics(1, 1, 1, 2, 0, 100))
-	);
-	assert_eq!(find(&rollup, Dim::Name, "engagement"), None);
 	db.close().unwrap();
 }
 
@@ -126,16 +170,49 @@ fn merges_late_events_and_reopens() {
 	assert!(db.insert(event(2, 20, 3800, "pageview", "/c", "")));
 	db.sync().unwrap();
 
-	let rollup = db.rollup(SITE, DAY).unwrap().unwrap();
-	assert_eq!(rollup.total, metrics(3, 4, 6, 7, 1, 400));
-	assert_eq!(
-		find(&rollup, Dim::Page, "/c"),
-		Some(metrics(1, 1, 1, 1, 0, 100))
-	);
+	let report = query(&db, Vec::new(), Some(Dim::Page)).unwrap();
+	assert_eq!(report.total, metrics(3, 4, 6, 7, 1, 400));
+	assert_eq!(row(&report, "/c"), Some(metrics(1, 1, 1, 1, 0, 100)));
 	db.close().unwrap();
 
 	let db = Db::open(&dir.0).unwrap();
-	assert_eq!(db.rollup(SITE, DAY).unwrap().unwrap().total, rollup.total);
+	assert_eq!(query(&db, Vec::new(), None).unwrap().total, report.total);
 	assert_eq!(fs::read_dir(dir.0.join("wal")).unwrap().count(), 1);
+	db.close().unwrap();
+}
+
+#[test]
+fn serves_today_live_and_after_restart() {
+	let dir = TempDir::new("live").unwrap();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs() as i64;
+	let today = now.div_euclid(86_400) as i32;
+	let live = |session: u64, ts: i64| {
+		let mut event = event(session, session, 0, "pageview", "/", "");
+		event.ts = ts;
+		event.offset = 0;
+		event
+	};
+	let today_query = Query {
+		site: SITE,
+		days: today..=today,
+		filters: Vec::new(),
+		breakdown: None,
+		limit: 10,
+	};
+
+	let db = Db::open(&dir.0).unwrap();
+	assert!(db.insert(live(1, now - 60)));
+	assert!(db.insert(live(1, now - 30)));
+	assert!(db.insert(live(2, now - 10)));
+	db.sync().unwrap();
+	let expected = metrics(2, 2, 3, 3, 1, 30);
+	assert_eq!(db.query(&today_query).unwrap().total, expected);
+	db.close().unwrap();
+
+	let db = Db::open(&dir.0).unwrap();
+	assert_eq!(db.query(&today_query).unwrap().total, expected);
 	db.close().unwrap();
 }

@@ -1,12 +1,12 @@
 use std::io;
 use std::path::Path;
-use std::sync::Arc;
 
 use crate::codec::{Reader, put_uvar};
 use crate::dict::Dict;
 use crate::event::Dim;
 use crate::frame::{self, invalid};
-use crate::segment::Segment;
+use crate::query::Matcher;
+use crate::segment::Columns;
 
 const MAGIC: &[u8; 5] = b"CRRU\x01";
 
@@ -21,10 +21,19 @@ pub struct Metrics {
 }
 
 impl Metrics {
+	pub(crate) fn merge(&mut self, other: &Metrics) {
+		self.visitors += other.visitors;
+		self.visits += other.visits;
+		self.pageviews += other.pageviews;
+		self.events += other.events;
+		self.bounces += other.bounces;
+		self.duration += other.duration;
+	}
+
 	fn add_visit(&mut self, visit: &Visit) {
 		self.visits += 1;
 		self.bounces += u64::from(visit.is_bounce());
-		self.duration += visit.duration();
+		self.duration += u64::from(visit.end - visit.start);
 	}
 
 	fn put(&self, buf: &mut Vec<u8>) {
@@ -52,142 +61,196 @@ impl Metrics {
 	}
 }
 
-#[derive(Debug, Clone)]
-pub struct Rollup {
-	pub total: Metrics,
-	pub hours: [Metrics; 24],
-	dims: Vec<Vec<(Arc<str>, Metrics)>>,
+pub(crate) struct Names {
+	pageview: Option<u32>,
+	engagement: Option<u32>,
 }
 
-impl Rollup {
-	pub fn dim(&self, dim: Dim) -> &[(Arc<str>, Metrics)] {
-		&self.dims[dim as usize]
+impl Names {
+	pub(crate) fn new(dict: &Dict) -> Self {
+		Self {
+			pageview: dict.find("pageview"),
+			engagement: dict.find("engagement"),
+		}
 	}
 }
 
-pub(crate) struct Counts {
-	pub(crate) seq: u64,
-	total: Metrics,
-	hours: [Metrics; 24],
-	dims: Vec<Vec<(u32, Metrics)>>,
-}
-
+#[derive(Clone, Copy)]
 struct Visit {
 	visitor: u32,
-	first: usize,
+	first: Option<(usize, usize, u32)>,
 	start: u32,
 	end: u32,
-	pageviews: u64,
-	events: u64,
+	pageviews: u32,
 	engaged: bool,
+	selected: bool,
+	hit_pageviews: u64,
+	hit_events: u64,
 }
 
 impl Visit {
 	fn is_bounce(&self) -> bool {
 		self.pageviews < 2 && !self.engaged
 	}
+}
 
-	fn duration(&self) -> u64 {
-		(self.end - self.start).into()
-	}
+pub(crate) struct Counts {
+	pub(crate) seq: u64,
+	pub(crate) total: Metrics,
+	pub(crate) hours: [Metrics; 24],
+	pub(crate) dims: Vec<Vec<(u32, Metrics)>>,
 }
 
 impl Counts {
-	pub(crate) fn compute(seg: &Segment, dict: &Dict) -> Self {
-		let names = &seg.dims[Dim::Name as usize];
-		let pageview = dict.find("pageview");
-		let engagement = dict.find("engagement");
-		let is_pageview = |row: usize| Some(names[row]) == pageview;
-		let is_engagement = |row: usize| Some(names[row]) == engagement;
+	pub(crate) fn empty() -> Self {
+		Self {
+			seq: 0,
+			total: Metrics::default(),
+			hours: [Metrics::default(); 24],
+			dims: vec![Vec::new(); Dim::COUNT],
+		}
+	}
 
-		let rows = seg.rows();
-		let mut visits = Vec::new();
-		let mut row_visit = vec![None; rows];
-		let mut start = 0;
-		while start < rows {
-			let session = seg.session[start];
-			let end = seg.session[start..]
+	pub(crate) fn scan(
+		parts: &[&Columns],
+		visitors: usize,
+		sessions: usize,
+		names: &Names,
+		filters: &[Matcher],
+		dims: &[Dim],
+	) -> Self {
+		let rows = || {
+			parts
 				.iter()
-				.position(|&s| s != session)
-				.map_or(rows, |len| start + len);
-			let mut first = None;
-			let mut visit = Visit {
-				visitor: seg.visitor[start],
-				first: 0,
-				start: seg.time[start],
-				end: seg.time[end - 1],
+				.enumerate()
+				.flat_map(|(p, part)| (0..part.rows()).map(move |row| (p, row)))
+		};
+		let name = |p: usize, row: usize| Some(parts[p].dims[Dim::Name as usize][row]);
+		let (event_filters, visit_filters): (Vec<&Matcher>, Vec<&Matcher>) =
+			filters.iter().partition(|m| m.dim.is_event());
+
+		let mut visits = vec![
+			Visit {
+				visitor: 0,
+				first: None,
+				start: u32::MAX,
+				end: 0,
 				pageviews: 0,
-				events: 0,
 				engaged: false,
+				selected: false,
+				hit_pageviews: 0,
+				hit_events: 0,
 			};
-			for row in (start..end).filter(|&row| !is_engagement(row)) {
-				first.get_or_insert(row);
-				visit.events += 1;
-				if is_pageview(row) {
-					visit.pageviews += 1;
-				} else if seg.interactive[row] == 1 {
-					visit.engaged = true;
-				}
+			sessions
+		];
+		for (p, row) in rows() {
+			let part = parts[p];
+			let time = part.time[row];
+			let visit = &mut visits[part.session[row] as usize];
+			visit.visitor = part.visitor[row];
+			visit.start = visit.start.min(time);
+			visit.end = visit.end.max(time);
+			if name(p, row) == names.engagement {
+				continue;
 			}
-			if let Some(first) = first {
-				visit.first = first;
-				row_visit[start..end].fill(Some(visits.len() as u32));
-				visits.push(visit);
+			if visit.first.is_none_or(|(_, _, first)| time < first) {
+				visit.first = Some((p, row, time));
 			}
-			start = end;
+			if name(p, row) == names.pageview {
+				visit.pageviews += 1;
+			} else if part.interactive[row] == 1 {
+				visit.engaged = true;
+			}
+		}
+		for visit in &mut visits {
+			visit.selected = visit.first.is_some_and(|(p, row, _)| {
+				visit_filters
+					.iter()
+					.all(|m| m.matches(parts[p].dims[m.dim as usize][row]))
+			});
 		}
 
-		let counted: Vec<(usize, u32)> = (0..rows)
-			.filter(|&row| !is_engagement(row))
-			.filter_map(|row| Some((row, row_visit[row]?)))
-			.collect();
+		let is_hit = |visits: &[Visit], p: usize, row: usize| {
+			let part = parts[p];
+			visits[part.session[row] as usize].selected
+				&& name(p, row) != names.engagement
+				&& event_filters
+					.iter()
+					.all(|m| m.matches(part.dims[m.dim as usize][row]))
+		};
+		let mut hours = [Metrics::default(); 24];
+		let mut visitor_hours = vec![0u32; visitors];
+		for (p, row) in rows() {
+			if !is_hit(&visits, p, row) {
+				continue;
+			}
+			let part = parts[p];
+			let pageview = u64::from(name(p, row) == names.pageview);
+			let hour = (part.time[row] / 3600) as usize;
+			let visit = &mut visits[part.session[row] as usize];
+			visit.hit_events += 1;
+			visit.hit_pageviews += pageview;
+			hours[hour].events += 1;
+			hours[hour].pageviews += pageview;
+			visitor_hours[part.visitor[row] as usize] |= 1 << hour;
+		}
+		for visit in &mut visits {
+			visit.selected &= visit.hit_events > 0;
+		}
 
 		let mut total = Metrics::default();
-		let mut hours = [Metrics::default(); 24];
-		for visit in &visits {
+		for visit in visits.iter().filter(|visit| visit.selected) {
 			total.add_visit(visit);
-			total.pageviews += visit.pageviews;
-			total.events += visit.events;
+			total.pageviews += visit.hit_pageviews;
+			total.events += visit.hit_events;
 			hours[(visit.start / 3600) as usize].add_visit(visit);
 		}
-		total.visitors = distinct(visits.iter().map(|visit| visit.visitor).collect());
-
-		let mut hour_visitors = Vec::with_capacity(counted.len());
-		for &(row, _) in &counted {
-			let hour = seg.time[row] / 3600;
-			hours[hour as usize].events += 1;
-			hours[hour as usize].pageviews += u64::from(is_pageview(row));
-			hour_visitors.push((hour, seg.visitor[row]));
-		}
-		hour_visitors.sort_unstable();
-		hour_visitors.dedup();
-		for (hour, _) in hour_visitors {
-			hours[hour as usize].visitors += 1;
+		for mask in visitor_hours.into_iter().filter(|&mask| mask != 0) {
+			total.visitors += 1;
+			for (hour, metrics) in hours.iter_mut().enumerate() {
+				metrics.visitors += u64::from(mask >> hour & 1);
+			}
 		}
 
-		let dims = Dim::ALL
-			.into_iter()
-			.map(|dim| {
-				let column = &seg.dims[dim as usize];
-				let mut entries = match dim.is_event() {
-					true => event_breakdown(column, &counted, &visits, is_pageview),
-					false => visit_breakdown(column, &visits),
-				};
-				entries.sort_unstable_by(|a, b| {
-					b.1.visitors
-						.cmp(&a.1.visitors)
-						.then(b.1.pageviews.cmp(&a.1.pageviews))
-						.then(a.0.cmp(&b.0))
-				});
-				entries
-			})
-			.collect();
+		let mut breakdowns = vec![Vec::new(); Dim::COUNT];
+		for &dim in dims {
+			let column = |p: usize, row: usize| parts[p].dims[dim as usize][row];
+			let mut entries = match dim.is_event() {
+				true => {
+					let hits = rows()
+						.filter(|&(p, row)| is_hit(&visits, p, row))
+						.map(|(p, row)| {
+							let session = parts[p].session[row];
+							(column(p, row), session, name(p, row) == names.pageview)
+						})
+						.collect();
+					event_breakdown(hits, &visits)
+				}
+				false => visit_breakdown(
+					visits
+						.iter()
+						.filter(|visit| visit.selected)
+						.filter_map(|visit| {
+							let (p, row, _) = visit.first?;
+							Some((column(p, row), visit))
+						})
+						.collect(),
+				),
+			};
+			entries.sort_unstable_by(|a, b| {
+				b.1.visitors
+					.cmp(&a.1.visitors)
+					.then(b.1.pageviews.cmp(&a.1.pageviews))
+					.then(a.0.cmp(&b.0))
+			});
+			breakdowns[dim as usize] = entries;
+		}
 
 		Self {
-			seq: seg.seq,
+			seq: 0,
 			total,
 			hours,
-			dims,
+			dims: breakdowns,
 		}
 	}
 
@@ -217,64 +280,32 @@ impl Counts {
 			.and_then(|buf| decode(buf))
 			.ok_or_else(|| invalid("bad rollup"))
 	}
-
-	pub(crate) fn resolve(self, dict: &Dict) -> io::Result<Rollup> {
-		let dims = self
-			.dims
-			.into_iter()
-			.map(|entries| {
-				entries
-					.into_iter()
-					.map(|(id, metrics)| Some((dict.get(id)?.clone(), metrics)))
-					.collect::<Option<Vec<_>>>()
-			})
-			.collect::<Option<Vec<_>>>()
-			.ok_or_else(|| invalid("unknown string id"))?;
-		Ok(Rollup {
-			total: self.total,
-			hours: self.hours,
-			dims,
-		})
-	}
 }
 
-fn visit_breakdown(column: &[u32], visits: &[Visit]) -> Vec<(u32, Metrics)> {
-	let mut pairs: Vec<(u32, &Visit)> = visits
-		.iter()
-		.map(|visit| (column[visit.first], visit))
-		.collect();
-	pairs.sort_unstable_by_key(|&(value, _)| value);
+fn visit_breakdown(mut pairs: Vec<(u32, &Visit)>) -> Vec<(u32, Metrics)> {
+	pairs.sort_unstable_by_key(|&(value, visit)| (value, visit.visitor));
 	pairs
 		.chunk_by(|a, b| a.0 == b.0)
 		.map(|group| {
 			let mut metrics = Metrics::default();
 			for &(_, visit) in group {
 				metrics.add_visit(visit);
-				metrics.pageviews += visit.pageviews;
-				metrics.events += visit.events;
+				metrics.pageviews += visit.hit_pageviews;
+				metrics.events += visit.hit_events;
 			}
-			metrics.visitors = distinct(group.iter().map(|(_, visit)| visit.visitor).collect());
+			metrics.visitors = group.chunk_by(|a, b| a.1.visitor == b.1.visitor).count() as u64;
 			(group[0].0, metrics)
 		})
 		.collect()
 }
 
-fn event_breakdown(
-	column: &[u32],
-	counted: &[(usize, u32)],
-	visits: &[Visit],
-	is_pageview: impl Fn(usize) -> bool,
-) -> Vec<(u32, Metrics)> {
-	let mut rows: Vec<(u32, u32, bool)> = counted
-		.iter()
-		.map(|&(row, visit)| (column[row], visit, is_pageview(row)))
-		.collect();
-	rows.sort_unstable();
-	rows.chunk_by(|a, b| a.0 == b.0)
+fn event_breakdown(mut hits: Vec<(u32, u32, bool)>, visits: &[Visit]) -> Vec<(u32, Metrics)> {
+	hits.sort_unstable();
+	hits.chunk_by(|a, b| a.0 == b.0)
 		.map(|group| {
 			let mut metrics = Metrics {
 				events: group.len() as u64,
-				pageviews: group.iter().filter(|row| row.2).count() as u64,
+				pageviews: group.iter().filter(|hit| hit.2).count() as u64,
 				..Metrics::default()
 			};
 			let mut visitors = Vec::new();
@@ -283,16 +314,12 @@ fn event_breakdown(
 				metrics.add_visit(visit);
 				visitors.push(visit.visitor);
 			}
-			metrics.visitors = distinct(visitors);
+			visitors.sort_unstable();
+			visitors.dedup();
+			metrics.visitors = visitors.len() as u64;
 			(group[0].0, metrics)
 		})
 		.collect()
-}
-
-fn distinct(mut ids: Vec<u32>) -> u64 {
-	ids.sort_unstable();
-	ids.dedup();
-	ids.len() as u64
 }
 
 fn decode(buf: &[u8]) -> Option<Counts> {

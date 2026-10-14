@@ -9,10 +9,8 @@ use crate::frame::{self, invalid};
 
 const MAGIC: &[u8; 5] = b"CRSG\x01";
 
-pub(crate) struct Segment {
-	pub(crate) seq: u64,
-	pub(crate) visitors: Vec<u64>,
-	pub(crate) sessions: Vec<u64>,
+#[derive(Clone)]
+pub(crate) struct Columns {
 	pub(crate) time: Vec<u32>,
 	pub(crate) visitor: Vec<u32>,
 	pub(crate) session: Vec<u32>,
@@ -26,61 +24,65 @@ pub(crate) struct Segment {
 	pub(crate) values: Vec<u32>,
 }
 
-impl Segment {
-	pub(crate) fn build(mut events: Vec<Event>, dict: &mut Dict, seq: u64) -> Self {
-		events.sort_unstable_by_key(|event| (event.session, event.ts + i64::from(event.offset)));
-		let rows = events.len();
-		let mut visitors = Vec::new();
-		let mut sessions = Vec::new();
-		let mut visitor_ids = HashMap::new();
-		let mut session_ids = HashMap::new();
-		let mut seg = Self {
-			seq,
-			visitors: Vec::new(),
-			sessions: Vec::new(),
-			time: Vec::with_capacity(rows),
-			visitor: Vec::with_capacity(rows),
-			session: Vec::with_capacity(rows),
-			interactive: Vec::with_capacity(rows),
-			scroll: Vec::with_capacity(rows),
-			engagement: Vec::with_capacity(rows),
-			dims: (0..Dim::COUNT).map(|_| Vec::with_capacity(rows)).collect(),
-			props: Vec::with_capacity(rows),
+impl Columns {
+	pub(crate) fn new() -> Self {
+		Self {
+			time: Vec::new(),
+			visitor: Vec::new(),
+			session: Vec::new(),
+			interactive: Vec::new(),
+			scroll: Vec::new(),
+			engagement: Vec::new(),
+			dims: vec![Vec::new(); Dim::COUNT],
+			props: Vec::new(),
 			keys: Vec::new(),
 			values: Vec::new(),
-		};
-
-		for event in &events {
-			seg.time
-				.push((event.ts + i64::from(event.offset)).rem_euclid(86_400) as u32);
-			seg.visitor
-				.push(dense(&mut visitor_ids, &mut visitors, event.visitor));
-			seg.session
-				.push(dense(&mut session_ids, &mut sessions, event.session));
-			seg.interactive.push(event.interactive.into());
-			seg.scroll
-				.push(event.scroll_depth.map_or(0, |depth| u32::from(depth) + 1));
-			seg.engagement.push(event.engagement_ms);
-			for dim in Dim::ALL {
-				seg.dims[dim as usize].push(dict.id(&event.dims[dim]));
-			}
-			seg.props.push(event.props.len() as u32);
-			for (key, value) in &event.props {
-				seg.keys.push(dict.id(key));
-				seg.values.push(dict.id(value));
-			}
 		}
-
-		seg.visitors = visitors;
-		seg.sessions = sessions;
-		seg
 	}
 
 	pub(crate) fn rows(&self) -> usize {
 		self.time.len()
 	}
 
-	fn is_consistent(&self) -> bool {
+	pub(crate) fn push(&mut self, event: &Event, dense: &mut Dense, dict: &mut Dict) {
+		self.time
+			.push((event.ts + i64::from(event.offset)).rem_euclid(86_400) as u32);
+		self.visitor.push(dense.visitor(event.visitor));
+		self.session.push(dense.session(event.session));
+		self.interactive.push(event.interactive.into());
+		self.scroll
+			.push(event.scroll_depth.map_or(0, |depth| u32::from(depth) + 1));
+		self.engagement.push(event.engagement_ms);
+		for dim in Dim::ALL {
+			self.dims[dim as usize].push(dict.id(&event.dims[dim]));
+		}
+		self.props.push(event.props.len() as u32);
+		for (key, value) in &event.props {
+			self.keys.push(dict.id(key));
+			self.values.push(dict.id(value));
+		}
+	}
+
+	pub(crate) fn concat<'a>(parts: impl IntoIterator<Item = &'a Columns>) -> Self {
+		let mut all = Self::new();
+		for part in parts {
+			all.time.extend(&part.time);
+			all.visitor.extend(&part.visitor);
+			all.session.extend(&part.session);
+			all.interactive.extend(&part.interactive);
+			all.scroll.extend(&part.scroll);
+			all.engagement.extend(&part.engagement);
+			for (all, part) in all.dims.iter_mut().zip(&part.dims) {
+				all.extend(part);
+			}
+			all.props.extend(&part.props);
+			all.keys.extend(&part.keys);
+			all.values.extend(&part.values);
+		}
+		all
+	}
+
+	fn is_consistent(&self, visitors: usize, sessions: usize) -> bool {
 		let rows = self.rows();
 		let columns = [
 			&self.visitor,
@@ -96,55 +98,66 @@ impl Segment {
 			.all(|column| column.len() == rows)
 			&& self.keys.len() == self.values.len()
 			&& self.props.iter().map(|&n| n as usize).sum::<usize>() == self.keys.len()
-			&& self
-				.visitor
-				.iter()
-				.all(|&id| (id as usize) < self.visitors.len())
-			&& self
-				.session
-				.iter()
-				.all(|&id| (id as usize) < self.sessions.len())
+			&& self.visitor.iter().all(|&id| (id as usize) < visitors)
+			&& self.session.iter().all(|&id| (id as usize) < sessions)
+			&& self.time.iter().all(|&time| time < 86_400)
 	}
+}
 
-	pub(crate) fn events(&self, dict: &Dict, site: u64, day: i32) -> io::Result<Vec<Event>> {
-		let string = |id: u32| {
-			dict.get(id)
-				.map(|s| s.to_string())
-				.ok_or_else(|| invalid("unknown string id"))
+#[derive(Default)]
+pub(crate) struct Dense {
+	pub(crate) visitors: Vec<u64>,
+	pub(crate) sessions: Vec<u64>,
+	visitor_ids: HashMap<u64, u32>,
+	session_ids: HashMap<u64, u32>,
+}
+
+impl Dense {
+	pub(crate) fn from_lists(visitors: Vec<u64>, sessions: Vec<u64>) -> Self {
+		let index = |ids: &[u64]| -> HashMap<u64, u32> {
+			ids.iter()
+				.enumerate()
+				.map(|(i, &id)| (id, i as u32))
+				.collect()
 		};
-		let mut prop = 0;
-		let mut events = Vec::with_capacity(self.rows());
-		for row in 0..self.rows() {
-			let mut event = Event {
-				site,
-				ts: i64::from(day) * 86_400 + i64::from(self.time[row]),
-				offset: 0,
-				visitor: self.visitors[self.visitor[row] as usize],
-				session: self.sessions[self.session[row] as usize],
-				interactive: self.interactive[row] == 1,
-				scroll_depth: self.scroll[row].checked_sub(1).map(|depth| depth as u8),
-				engagement_ms: self.engagement[row],
-				..Event::default()
-			};
-			for dim in Dim::ALL {
-				event.dims[dim] = string(self.dims[dim as usize][row])?;
-			}
-			for _ in 0..self.props[row] {
-				event
-					.props
-					.push((string(self.keys[prop])?, string(self.values[prop])?));
-				prop += 1;
-			}
-			events.push(event);
+		Self {
+			visitor_ids: index(&visitors),
+			session_ids: index(&sessions),
+			visitors,
+			sessions,
 		}
-		Ok(events)
 	}
 
+	fn visitor(&mut self, id: u64) -> u32 {
+		dense(&mut self.visitor_ids, &mut self.visitors, id)
+	}
+
+	fn session(&mut self, id: u64) -> u32 {
+		dense(&mut self.session_ids, &mut self.sessions, id)
+	}
+}
+
+fn dense(ids: &mut HashMap<u64, u32>, list: &mut Vec<u64>, key: u64) -> u32 {
+	*ids.entry(key).or_insert_with(|| {
+		list.push(key);
+		list.len() as u32 - 1
+	})
+}
+
+pub(crate) struct Segment {
+	pub(crate) seq: u64,
+	pub(crate) visitors: Vec<u64>,
+	pub(crate) sessions: Vec<u64>,
+	pub(crate) cols: Columns,
+}
+
+impl Segment {
 	pub(crate) fn write(&self, path: &Path) -> io::Result<()> {
+		let cols = &self.cols;
 		let mut buf = Vec::new();
 		frame::put(&mut buf, |buf| {
 			put_uvar(buf, self.seq);
-			put_uvar(buf, self.rows() as u64);
+			put_uvar(buf, cols.rows() as u64);
 		});
 		frame::put(&mut buf, |buf| {
 			for ids in [&self.visitors, &self.sessions] {
@@ -154,17 +167,17 @@ impl Segment {
 				}
 			}
 			for column in [
-				&self.time,
-				&self.visitor,
-				&self.session,
-				&self.interactive,
-				&self.scroll,
-				&self.engagement,
-				&self.props,
+				&cols.time,
+				&cols.visitor,
+				&cols.session,
+				&cols.interactive,
+				&cols.scroll,
+				&cols.engagement,
+				&cols.props,
 			] {
 				put_packed(buf, column);
 			}
-			for column in self.dims.iter().chain([&self.keys, &self.values]) {
+			for column in cols.dims.iter().chain([&cols.keys, &cols.values]) {
 				put_strings(buf, column);
 			}
 		});
@@ -178,7 +191,12 @@ impl Segment {
 		};
 		let (seq, rows) = header(head).ok_or_else(|| invalid("bad segment header"))?;
 		decode(data, seq)
-			.filter(|seg| seg.rows() == rows && seg.is_consistent())
+			.filter(|seg| {
+				seg.cols.rows() == rows
+					&& seg
+						.cols
+						.is_consistent(seg.visitors.len(), seg.sessions.len())
+			})
 			.ok_or_else(|| invalid("bad segment data"))
 	}
 
@@ -192,13 +210,6 @@ impl Segment {
 	}
 }
 
-fn dense(ids: &mut HashMap<u64, u32>, list: &mut Vec<u64>, key: u64) -> u32 {
-	*ids.entry(key).or_insert_with(|| {
-		list.push(key);
-		list.len() as u32 - 1
-	})
-}
-
 fn header(buf: &[u8]) -> Option<(u64, usize)> {
 	let mut r = Reader::new(buf);
 	Some((r.uvar()?, usize::try_from(r.uvar()?).ok()?))
@@ -209,10 +220,7 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 	let mut ids = || -> Option<Vec<u64>> { (0..r.uvar()?).map(|_| r.u64()).collect() };
 	let visitors = ids()?;
 	let sessions = ids()?;
-	let seg = Segment {
-		seq,
-		visitors,
-		sessions,
+	let cols = Columns {
 		time: r.packed()?,
 		visitor: r.packed()?,
 		session: r.packed()?,
@@ -226,7 +234,12 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 		keys: strings(&mut r)?,
 		values: strings(&mut r)?,
 	};
-	r.is_empty().then_some(seg)
+	r.is_empty().then_some(Segment {
+		seq,
+		visitors,
+		sessions,
+		cols,
+	})
 }
 
 fn put_strings(buf: &mut Vec<u8>, ids: &[u32]) {

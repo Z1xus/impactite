@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
@@ -57,6 +57,15 @@ impl Dict {
 
 	pub(crate) fn find(&self, s: &str) -> Option<u32> {
 		self.ids.get(s).copied()
+	}
+
+	pub(crate) fn matching(&self, keep: impl Fn(&str) -> bool) -> HashSet<u32> {
+		self.strings
+			.iter()
+			.enumerate()
+			.filter(|(_, s)| keep(s))
+			.map(|(id, _)| id as u32)
+			.collect()
 	}
 
 	pub(crate) fn get(&self, id: u32) -> Option<&Arc<str>> {
