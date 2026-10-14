@@ -1,1 +1,90 @@
 @import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+
+@font-face {
+	font-family: "Departure Mono";
+	src: url("../lib/fonts/DepartureMono-Regular.woff2") format("woff2");
+	font-display: swap;
+}
+
+@theme {
+	--font-sans: "IBM Plex Sans", system-ui, sans-serif;
+	--font-mono: "Departure Mono", ui-monospace, monospace;
+
+	--color-ink: #06090b;
+	--color-panel: #0a0f12;
+	--color-raised: #0f161a;
+	--color-line: #172127;
+	--color-edge: #24323a;
+	--color-fg: #e3eef0;
+	--color-dim: #8798a0;
+	--color-faint: #4c5c64;
+	--color-cyan: #38e1f2;
+	--color-cyan-deep: #0e7f8d;
+	--color-cyan-night: #06343b;
+	--color-warn: #f0b64a;
+	--color-bad: #f0645a;
+
+	--text-label: 11px;
+	--text-label--line-height: 11px;
+	--text-num: 22px;
+	--text-num--line-height: 22px;
+	--text-big: 44px;
+	--text-big--line-height: 44px;
+
+	--radius-px: 2px;
+}
+
+@layer base {
+	html {
+		color-scheme: dark;
+		background: var(--color-ink);
+		color: var(--color-fg);
+		font-family: var(--font-sans);
+		font-size: 15px;
+		-webkit-font-smoothing: antialiased;
+	}
+
+	::selection {
+		background: var(--color-cyan);
+		color: var(--color-ink);
+	}
+
+	:focus-visible {
+		outline: 1px solid var(--color-cyan);
+		outline-offset: 2px;
+	}
+}
+
+@utility label {
+	font-family: var(--font-mono);
+	font-size: var(--text-label);
+	line-height: var(--text-label--line-height);
+	text-transform: lowercase;
+	color: var(--color-dim);
+}
+
+@utility num {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+@utility pixelated {
+	image-rendering: pixelated;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 160ms;
+	animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
