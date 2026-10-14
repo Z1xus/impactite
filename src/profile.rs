@@ -141,33 +141,39 @@ async fn destroy(
 	if !body.email.trim().eq_ignore_ascii_case(&email) {
 		return fail(StatusCode::BAD_REQUEST, "Type your email to confirm.");
 	}
-	let owned = match web.app.owned_teams(viewer.user) {
-		Ok(owned) => owned,
-		Err(err) => return internal(err),
+	match remove_account(&web, viewer.user).await {
+		Ok(()) => StatusCode::NO_CONTENT.into_response(),
+		Err((status, message)) => fail(status, &message),
+	}
+}
+
+pub async fn remove_account(web: &Web, user: i64) -> Result<(), (StatusCode, String)> {
+	let broken = |err: rusqlite::Error| {
+		tracing::error!(%err, "remove account");
+		(
+			StatusCode::INTERNAL_SERVER_ERROR,
+			"Something went wrong.".to_owned(),
+		)
 	};
+	let owned = web.app.owned_teams(user).map_err(broken)?;
 	if let Some((_, name, _)) = owned.iter().find(|(_, _, others)| *others > 0) {
-		return fail(
+		return Err((
 			StatusCode::CONFLICT,
-			&format!("Hand over {name} to another member first."),
-		);
+			format!("Hand over {name} to another member first."),
+		));
 	}
 	for (team, _, _) in owned {
-		let Ok(team_sites) = web.app.team_sites(team) else {
-			return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
-		};
-		for site in team_sites {
-			if !sites::drop_site(&web, site).await {
-				return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
+		for site in web.app.team_sites(team).map_err(broken)? {
+			if !sites::drop_site(web, site).await {
+				return Err((
+					StatusCode::INTERNAL_SERVER_ERROR,
+					"Something went wrong.".to_owned(),
+				));
 			}
 		}
-		if let Err(err) = web.app.delete_team(team) {
-			return internal(err);
-		}
+		web.app.delete_team(team).map_err(broken)?;
 	}
-	match web.app.delete_user(viewer.user) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.delete_user(user).map_err(broken)
 }
 
 async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Response {

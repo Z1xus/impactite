@@ -122,7 +122,7 @@ async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 	let user = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let setup = web.app.users_exist().map(|exists| !exists).unwrap_or(false);
 	let me = user.and_then(|user| web.app.me(user).ok());
-	Json(json!({ "setup": setup, "me": me })).into_response()
+	Json(json!({ "setup": setup, "signup": web.app.signup_open(), "me": me })).into_response()
 }
 
 async fn setup(
@@ -461,6 +461,35 @@ pub fn internal(err: rusqlite::Error) -> Response {
 	fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
 }
 
+#[derive(Deserialize)]
+pub struct Signup {
+	name: String,
+	email: String,
+	password: Option<String>,
+	passkey: Option<Proof>,
+}
+
+pub async fn signup(
+	State(web): State<Arc<Web>>,
+	headers: HeaderMap,
+	Json(body): Json<Signup>,
+) -> Response {
+	if !web.app.signup_open() {
+		return fail(StatusCode::FORBIDDEN, "Sign-up is closed on this server.");
+	}
+	match new_account(
+		&web,
+		&headers,
+		(&body.name, &body.email),
+		body.password.as_deref(),
+		body.passkey.as_ref(),
+		&Purpose::Signup,
+	) {
+		Ok(user) => signed_in(&web, user, None),
+		Err((status, message)) => fail(status, message),
+	}
+}
+
 pub(crate) fn hash(password: &str) -> rusqlite::Result<String> {
 	Argon2::default()
 		.hash_password(password.as_bytes())
@@ -496,7 +525,8 @@ impl App {
 		let user = {
 			let conn = self.conn();
 			conn.execute(
-				"insert into users (email, name, password, created_at) values (?1, ?2, ?3, unixepoch())",
+				"insert into users (email, name, password, admin, created_at)
+				values (?1, ?2, ?3, not exists (select 1 from users), unixepoch())",
 				params![email.trim(), name.trim(), hash],
 			)?;
 			conn.last_insert_rowid()
@@ -710,10 +740,10 @@ impl App {
 
 	pub fn me(&self, user: i64) -> rusqlite::Result<Value> {
 		let conn = self.conn();
-		let (name, email, password): (String, String, bool) = conn.query_row(
-			"select name, email, password != '' from users where id = ?1",
+		let (name, email, password, admin): (String, String, bool, bool) = conn.query_row(
+			"select name, email, password != '', admin from users where id = ?1",
 			[user],
-			|row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+			|row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
 		)?;
 		let mut teams_stmt = conn.prepare(
 			"select t.id, t.name, t.personal, m.role from teams t join members m on m.team = t.id
@@ -757,6 +787,8 @@ impl App {
 		if !shared.is_empty() {
 			teams.push(json!({ "id": 0, "name": "Shared with me", "personal": false, "role": "guest", "sites": shared }));
 		}
-		Ok(json!({ "id": user, "name": name, "email": email, "password": password, "teams": teams }))
+		Ok(
+			json!({ "id": user, "name": name, "email": email, "password": password, "admin": admin, "teams": teams }),
+		)
 	}
 }

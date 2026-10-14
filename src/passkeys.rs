@@ -21,6 +21,7 @@ const CEREMONY_SECS: i64 = 300;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Purpose {
 	Setup,
+	Signup,
 	Invite(String),
 	Add(i64),
 	Login,
@@ -106,10 +107,17 @@ struct Signup {
 	name: String,
 	email: Option<String>,
 	invite: bool,
+	#[serde(default)]
+	open: bool,
 }
 
 async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Response {
-	let (purpose, email) = if body.invite {
+	let (purpose, email) = if body.open {
+		if !web.app.signup_open() {
+			return fail(StatusCode::FORBIDDEN, "Sign-up is closed on this server.");
+		}
+		(Purpose::Signup, body.email.clone().unwrap_or_default())
+	} else if body.invite {
 		match web.app.open_invite(&body.token) {
 			Ok(Some(invitation)) => (Purpose::Invite(body.token.clone()), invitation.email),
 			_ => {

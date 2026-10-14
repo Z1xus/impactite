@@ -1,4 +1,5 @@
 mod accounts;
+mod admin;
 mod app;
 mod assets;
 mod cli;

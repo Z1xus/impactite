@@ -3,7 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { api, type Me } from "#lib/api.ts";
 	import { get } from "#lib/passkey.ts";
-	import { adopt } from "#lib/session.svelte.ts";
+	import { adopt, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
@@ -87,6 +87,13 @@
 					{item.label}
 				</Button>
 			{/each}
+			{#if session.signup}
+				<a
+					href={resolve("/signup")}
+					class="inline-flex h-7 items-center px-1 label text-dim transition-colors duration-100 hover:text-fg"
+					>create an account</a
+				>
+			{/if}
 		</div>
 	</div>
 </Gate>

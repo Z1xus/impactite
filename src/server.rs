@@ -7,6 +7,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
 use crate::accounts::{self, Web};
+use crate::admin;
 use crate::assets;
 use crate::goals;
 use crate::icons;
@@ -38,6 +39,8 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(sites::routes())
 				.merge(teams::routes())
 				.merge(profile::routes())
+				.merge(admin::routes())
+				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))
 				.route("/api/app/icon/{host}", get(icons::icon))

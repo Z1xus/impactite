@@ -3,13 +3,15 @@ import { api, type Me } from "./api";
 export const session = $state<{
 	ready: boolean;
 	setup: boolean;
+	signup: boolean;
 	me: Me | null;
 	team: number | null;
-}>({ ready: false, setup: false, me: null, team: null });
+}>({ ready: false, setup: false, signup: false, me: null, team: null });
 
 export async function refresh() {
-	const state = await api<{ setup: boolean; me: Me | null }>("/api/app/state");
+	const state = await api<{ setup: boolean; signup: boolean; me: Me | null }>("/api/app/state");
 	session.setup = state.setup;
+	session.signup = state.signup;
 	adopt(state.me);
 	session.ready = true;
 }

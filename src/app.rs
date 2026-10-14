@@ -115,6 +115,14 @@ const MIGRATIONS: &[&str] = &[
 		expires_at integer not null
 	);
 	",
+	"
+	alter table users add column admin integer not null default 0;
+	update users set admin = 1 where id = (select min(id) from users);
+	create table settings (
+		key text primary key,
+		value text not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]
