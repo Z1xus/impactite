@@ -37,7 +37,7 @@
 	{#if rows === null}
 		{#each { length: limit }, i (i)}
 			<li class="flex h-8 items-center px-2">
-				<span class="dither h-3 rounded-px" style:width="{70 - i * 7}%"></span>
+				<span class="h-3 rounded-px dither opacity-85" style:width="{70 - i * 7}%"></span>
 			</li>
 		{/each}
 	{:else if rows.length === 0}
@@ -62,7 +62,7 @@
 					class="pointer-events-none relative flex h-full min-w-0 flex-1 items-center justify-between gap-4"
 				>
 					<span
-						class="dither absolute inset-y-1 left-0 rounded-px transition-[width] duration-300 ease-out"
+						class="absolute inset-y-1 left-0 rounded-px dither opacity-85 transition-[width] duration-300 ease-out"
 						style:width="{(row.value / max) * 100}%"
 					></span>
 					<span class="relative flex min-w-0 items-center gap-1.5 pl-2">
@@ -96,14 +96,3 @@
 		{/each}
 	{/if}
 </ul>
-
-<style>
-	.dither {
-		opacity: 0.85;
-		background-color: var(--color-cyan-night);
-		background-image:
-			linear-gradient(45deg, var(--color-panel) 25%, transparent 25%),
-			linear-gradient(-45deg, var(--color-panel) 25%, transparent 25%);
-		background-size: 4px 4px;
-	}
-</style>

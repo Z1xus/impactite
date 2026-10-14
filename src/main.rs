@@ -246,6 +246,7 @@ async fn main() -> anyhow::Result<()> {
 			let count = demo::seed(&db, site.id, &site.domain, &site.timezone, days);
 			db.sync()?;
 			db.close()?;
+			app.backdate(site.id, jiff::Timestamp::now().as_second() - days * 86_400)?;
 			println!("{count} events  {}  {days} days", site.domain);
 			Ok(())
 		}

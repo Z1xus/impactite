@@ -72,6 +72,14 @@
 	font-variant-numeric: tabular-nums;
 }
 
+@utility dither {
+	background-color: var(--color-cyan-night);
+	background-image:
+		linear-gradient(45deg, var(--dither-gap, var(--color-panel)) 25%, transparent 25%),
+		linear-gradient(-45deg, var(--dither-gap, var(--color-panel)) 25%, transparent 25%);
+	background-size: 4px 4px;
+}
+
 @utility pixelated {
 	image-rendering: pixelated;
 }

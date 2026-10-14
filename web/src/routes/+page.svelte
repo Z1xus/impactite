@@ -4,7 +4,8 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { currentTeam, refresh } from "#lib/session.svelte.ts";
-	import { compact, query, range } from "#lib/stats.ts";
+	import { shift, today } from "#lib/period.ts";
+	import { compact, query } from "#lib/stats.ts";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
@@ -20,7 +21,7 @@
 		for (const site of team?.sites ?? []) {
 			query(site.domain, {
 				metrics: ["visitors"],
-				date_range: range("30d", site.timezone).current,
+				date_range: [shift(today(site.timezone), -27), today(site.timezone)],
 				dimensions: ["time:day"]
 			}).then((result) => {
 				series[site.domain] = result.results.map((row) => row.metrics[0]);

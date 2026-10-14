@@ -9,13 +9,15 @@
 		options,
 		pick,
 		data = false,
-		icon
+		icon,
+		text: shown
 	}: {
 		value: T;
 		options: { key: T; label: string; glyph?: Spec | null }[];
 		pick: (key: T) => void;
 		data?: boolean;
 		icon?: string;
+		text?: string;
 	} = $props();
 
 	const text = $derived(data ? "normal-case tracking-normal" : "");
@@ -43,7 +45,7 @@
 <div class="relative" bind:this={root}>
 	<button
 		type="button"
-		class="flex h-8 cursor-pointer items-center gap-2 rounded-px border border-line px-3 label {text} text-fg transition-colors duration-100 hover:border-edge"
+		class="flex h-8 cursor-pointer items-center gap-2 rounded-px border border-line px-3 label whitespace-nowrap {text} text-fg transition-colors duration-100 hover:border-edge"
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
@@ -52,7 +54,7 @@
 		{:else if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
-		{current?.label}
+		{shown ?? current?.label}
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
 	{#if open}

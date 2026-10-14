@@ -5,24 +5,22 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
-	import calendar from "pixelarticons/svg/calendar.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import { session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
-		PERIODS,
 		decodeFilter,
 		delta,
 		display,
 		encodeFilter,
 		format,
 		query,
-		range,
 		toQueryFilters,
 		type Filter,
-		type Metric,
-		type Period
+		type Metric
 	} from "#lib/stats.ts";
+	import Period from "#lib/Period.svelte";
+	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
 	import Snippet from "#lib/Snippet.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
 	import Chip from "#lib/ui/Chip.svelte";
@@ -70,7 +68,6 @@
 			glyph: icon("event:hostname", site.domain)
 		}))
 	);
-	const period = $derived((page.url.searchParams.get("period") ?? "30d") as Period);
 	const metric = $derived((page.url.searchParams.get("metric") ?? "visitors") as Metric);
 	const filters = $derived(
 		page.url.searchParams
@@ -78,7 +75,19 @@
 			.map(decodeFilter)
 			.filter((filter): filter is Filter => filter !== null)
 	);
-	const dates = $derived(site ? range(period, site.timezone) : null);
+	const view = $derived(site ? parse(page.url.searchParams, site.timezone) : null);
+	const dates = $derived.by(() => {
+		if (!view) return null;
+		const range = current(view);
+		return {
+			current: range,
+			previous: previous(view, range),
+			overlay: view.compare !== "off",
+			interval: interval(view, range),
+			grain: `time:${interval(view, range)}`,
+			choices: intervals(range)
+		};
+	});
 	const withImports = $derived(page.url.searchParams.get("imports") !== "0");
 	const ask = (body: Record<string, unknown>) => query(domain, body, withImports);
 
@@ -189,6 +198,14 @@
 	let ranked = $state<Record<string, Ranked>>({});
 	let loading = $state<Record<string, boolean>>({});
 
+	function go(change: Record<string, string | null>) {
+		navigate((params) => {
+			for (const [key, value] of Object.entries(change))
+				if (value === null) params.delete(key);
+				else params.set(key, value);
+		});
+	}
+
 	function navigate(change: (params: URLSearchParams) => void) {
 		const params = new URLSearchParams(page.url.search);
 		change(params);
@@ -227,31 +244,29 @@
 		const where = toQueryFilters(filters);
 		const keys = METRICS.map((item) => item.key);
 		let stale = false;
+		const { previous: before, grain } = dates;
 		Promise.all([
 			ask({ metrics: keys, date_range: dates.current, filters: where }),
-			ask({ metrics: keys, date_range: dates.previous, filters: where }),
+			before && ask({ metrics: keys, date_range: before, filters: where }),
 			ask({
 				metrics: [metric],
 				date_range: dates.current,
-				dimensions: [dates.grain],
+				dimensions: [grain],
 				filters: where
 			}),
-			ask({
-				metrics: [metric],
-				date_range: dates.previous,
-				dimensions: [dates.grain],
-				filters: where
-			})
+			before &&
+				dates.overlay &&
+				ask({ metrics: [metric], date_range: before, dimensions: [grain], filters: where })
 		]).then(([now, before, line, previousLine]) => {
 			if (stale) return;
 			quiet = !now.results[0]?.metrics[0];
 			hasImports =
 				!withImports || (now.meta?.imports_skip_reason ?? "") !== "no_imported_data";
 			totals = now.results[0]?.metrics ?? null;
-			previousTotals = before.results[0]?.metrics ?? null;
+			previousTotals = before ? (before.results[0]?.metrics ?? null) : null;
 			series = line.results.map((row) => row.metrics[0]);
-			previousSeries = previousLine.results.map((row) => row.metrics[0]);
-			labels = line.results.map((row) => label(row.dimensions[0], dates.grain));
+			previousSeries = previousLine ? previousLine.results.map((row) => row.metrics[0]) : [];
+			labels = line.results.map((row) => label(row.dimensions[0], grain));
 		});
 		return () => (stale = true);
 	});
@@ -310,12 +325,6 @@
 <Shell>
 	{#snippet actions()}
 		<Live site={domain} />
-		<Select
-			value={period}
-			icon={calendar}
-			options={PERIODS.map((item) => ({ key: item.key, label: item.label }))}
-			pick={(key) => navigate((params) => params.set("period", key))}
-		/>
 	{/snippet}
 
 	<div class="flex flex-col gap-6">
@@ -343,8 +352,8 @@
 					remove={() => removeFilter(filter)}
 				/>
 			{/each}
-			{#if hasImports}
-				<div class="ml-auto">
+			<div class="ml-auto flex flex-wrap items-center gap-3">
+				{#if hasImports}
 					<Checks
 						bind:value={
 							() => (withImports ? ["imports"] : []),
@@ -357,8 +366,11 @@
 						}
 						options={[{ key: "imports", label: "imported data" }]}
 					/>
-				</div>
-			{/if}
+				{/if}
+				{#if view}
+					<Period {view} {go} />
+				{/if}
+			</div>
 		</div>
 
 		{#if empty}
@@ -385,7 +397,16 @@
 						/>
 					{/each}
 				</div>
-				<div class="px-4 pt-8 pb-5">
+				<div class="relative px-4 pt-8 pb-5">
+					{#if dates && dates.choices.length > 1}
+						<div class="absolute top-3 right-4 z-10">
+							<Select
+								value={dates.interval}
+								options={dates.choices.map((key) => ({ key, label: key }))}
+								pick={(key) => go({ interval: key })}
+							/>
+						</div>
+					{/if}
 					<Chart
 						values={series}
 						previous={previousSeries}
