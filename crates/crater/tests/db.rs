@@ -406,3 +406,50 @@ fn reset_keeps_only_new_events_after_restart() {
 	assert_eq!(visitors(&db), 1);
 	db.close().unwrap();
 }
+
+#[test]
+fn purged_page_stays_gone_after_restart() {
+	let dir = TempDir::new("purge").unwrap();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs() as i64;
+	let today = now.div_euclid(86_400) as i32;
+	let at = |session: u64, page: &str, ts: i64| {
+		let mut event = event(session, session, 0, "pageview", page, "");
+		event.ts = ts;
+		event.offset = 0;
+		Box::new(event)
+	};
+	let visitors = |db: &Db, day: i32| {
+		db.query(&Query {
+			site: SITE,
+			days: day..=day,
+			filters: Vec::new(),
+			breakdown: None,
+			limit: 10,
+			daily: false,
+			imports: false,
+			since: None,
+		})
+		.unwrap()
+		.total
+		.visitors
+	};
+
+	let db = Db::open(&dir.0).unwrap();
+	db.insert(at(1, "/", now - 10)).unwrap();
+	db.insert(at(2, "/", now - 10)).unwrap();
+	db.insert(at(3, "/secret", now - 10)).unwrap();
+	db.insert(at(4, "/secret", now - 86_400)).unwrap();
+	db.sync().unwrap();
+	assert_eq!((visitors(&db, today - 1), visitors(&db, today)), (1, 3));
+	db.purge(SITE, Dim::Page, "/secret").unwrap();
+	db.insert(at(5, "/secret", now - 5)).unwrap();
+	db.sync().unwrap();
+	assert_eq!((visitors(&db, today - 1), visitors(&db, today)), (0, 3));
+	db.close().unwrap();
+
+	let db = Db::open(&dir.0).unwrap();
+	assert_eq!((visitors(&db, today - 1), visitors(&db, today)), (0, 3));
+}

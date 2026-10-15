@@ -32,6 +32,7 @@ enum Change {
 	Drop,
 	Reset,
 	Prune(i32),
+	Purge(Dim, String),
 }
 
 enum Msg {
@@ -102,6 +103,11 @@ impl Db {
 	// removes all data but keeps the site collecting
 	pub fn reset_site(&self, site: u64) -> io::Result<()> {
 		self.change(site, Change::Reset)
+	}
+
+	// removes every stored event of the site whose dimension holds this value
+	pub fn purge(&self, site: u64, dim: Dim, value: &str) -> io::Result<()> {
+		self.change(site, Change::Purge(dim, value.to_owned()))
 	}
 
 	// removes sealed days before `day`
@@ -831,13 +837,14 @@ impl Writer {
 				}
 			}
 			for (site, change, reply) in changes.drain(..) {
-				if !matches!(change, Change::Prune(_)) {
+				if matches!(change, Change::Drop | Change::Reset) {
 					batch.retain(|event| event.site != site);
 				}
 				let _ = reply.send(match change {
 					Change::Drop => self.drop_site(site),
 					Change::Reset => self.reset_site(site),
 					Change::Prune(day) => self.prune(site, day),
+					Change::Purge(dim, value) => self.purge(site, dim, &value),
 				});
 			}
 
@@ -1070,6 +1077,52 @@ impl Writer {
 			}
 		}
 		Ok(())
+	}
+
+	fn purge(&mut self, site: u64, dim: Dim, value: &str) -> io::Result<()> {
+		let live: Vec<Key> = self
+			.memtable
+			.keys()
+			.copied()
+			.filter(|key| key.0 == site)
+			.collect();
+		for key in live {
+			self.seal(key)?;
+		}
+		// two rotations leave an empty wal, its seq marks the rewritten days so caches refresh
+		self.rotate()?;
+		let seq = self.seq;
+		self.rotate()?;
+		let dict = self.shared.dict(site)?;
+		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
+		let (Some(id), Ok(entries)) = (dict.find(value), fs::read_dir(self.shared.site_dir(site)))
+		else {
+			return self.drop_sealed_wals();
+		};
+		for entry in entries {
+			let path = entry?.path();
+			let day = path
+				.file_stem()
+				.and_then(|stem| stem.to_str())
+				.and_then(|stem| stem.parse::<i32>().ok());
+			let (Some(day), true) = (day, path.extension().is_some_and(|ext| ext == "seg")) else {
+				continue;
+			};
+			let mut seg = Segment::read(&path)?;
+			let column = &seg.cols.dims[dim as usize];
+			if !column.contains(&id) {
+				continue;
+			}
+			let column = column.clone();
+			seg.cols = seg.cols.keep(|row| column[row] != id);
+			seg.seq = seq;
+			seg.write(&path)?;
+			let key = (site, day);
+			rollup(&seg, &dict).write(&self.shared.path(key, "rlp"))?;
+			self.sealed.insert(key, seq);
+			lock(&self.shared.versions).insert(key, seq);
+		}
+		self.drop_sealed_wals()
 	}
 
 	// drops in-memory state of the site, for days before `before` or all of it

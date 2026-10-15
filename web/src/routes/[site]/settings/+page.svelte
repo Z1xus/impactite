@@ -397,6 +397,7 @@
 	];
 	let domainName = $state(untrack(() => page.params.site ?? ""));
 	let resetConfirm = $state("");
+	let purgePath = $state("");
 
 	async function renameSite() {
 		const id = site?.id;
@@ -423,6 +424,12 @@
 			await api(`/api/app/sites/${domain}`, { retention }, "PATCH");
 			await refresh();
 		});
+
+	async function purgePage() {
+		if (!purgePath.startsWith("/")) throw new Error("Use a path like /old-page.");
+		await api(`/api/app/sites/${domain}/purge`, { page: purgePath });
+		purgePath = "";
+	}
 
 	async function resetStats() {
 		if (resetConfirm !== "reset") throw new Error("Type reset to confirm.");
@@ -963,6 +970,13 @@
 
 			{#if owner}
 				<Section id="danger" label="danger" danger>
+					<Form action="purge page" submit={purgePage} inline danger>
+						<Field
+							label="remove all stats of one page, imported days stay"
+							placeholder="/old-page"
+							bind:value={purgePath}
+						/>
+					</Form>
 					<Form action="reset stats" submit={resetStats} inline danger>
 						<Field
 							label="type reset to remove all stats but keep the site and its settings"

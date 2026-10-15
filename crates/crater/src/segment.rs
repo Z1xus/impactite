@@ -96,6 +96,36 @@ impl Columns {
 		all
 	}
 
+	pub(crate) fn keep(&self, keep: impl Fn(usize) -> bool) -> Self {
+		let mut kept = Self::new();
+		let mut prop = 0;
+		for row in 0..self.rows() {
+			let count = self.props[row] as usize;
+			if keep(row) {
+				for (kept, column) in [
+					(&mut kept.time, &self.time),
+					(&mut kept.visitor, &self.visitor),
+					(&mut kept.session, &self.session),
+					(&mut kept.interactive, &self.interactive),
+					(&mut kept.scroll, &self.scroll),
+					(&mut kept.engagement, &self.engagement),
+					(&mut kept.props, &self.props),
+					(&mut kept.revenue, &self.revenue),
+					(&mut kept.currency, &self.currency),
+				] {
+					kept.push(column[row]);
+				}
+				for (kept, column) in kept.dims.iter_mut().zip(&self.dims) {
+					kept.push(column[row]);
+				}
+				kept.keys.extend(&self.keys[prop..prop + count]);
+				kept.values.extend(&self.values[prop..prop + count]);
+			}
+			prop += count;
+		}
+		kept
+	}
+
 	fn is_consistent(&self, visitors: usize, sessions: usize) -> bool {
 		let rows = self.rows();
 		let columns = [

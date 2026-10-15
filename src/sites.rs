@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch};
 use axum::{Json, Router};
+use crater::Dim;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use rusqlite::params;
@@ -31,6 +32,7 @@ pub fn routes() -> Router<Arc<Web>> {
 		)
 		.route("/api/app/sites/{domain}/imports/{id}", delete(remove))
 		.route("/api/app/sites/{domain}/reset", axum::routing::post(reset))
+		.route("/api/app/sites/{domain}/purge", axum::routing::post(purge))
 		.route(
 			"/api/app/sites/{domain}/guests",
 			get(guests).post(invite_guest),
@@ -58,6 +60,11 @@ struct Update {
 struct Guest {
 	email: String,
 	role: String,
+}
+
+#[derive(Deserialize)]
+struct Purge {
+	page: String,
 }
 
 #[derive(Deserialize)]
@@ -145,6 +152,29 @@ async fn reset(
 	match web.app.clear_imports(site.id) {
 		Ok(()) => StatusCode::NO_CONTENT.into_response(),
 		Err(_) => broken(),
+	}
+}
+
+async fn purge(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+	Json(body): Json<Purge>,
+) -> Response {
+	let Some(site) = managed(&web, viewer.user, &domain) else {
+		return fail(
+			StatusCode::FORBIDDEN,
+			"Only owners and admins can purge pages.",
+		);
+	};
+	let page = body.page.trim().to_owned();
+	if !page.starts_with('/') {
+		return fail(StatusCode::BAD_REQUEST, "Use a path like /old-page.");
+	}
+	let db = web.stats.db.clone();
+	match tokio::task::spawn_blocking(move || db.purge(site.id, Dim::Page, &page)).await {
+		Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+		_ => broken(),
 	}
 }
 
