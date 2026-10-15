@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
+	import qrcode from "qrcode-generator";
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
 	import { adopt, refresh, session } from "#lib/session.svelte.ts";
@@ -22,6 +23,7 @@
 	const sections = [
 		{ id: "profile", label: "profile" },
 		{ id: "password", label: "password" },
+		{ id: "two-factor", label: "two factor" },
 		{ id: "passkeys", label: "passkeys" },
 		{ id: "sessions", label: "sessions" },
 		{ id: "keys", label: "api keys" },
@@ -40,6 +42,16 @@
 	let fresh = $state("");
 	let confirm = $state("");
 	let error = $state("");
+	let pending = $state<{ secret: string; uri: string } | null>(null);
+	let totpCode = $state("");
+	let recovery = $state<string[] | null>(null);
+	const qr = $derived.by(() => {
+		if (!pending) return "";
+		const code = qrcode(0, "M");
+		code.addData(pending.uri);
+		code.make();
+		return code.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+	});
 
 	const date = (seconds: number) =>
 		new Date(seconds * 1000).toLocaleDateString("en-US", {
@@ -74,6 +86,31 @@
 		await refresh();
 		current = next = "";
 		saved = "Password saved.";
+	}
+
+	const startTotp = () =>
+		attempt(async () => {
+			pending = await api("/api/app/totp/begin", {});
+		});
+
+	async function enableTotp() {
+		if (!pending) return;
+		recovery = (
+			await api<{ recovery: string[] }>("/api/app/totp/enable", {
+				secret: pending.secret,
+				code: totpCode
+			})
+		).recovery;
+		pending = null;
+		totpCode = "";
+		await refresh();
+	}
+
+	async function disableTotp() {
+		await api("/api/app/totp/disable", { code: totpCode });
+		totpCode = "";
+		recovery = null;
+		await refresh();
 	}
 
 	const addPasskey = () =>
@@ -184,6 +221,58 @@
 					/>
 				</div>
 			</Form>
+		</Section>
+
+		<Section id="two-factor" label="two factor">
+			{#snippet actions()}
+				{#if !session.me?.totp && !pending}
+					<Button variant="quiet" onclick={startTotp}>set up</Button>
+				{/if}
+			{/snippet}
+			{#if recovery}
+				<span class="text-[14px] text-dim"
+					>Two factor is on. Save these recovery codes now, each one signs you in once
+					without the app.</span
+				>
+				<Code code={recovery.join("\n")} />
+			{:else if session.me?.totp}
+				<span class="text-[14px] text-dim"
+					>Password sign in asks for a code from your authenticator app. Passkeys need no
+					code.</span
+				>
+				<Form action="turn off" submit={disableTotp} inline>
+					<Field
+						label="code from your app or a recovery code"
+						bind:value={totpCode}
+						autocomplete="one-time-code"
+						required
+					/>
+				</Form>
+			{:else if pending}
+				<div class="flex flex-wrap items-start gap-6">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -- svg built from our own otpauth uri -->
+					<div class="w-40 shrink-0 rounded-px bg-white p-2">{@html qr}</div>
+					<div class="flex min-w-0 flex-1 flex-col gap-3">
+						<span class="text-[14px] text-dim"
+							>Scan this with your authenticator app, or enter the key by hand.</span
+						>
+						<Code code={pending.secret} />
+						<Form action="turn on" submit={enableTotp} inline>
+							<Field
+								label="code from your app"
+								bind:value={totpCode}
+								autocomplete="one-time-code"
+								inputmode="numeric"
+								required
+							/>
+						</Form>
+					</div>
+				</div>
+			{:else}
+				<span class="text-[14px] text-dim"
+					>Ask for a code from an authenticator app when you sign in with a password.</span
+				>
+			{/if}
 		</Section>
 
 		<Section id="passkeys" label="passkeys">

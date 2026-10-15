@@ -222,6 +222,11 @@ const MIGRATIONS: &[&str] = &[
 	);
 	",
 	"alter table sites add column skip text not null default '';",
+	"
+	alter table users add column totp text not null default '';
+	alter table users add column totp_step integer not null default 0;
+	alter table users add column recovery text not null default '';
+	",
 ];
 
 #[derive(Debug, Clone)]

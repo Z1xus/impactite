@@ -14,13 +14,15 @@ export type Me = {
 	email: string;
 	password: boolean;
 	admin: boolean;
+	totp: boolean;
 	teams: Team[];
 };
 
 export class ApiError extends Error {
 	constructor(
 		public status: number,
-		message: string
+		message: string,
+		public data: Record<string, unknown> = {}
 	) {
 		super(message);
 	}
@@ -41,6 +43,6 @@ export async function api<T>(path: string, body?: unknown, method?: string): Pro
 	});
 	if (res.status === 204) return undefined as T;
 	const data = await res.json().catch(() => ({}));
-	if (!res.ok) throw new ApiError(res.status, data.error ?? "Something went wrong.");
+	if (!res.ok) throw new ApiError(res.status, data.error ?? "Something went wrong.", data);
 	return data as T;
 }

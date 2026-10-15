@@ -30,6 +30,7 @@ mod sites;
 mod stats;
 mod teams;
 mod titles;
+mod totp;
 mod tracker;
 mod webauthn;
 

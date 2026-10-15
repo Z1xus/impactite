@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
-	import { api, type Me } from "#lib/api.ts";
+	import { api, ApiError, type Me } from "#lib/api.ts";
 	import { get } from "#lib/passkey.ts";
 	import { adopt, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
@@ -21,6 +21,8 @@
 	let email = $state("");
 	let secret = $state("");
 	let sent = $state(false);
+	let code = $state("");
+	let asked = $state(false);
 
 	async function finish(promise: Promise<{ me: Me }>) {
 		adopt((await promise).me);
@@ -36,8 +38,15 @@
 		await finish(api("/api/app/passkeys/login", { challenge, credential }));
 	}
 
-	function withPassword() {
-		return finish(api("/api/app/login", { email, password: secret }));
+	async function withPassword() {
+		try {
+			await finish(
+				api("/api/app/login", { email, password: secret, ...(asked && { code }) })
+			);
+		} catch (err) {
+			if (err instanceof ApiError && err.data.totp) asked = true;
+			throw err;
+		}
 	}
 
 	async function withLink() {
@@ -64,6 +73,14 @@
 					autocomplete="current-password"
 					required
 				/>
+				{#if asked}
+					<Field
+						label="code from your app or a recovery code"
+						bind:value={code}
+						autocomplete="one-time-code"
+						required
+					/>
+				{/if}
 			</Form>
 		{:else if mode === "link"}
 			<Form block action="email me a link" submit={withLink}>

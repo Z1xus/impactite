@@ -109,6 +109,7 @@ async fn live(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<St
 struct Credentials {
 	email: String,
 	password: String,
+	code: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -198,7 +199,25 @@ fn new_account(
 
 async fn login(State(web): State<Arc<Web>>, Json(body): Json<Credentials>) -> Response {
 	match web.app.verify(&body.email, &body.password) {
-		Ok(Some(user)) => signed_in(&web, user, None),
+		Ok(Some(user)) => match (web.app.totp(user), &body.code) {
+			(Ok(None), _) => signed_in(&web, user, None),
+			(Ok(Some(_)), None) => (
+				StatusCode::UNAUTHORIZED,
+				Json(
+					json!({ "error": "Enter the code from your authenticator app.", "totp": true }),
+				),
+			)
+				.into_response(),
+			(Ok(Some(_)), Some(code)) => match crate::totp::verify(&web.app, user, code) {
+				Ok(()) => signed_in(&web, user, None),
+				Err(message) => (
+					StatusCode::UNAUTHORIZED,
+					Json(json!({ "error": message, "totp": true })),
+				)
+					.into_response(),
+			},
+			(Err(err), _) => internal(err),
+		},
 		Ok(None) => fail(StatusCode::UNAUTHORIZED, "Wrong email or password."),
 		Err(err) => internal(err),
 	}
@@ -755,11 +774,20 @@ impl App {
 
 	pub fn me(&self, user: i64) -> rusqlite::Result<Value> {
 		let conn = self.conn();
-		let (name, email, password, admin): (String, String, bool, bool) = conn.query_row(
-			"select name, email, password != '', admin from users where id = ?1",
-			[user],
-			|row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-		)?;
+		let (name, email, password, admin, totp): (String, String, bool, bool, bool) = conn
+			.query_row(
+				"select name, email, password != '', admin, totp != '' from users where id = ?1",
+				[user],
+				|row| {
+					Ok((
+						row.get(0)?,
+						row.get(1)?,
+						row.get(2)?,
+						row.get(3)?,
+						row.get(4)?,
+					))
+				},
+			)?;
 		let mut teams_stmt = conn.prepare(
 			"select t.id, t.name, t.personal, m.role from teams t join members m on m.team = t.id
 			where m.user = ?1 order by t.personal desc, t.name",
@@ -807,7 +835,7 @@ impl App {
 			teams.push(json!({ "id": 0, "name": "Shared with me", "personal": false, "role": "guest", "sites": shared }));
 		}
 		Ok(
-			json!({ "id": user, "name": name, "email": email, "password": password, "admin": admin, "teams": teams }),
+			json!({ "id": user, "name": name, "email": email, "password": password, "admin": admin, "totp": totp, "teams": teams }),
 		)
 	}
 }

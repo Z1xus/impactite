@@ -29,6 +29,7 @@ use crate::sites;
 use crate::stats::{self, Stats};
 use crate::teams;
 use crate::titles;
+use crate::totp;
 use crate::tracker;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
@@ -59,6 +60,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(reports::routes())
 				.merge(titles::routes())
 				.merge(google::routes())
+				.merge(totp::routes())
 				.merge(api::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
