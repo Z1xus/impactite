@@ -134,6 +134,18 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 			let &(raw_referrer, utm, _) = rng.pick(SOURCES, |s| s.2);
 			let &(device, browser, version, os, os_version, _) = rng.pick(AGENTS, |a| a.5);
 			let country = rng.pick(COUNTRIES, |c| c.1).0;
+			let language = match country {
+				"DE" => "de",
+				"FR" => "fr",
+				"NL" => "nl",
+				"UA" => "uk",
+				"PL" => "pl",
+				"BR" => "pt",
+				"JP" => "ja",
+				"SE" => "sv",
+				"ES" => "es",
+				_ => "en",
+			};
 			let host = raw_referrer
 				.split("//")
 				.nth(1)
@@ -194,6 +206,7 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 						(Dim::BrowserVersion, version),
 						(Dim::Os, os),
 						(Dim::OsVersion, os_version),
+						(Dim::Language, language),
 					] {
 						event.dims[dim] = value.to_owned();
 					}
