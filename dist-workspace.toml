@@ -15,6 +15,8 @@ targets = ["aarch64-unknown-linux-musl", "x86_64-unknown-linux-musl"]
 install-path = "CARGO_HOME"
 # Where to host releases
 hosting = "github"
+# gzip, so `impactite update` unpacks it with what it already has
+unix-archive = ".tar.gz"
 # Whether to install an updater program
 install-updater = false
 # The web dashboard is embedded, so it builds first
