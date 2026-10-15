@@ -106,13 +106,19 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 				return Ok(());
 			}
 			let subject = format!("Traffic spike on {}", report.site.domain);
-			let text = format!(
-				"{} has {current} visitors right now, at or above your alert of {}.\n\n{}",
-				report.site.domain,
-				report.threshold,
-				link(web, report, None)
+			let line = format!(
+				"{} has {current} visitors right now. Your alert is at {}.",
+				report.site.domain, report.threshold
 			);
-			deliver(web, report, &subject, &text).await?;
+			deliver(
+				web,
+				report,
+				&subject,
+				&[line],
+				None,
+				&link(web, report, None),
+			)
+			.await?;
 			web.app.mark_report(report.id, ts)?;
 		}
 		_ => {
@@ -125,13 +131,12 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 				.unwrap_or(0);
 			if visitors < report.threshold {
 				let subject = format!("Traffic drop on {}", report.site.domain);
-				let text = format!(
-					"{} had {visitors} visitors on {yesterday}, below your alert of {}.\n\n{}",
-					report.site.domain,
-					report.threshold,
-					link(web, report, Some((yesterday, yesterday)))
+				let line = format!(
+					"{} had {visitors} visitors on {yesterday}. Your alert is at {}.",
+					report.site.domain, report.threshold
 				);
-				deliver(web, report, &subject, &text).await?;
+				let link = link(web, report, Some((yesterday, yesterday)));
+				deliver(web, report, &subject, &[line], None, &link).await?;
 			}
 			web.app
 				.mark_report(report.id, day_number(yesterday).into())?;
@@ -203,15 +208,13 @@ async fn summary(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Re
 			.collect::<Vec<_>>()
 			.join("\n"))
 	};
-	let text = format!(
-		"{domain}, {from} to {to}\n\n\
-		visitors      {visitors}{visitors_change}\n\
+	let table = format!(
+		"visitors      {visitors}{visitors_change}\n\
 		pageviews     {pageviews}{pageviews_change}\n\
 		bounce rate   {bounce}%\n\
 		visit time    {duration}s\n\n\
 		top pages\n{pages}\n\n\
-		top sources\n{sources}\n\n{link}",
-		domain = report.site.domain,
+		top sources\n{sources}",
 		visitors = now["visitors"],
 		visitors_change = change("visitors"),
 		pageviews = now["pageviews"],
@@ -220,18 +223,45 @@ async fn summary(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Re
 		duration = now["duration"],
 		pages = top("event:page")?,
 		sources = top("visit:source")?,
-		link = link(web, report, Some((from, to))),
 	);
 	let subject = format!("{} {} report", report.site.domain, report.kind);
-	deliver(web, report, &subject, &text).await
+	let line = format!("{from} to {to}");
+	let link = link(web, report, Some((from, to)));
+	deliver(web, report, &subject, &[line], Some(&table), &link).await
 }
 
 // mail, or a webhook: slack and discord get their own format, anything else gets json
-async fn deliver(web: &Web, report: &Report, subject: &str, text: &str) -> anyhow::Result<()> {
+async fn deliver(
+	web: &Web,
+	report: &Report,
+	subject: &str,
+	lines: &[String],
+	table: Option<&str>,
+	link: &str,
+) -> anyhow::Result<()> {
 	let to = report.email.as_str();
 	if !to.starts_with("https://") {
-		return web.mail.send(to, subject, text, &html(text)).await;
+		let letter = crate::mail::Letter {
+			base: &web.url,
+			title: subject,
+			lines,
+			table,
+			button: Some(("Open dashboard", link)),
+		};
+		return web
+			.mail
+			.send(to, subject, &letter.text(), &letter.html())
+			.await;
 	}
+	let text = [
+		lines.join("\n\n"),
+		table.unwrap_or_default().to_owned(),
+		link.to_owned(),
+	]
+	.into_iter()
+	.filter(|part| !part.is_empty())
+	.collect::<Vec<_>>()
+	.join("\n\n");
 	let body = if to.starts_with("https://hooks.slack.com/") {
 		json!({ "text": format!("*{subject}*\n```{text}```") })
 	} else if to.contains("discord.com/api/webhooks/") {
@@ -267,15 +297,6 @@ fn shown(to: &str) -> String {
 		}
 		_ => to.to_owned(),
 	}
-}
-
-// monospace keeps the plain text columns readable in mail clients
-fn html(text: &str) -> String {
-	let escaped = text
-		.replace('&', "&amp;")
-		.replace('<', "&lt;")
-		.replace('>', "&gt;");
-	format!("<pre style=\"font-family:ui-monospace,monospace;font-size:13px\">{escaped}</pre>")
 }
 
 fn editable(web: &Web, user: i64, domain: &str) -> Option<Site> {

@@ -227,6 +227,14 @@ const MIGRATIONS: &[&str] = &[
 	alter table users add column totp_step integer not null default 0;
 	alter table users add column recovery text not null default '';
 	",
+	"
+	create table email_changes (
+		hash text primary key,
+		user integer not null references users (id) on delete cascade,
+		email text not null,
+		expires_at integer not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

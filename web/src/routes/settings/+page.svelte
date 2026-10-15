@@ -71,9 +71,17 @@
 	});
 
 	async function saveProfile() {
-		await api("/api/app/me", { name, email }, "PATCH");
+		const result = await api<{ pending?: string } | undefined>(
+			"/api/app/me",
+			{ name, email },
+			"PATCH"
+		);
 		await refresh();
-		toast("Profile saved.");
+		// a new email waits for its confirmation link, the field shows the current one meanwhile
+		if (result?.pending) {
+			email = session.me?.email ?? email;
+			toast(`We sent a link to ${result.pending} to confirm the change.`);
+		} else toast("Profile saved.");
 	}
 
 	async function savePassword() {
@@ -328,14 +336,20 @@
 				<Button variant="quiet" onclick={addPasskey}>add passkey</Button>
 			{/snippet}
 			<List
-				items={passkeys?.map((passkey) => ({
-					key: passkey.id,
-					title: passkey.name,
-					meta: [
-						`added ${date(passkey.created_at)}`,
-						...(passkey.used_at ? [`used ${date(passkey.used_at)}`] : [])
-					]
-				})) ?? null}
+				items={passkeys?.map((passkey, _, all) => {
+					// the last way in can't go
+					const only = all.length === 1 && !session.me?.password;
+					return {
+						key: passkey.id,
+						title: passkey.name,
+						removable: !only,
+						meta: [
+							`added ${date(passkey.created_at)}`,
+							...(passkey.used_at ? [`used ${date(passkey.used_at)}`] : []),
+							...(only ? ["your only sign-in"] : [])
+						]
+					};
+				}) ?? null}
 				remove={removePasskey}
 			/>
 		</Section>

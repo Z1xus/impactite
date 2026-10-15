@@ -78,14 +78,21 @@ async fn test_mail(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 		Ok(me) => me["email"].as_str().unwrap_or_default().to_owned(),
 		Err(err) => return internal(err),
 	};
-	let text = "Mail from Impactite works.";
+	let lines = ["impactite can send mail from this server.".to_owned()];
+	let letter = crate::mail::Letter {
+		base: &web.url,
+		title: "Mail works",
+		lines: &lines,
+		table: None,
+		button: None,
+	};
 	match web
 		.mail
 		.send(
 			&email,
-			"Impactite test mail",
-			text,
-			&format!("<p>{text}</p>"),
+			"impactite test mail",
+			&letter.text(),
+			&letter.html(),
 		)
 		.await
 	{

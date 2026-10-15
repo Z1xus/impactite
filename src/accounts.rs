@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 
 use crate::app::{App, key_hash, token};
 use crate::ingest::Ingest;
+use crate::mail::Letter;
 use crate::mail::Mail;
 use crate::passkeys::{Failure, Proof, Purpose, device, registered};
 use crate::shares::Reader;
@@ -307,18 +308,26 @@ pub async fn mail_invite(
 	token: &str,
 ) -> rusqlite::Result<(String, bool)> {
 	let inviter = web.app.user_name(user)?;
-	let link = format!("{}/invite/{token}", web.url.trim_end_matches('/'));
-	let text = format!(
-		"{inviter} invited you to {place} on Impactite.\n\n{link}\n\nThe link works for 7 days."
-	);
-	let html = format!(
-		"<p>{} invited you to <b>{}</b> on Impactite.</p><p><a href=\"{link}\">Join {}</a></p><p>The link works for 7 days.</p>",
-		escape(&inviter),
-		escape(place),
-		escape(place)
-	);
-	let subject = format!("Join {place} on Impactite");
-	let sent = match web.mail.send(email, &subject, &text, &html).await {
+	let base = web.url.trim_end_matches('/');
+	let link = format!("{base}/invite/{token}");
+	let lines = [
+		format!("{inviter} invited you to {place} on impactite."),
+		"The link works for 7 days.".to_owned(),
+	];
+	let title = format!("Join {place}");
+	let letter = Letter {
+		base,
+		title: &title,
+		lines: &lines,
+		table: None,
+		button: Some(("Join", &link)),
+	};
+	let subject = format!("Join {place} on impactite");
+	let sent = match web
+		.mail
+		.send(email, &subject, &letter.text(), &letter.html())
+		.await
+	{
 		Ok(()) => web.mail.ready(),
 		Err(err) => {
 			tracing::warn!(%err, "invite mail");
@@ -326,13 +335,6 @@ pub async fn mail_invite(
 		}
 	};
 	Ok((link, sent))
-}
-
-fn escape(text: &str) -> String {
-	text.replace('&', "&amp;")
-		.replace('<', "&lt;")
-		.replace('>', "&gt;")
-		.replace('"', "&quot;")
 }
 
 #[derive(Deserialize)]

@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail, hash, internal, now, signed_in};
 use crate::app::{App, key_hash, token};
+use crate::mail::Letter;
 use crate::sites;
 
 const LINK_SECS: i64 = 15 * 60;
@@ -20,6 +21,7 @@ pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
 		.route("/api/app/me", patch(update).delete(destroy))
 		.route("/api/app/me/password", put(password))
+		.route("/api/app/me/email", post(accept_email))
 		.route(
 			"/api/app/me/sessions",
 			axum::routing::get(sessions).delete(end_others),
@@ -60,10 +62,34 @@ async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Up
 			return internal(err);
 		}
 	}
+	let mut pending = None;
 	if let Some(email) = body.email.as_deref().map(str::trim) {
 		if !email.contains('@') {
 			return fail(StatusCode::BAD_REQUEST, "Use a valid email.");
 		}
+		let current = match web.app.me(viewer.user) {
+			Ok(me) => me["email"].as_str().unwrap_or_default().to_owned(),
+			Err(err) => return internal(err),
+		};
+		if email.eq_ignore_ascii_case(&current) {
+			return StatusCode::NO_CONTENT.into_response();
+		}
+		if matches!(web.app.user_by_email(email), Ok(Some(_))) {
+			return fail(StatusCode::CONFLICT, "This email is already used.");
+		}
+		// with mail the new address confirms itself first, the old one hears about it
+		if web.mail.ready() {
+			return match confirm_email(&web, viewer.user, &current, email).await {
+				Ok(()) => Json(json!({ "pending": email })).into_response(),
+				Err(err) => {
+					tracing::warn!(%err, "email change mail");
+					fail(StatusCode::BAD_GATEWAY, "The mail couldn't be sent.")
+				}
+			};
+		}
+		pending = Some(email);
+	}
+	if let Some(email) = pending {
 		match web.app.set_user(viewer.user, "email", email) {
 			Err(rusqlite::Error::SqliteFailure(err, _))
 				if err.code == rusqlite::ErrorCode::ConstraintViolation =>
@@ -75,6 +101,70 @@ async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Up
 		}
 	}
 	StatusCode::NO_CONTENT.into_response()
+}
+
+async fn confirm_email(web: &Web, user: i64, old: &str, new: &str) -> anyhow::Result<()> {
+	let token = web.app.create_email_change(user, new)?;
+	let base = web.url.trim_end_matches('/');
+	let link = format!("{base}/email/{token}");
+	let lines = [
+		"Confirm this address to use it for your impactite account. The link works for a day."
+			.to_owned(),
+	];
+	let letter = Letter {
+		base,
+		title: "Confirm your new email",
+		lines: &lines,
+		table: None,
+		button: Some(("Confirm email", &link)),
+	};
+	web.mail
+		.send(
+			new,
+			"Confirm your new email",
+			&letter.text(),
+			&letter.html(),
+		)
+		.await?;
+	let lines = [
+		format!(
+			"Someone asked to change your account's email to {new}. It changes once that address confirms."
+		),
+		"If that wasn't you, sign in and check your account.".to_owned(),
+	];
+	let letter = Letter {
+		base,
+		title: "Your email is changing",
+		lines: &lines,
+		table: None,
+		button: None,
+	};
+	web.mail
+		.send(
+			old,
+			"Your impactite email is changing",
+			&letter.text(),
+			&letter.html(),
+		)
+		.await
+}
+
+async fn accept_email(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Response {
+	let Ok(Some((user, email))) = web.app.take_email_change(&body.token) else {
+		return fail(
+			StatusCode::BAD_REQUEST,
+			"This link expired or was already used.",
+		);
+	};
+	match web.app.set_user(user, "email", &email) {
+		Err(rusqlite::Error::SqliteFailure(err, _))
+			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+		{
+			fail(StatusCode::CONFLICT, "This email is already used.")
+		}
+		Err(err) => internal(err),
+		Ok(()) => Json(json!({ "email": email })).into_response(),
+	}
 }
 
 async fn password(
@@ -195,14 +285,25 @@ async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Re
 		Ok(token) => token,
 		Err(err) => return internal(err),
 	};
-	let link = format!("{}/login/link/{token}", web.url.trim_end_matches('/'));
-	let text = format!("Sign in to Impactite:\n\n{link}\n\nThe link works for 15 minutes.");
-	let html = format!(
-		"<p><a href=\"{link}\">Sign in to Impactite</a></p><p>The link works for 15 minutes.</p>"
-	);
+	let base = web.url.trim_end_matches('/');
+	let link = format!("{base}/login/link/{token}");
+	let lines =
+		["The link works for 15 minutes. If you didn't ask for it, ignore this mail.".to_owned()];
+	let letter = Letter {
+		base,
+		title: "Sign in to impactite",
+		lines: &lines,
+		table: None,
+		button: Some(("Sign in", &link)),
+	};
 	if let Err(err) = web
 		.mail
-		.send(&body.email, "Sign in to Impactite", &text, &html)
+		.send(
+			&body.email,
+			"Sign in to impactite",
+			&letter.text(),
+			&letter.html(),
+		)
 		.await
 	{
 		tracing::warn!(%err, "login mail");
@@ -312,6 +413,25 @@ impl App {
 			params![key_hash(&token), user, now() + LINK_SECS],
 		)?;
 		Ok(token)
+	}
+
+	fn create_email_change(&self, user: i64, email: &str) -> rusqlite::Result<String> {
+		let token = token()?;
+		self.conn().execute(
+			"insert into email_changes (hash, user, email, expires_at) values (?1, ?2, ?3, ?4)",
+			params![key_hash(&token), user, email, now() + 86_400],
+		)?;
+		Ok(token)
+	}
+
+	fn take_email_change(&self, token: &str) -> rusqlite::Result<Option<(i64, String)>> {
+		self.conn()
+			.query_row(
+				"delete from email_changes where hash = ?1 and expires_at > ?2 returning user, email",
+				params![key_hash(token), now()],
+				|row| Ok((row.get(0)?, row.get(1)?)),
+			)
+			.optional()
 	}
 
 	fn take_login(&self, token: &str) -> rusqlite::Result<Option<i64>> {

@@ -240,13 +240,16 @@ async fn main() -> anyhow::Result<()> {
 		Command::Mail {
 			command: MailCommand::Test { to },
 		} => {
-			mail.send(
-				&to,
-				"Impactite mail works",
-				"Mail is set up.",
-				"<p>Mail is set up.</p>",
-			)
-			.await?;
+			let lines = ["impactite can send mail from this server.".to_owned()];
+			let letter = mail::Letter {
+				base: "",
+				title: "Mail works",
+				lines: &lines,
+				table: None,
+				button: None,
+			};
+			mail.send(&to, "impactite test mail", &letter.text(), &letter.html())
+				.await?;
 			println!("sent to {to}");
 			Ok(())
 		}
