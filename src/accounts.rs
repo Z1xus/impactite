@@ -82,6 +82,7 @@ pub fn routes() -> Router<Arc<Web>> {
 			delete(remove_member),
 		)
 		.route("/api/app/invites/accept", post(accept))
+		.route("/api/app/invites/{token}", get(invitation))
 		.route("/api/app/sites", post(add_site))
 		.route("/api/app/live/{domain}", get(live))
 }
@@ -345,6 +346,19 @@ struct Accept {
 	passkey: Option<Proof>,
 }
 
+async fn invitation(State(web): State<Arc<Web>>, Path(token): Path<String>) -> Response {
+	match web.app.open_invite(&token) {
+		Ok(Some(invite)) => {
+			Json(json!({ "place": invite.place, "email": invite.email })).into_response()
+		}
+		Ok(None) => fail(
+			StatusCode::NOT_FOUND,
+			"This invite expired or was already used.",
+		),
+		Err(err) => internal(err),
+	}
+}
+
 async fn accept(
 	State(web): State<Arc<Web>>,
 	headers: HeaderMap,
@@ -355,6 +369,7 @@ async fn accept(
 		site,
 		email,
 		role,
+		..
 	})) = web.app.open_invite(&body.token)
 	else {
 		return fail(
@@ -483,6 +498,7 @@ pub struct Invitation {
 	pub site: Option<i64>,
 	pub email: String,
 	pub role: String,
+	pub place: String,
 }
 
 pub fn fail(status: StatusCode, message: &str) -> Response {
@@ -739,7 +755,9 @@ impl App {
 	pub fn open_invite(&self, token: &str) -> rusqlite::Result<Option<Invitation>> {
 		self.conn()
 			.query_row(
-				"select team, site, email, role from invites where hash = ?1 and expires_at > ?2",
+				"select i.team, i.site, i.email, i.role, coalesce(s.domain, t.name) from invites i
+				join teams t on t.id = i.team left join sites s on s.id = i.site
+				where i.hash = ?1 and i.expires_at > ?2",
 				params![key_hash(token), now()],
 				|row| {
 					Ok(Invitation {
@@ -747,6 +765,7 @@ impl App {
 						site: row.get(1)?,
 						email: row.get(2)?,
 						role: row.get(3)?,
+						place: row.get(4)?,
 					})
 				},
 			)

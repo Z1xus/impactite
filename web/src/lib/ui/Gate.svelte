@@ -11,7 +11,7 @@
 			<Meteor size={168} pixel={3} />
 			<span class="font-mono text-num tracking-tight">impactite</span>
 		</div>
-		<div class="w-full">
+		<div class="w-full [&>p]:text-center">
 			{@render children()}
 		</div>
 	</div>

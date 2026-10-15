@@ -73,13 +73,21 @@
 	type ReportKind = "daily" | "weekly" | "biweekly" | "monthly" | "spike" | "drop" | "export";
 	type Report = { id: number; kind: ReportKind; email: string; threshold: number };
 	const REPORTS: { key: ReportKind; label: string; meta: (threshold: number) => string }[] = [
-		{ key: "daily", label: "daily", meta: () => "daily report" },
-		{ key: "weekly", label: "weekly", meta: () => "weekly report" },
-		{ key: "biweekly", label: "biweekly", meta: () => "report every two weeks" },
-		{ key: "monthly", label: "monthly", meta: () => "monthly report" },
-		{ key: "spike", label: "spike", meta: (n) => `alert at ${n} current visitors` },
-		{ key: "drop", label: "drop", meta: (n) => `alert under ${n} visitors a day` },
-		{ key: "export", label: "raw export", meta: () => "daily raw export" }
+		{ key: "daily", label: "daily report", meta: () => "daily report" },
+		{ key: "weekly", label: "weekly report", meta: () => "weekly report" },
+		{ key: "biweekly", label: "report every two weeks", meta: () => "report every two weeks" },
+		{ key: "monthly", label: "monthly report", meta: () => "monthly report" },
+		{
+			key: "spike",
+			label: "traffic spike alert",
+			meta: (n) => `alert at ${n} current visitors`
+		},
+		{
+			key: "drop",
+			label: "traffic drop alert",
+			meta: (n) => `alert under ${n} visitors a day`
+		},
+		{ key: "export", label: "daily raw export", meta: () => "daily raw export" }
 	];
 	let reports = $state<Report[] | null>(null);
 	type Google = {
@@ -618,7 +626,7 @@
 				{ key: "revenue", label: "revenue" }
 			]}
 		/>
-		<div class="grid gap-4 sm:grid-cols-2">
+		<div class="grid gap-4 {kind === 'event' ? '' : 'sm:grid-cols-2'}">
 			<Field
 				label={kind === "page" ? "path" : "event name"}
 				placeholder={kind === "page" ? "/pricing" : "Signup"}
@@ -728,8 +736,17 @@
 
 <Dialog title="add report" bind:open={reporting}>
 	<Form action="add report" submit={addReport}>
-		<Toggle label="kind" bind:value={reportKind} options={REPORTS} />
-		<div class="grid gap-4 sm:grid-cols-2">
+		<Select
+			label="kind"
+			value={reportKind}
+			options={REPORTS}
+			pick={(key) => (reportKind = key)}
+		/>
+		<div
+			class="grid gap-4 {reportKind === 'spike' || reportKind === 'drop'
+				? 'sm:grid-cols-2'
+				: ''}"
+		>
 			<Field
 				label={reportKind === "export" ? "s3 bucket" : "send to"}
 				placeholder={reportKind === "export"

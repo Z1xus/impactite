@@ -5,6 +5,7 @@
 	import { PRESETS, label, preset, step, type View } from "#lib/period.ts";
 	import Calendar from "#lib/ui/Calendar.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
+	import { fit } from "#lib/ui/fit.ts";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Select from "#lib/ui/Select.svelte";
 
@@ -111,6 +112,7 @@
 	{/if}
 	{#if picking}
 		<div
+			{@attach fit}
 			class="absolute top-full right-0 z-30 mt-1 rounded-px border border-edge bg-raised p-3"
 		>
 			{#if picking === "range"}

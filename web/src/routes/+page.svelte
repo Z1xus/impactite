@@ -1,4 +1,5 @@
 <script lang="ts">
+	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
@@ -93,7 +94,10 @@
 							class="flex flex-col gap-5 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
 						>
 							<div class="flex items-center justify-between gap-4">
-								<span class="text-fg">all sites</span>
+								<span class="flex items-center gap-2.5 text-fg">
+									<Glyph spec={{ kind: "pixel", svg: grid }} />
+									all sites
+								</span>
 								{#if values}
 									<Num
 										value={values.reduce((sum, value) => sum + value, 0)}

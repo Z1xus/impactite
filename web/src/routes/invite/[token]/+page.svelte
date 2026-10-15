@@ -9,11 +9,20 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
+	import Message from "#lib/ui/Message.svelte";
 
 	const token = page.params.token ?? "";
 	let usePassword = $state(false);
 	let name = $state("");
 	let password = $state("");
+	let place = $state("");
+	let failed = $state("");
+
+	$effect(() => {
+		api<{ place: string }>(`/api/app/invites/${token}`)
+			.then((invite) => (place = invite.place))
+			.catch((err) => (failed = err.message));
+	});
 
 	async function submit() {
 		const body: Record<string, unknown> = { token };
@@ -37,26 +46,33 @@
 </script>
 
 <Gate>
-	<div class="flex flex-col gap-3">
-		<Form block action={session.me || usePassword ? "join" : "join with passkey"} {submit}>
-			{#if !session.me}
-				<Field label="name" bind:value={name} autocomplete="name" required />
-				{#if usePassword}
-					<Field
-						label="password"
-						type="password"
-						bind:value={password}
-						autocomplete="new-password"
-						minlength={10}
-						required
-					/>
+	{#if failed}
+		<Message tone="bad">{failed}</Message>
+	{:else if place}
+		<div class="flex flex-col gap-3">
+			<p class="mb-3 text-center text-[14px] text-dim">
+				You're invited to <span class="text-fg">{place}</span>.
+			</p>
+			<Form block action={session.me || usePassword ? "join" : "join with passkey"} {submit}>
+				{#if !session.me}
+					<Field label="name" bind:value={name} autocomplete="name" required />
+					{#if usePassword}
+						<Field
+							label="password"
+							type="password"
+							bind:value={password}
+							autocomplete="new-password"
+							minlength={10}
+							required
+						/>
+					{/if}
 				{/if}
+			</Form>
+			{#if !session.me}
+				<Button variant="plain" type="button" onclick={() => (usePassword = !usePassword)}>
+					{usePassword ? "use a passkey" : "use a password instead"}
+				</Button>
 			{/if}
-		</Form>
-		{#if !session.me}
-			<Button variant="plain" type="button" onclick={() => (usePassword = !usePassword)}>
-				{usePassword ? "use a passkey" : "use a password instead"}
-			</Button>
-		{/if}
-	</div>
+		</div>
+	{/if}
 </Gate>

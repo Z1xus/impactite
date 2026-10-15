@@ -69,6 +69,29 @@
 		--color-bad: #c6372d;
 	}
 
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-edge) transparent;
+	}
+
+	::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	::-webkit-scrollbar-thumb {
+		background: var(--color-edge);
+		border-radius: 2px;
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--color-dim);
+	}
+
 	:focus-visible {
 		outline: 1px solid var(--color-cyan);
 		outline-offset: 2px;

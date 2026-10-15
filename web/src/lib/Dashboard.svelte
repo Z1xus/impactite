@@ -1,4 +1,5 @@
 <script lang="ts">
+	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 	import { flip } from "svelte/animate";
 	import { clock } from "#lib/display.svelte.ts";
 	import { goto } from "$app/navigation";
@@ -90,7 +91,9 @@
 	const combined = $derived(domain.startsWith("team:"));
 	const team = $derived(currentTeam());
 	const sites = $derived([
-		...((team?.sites.length ?? 0) > 1 ? [{ key: "all", label: "all sites" }] : []),
+		...((team?.sites.length ?? 0) > 1
+			? [{ key: "all", label: "all sites", glyph: { kind: "pixel" as const, svg: grid } }]
+			: []),
 		...(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
 			key: site.domain,
 			label: site.domain,
@@ -164,6 +167,10 @@
 		const sign = lineSort[1] === "desc" ? -1 : 1;
 		return [...lines].sort((a, b) => sign * (a.values[i] - b.values[i]));
 	});
+	// realtime minutes only count pageviews
+	const tableMetrics = $derived(
+		realtime ? METRICS.filter((item) => item.key === "pageviews") : METRICS
+	);
 
 	type Layout = { order: string[]; hidden: string[]; table: boolean };
 	let layout = $state<Layout>({ order: [], hidden: [], table: false });
@@ -855,12 +862,17 @@
 				{#if layout.table}
 					<div class="max-h-96 overflow-y-auto">
 						<Table
-							columns={METRICS.map((item) => ({
+							columns={tableMetrics.map((item) => ({
 								key: item.key,
 								label: item.label,
 								format: (value: number | null) => format(item.key, value ?? 0)
 							}))}
-							rows={sortedLines}
+							rows={sortedLines.map((line) => ({
+								...line,
+								values: tableMetrics.map(
+									(item) => line.values[METRICS.indexOf(item)]
+								)
+							}))}
 							bind:sort={lineSort}
 						/>
 					</div>

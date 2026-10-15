@@ -1,6 +1,7 @@
 <script lang="ts">
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import check from "pixelarticons/svg/check.svg?raw";
+	import { fit } from "./fit.ts";
 	import Icon from "./Icon.svelte";
 
 	type Item =
@@ -58,6 +59,7 @@
 	{#if open}
 		<ul
 			role="menu"
+			{@attach fit}
 			class="absolute top-full {align === 'right'
 				? 'right-0'
 				: 'left-0'} z-30 mt-1 min-w-52 rounded-px border border-edge bg-raised py-1"

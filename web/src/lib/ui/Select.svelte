@@ -2,6 +2,7 @@
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
+	import { fit } from "./fit.ts";
 	import Icon from "./Icon.svelte";
 
 	let {
@@ -37,7 +38,7 @@
 	const plain = (text: string) => text.toLowerCase().replaceAll("_", " ");
 
 	// long lists get a search box
-	const searchable = $derived(options.length > 8);
+	const searchable = $derived(options.length > 12);
 	const shownOptions = $derived(
 		options.filter((option) => plain(option.label).includes(plain(query.trim())))
 	);
@@ -105,9 +106,10 @@
 	</button>
 	{#if open}
 		<div
+			{@attach fit}
 			class="absolute top-full {align === 'right'
 				? 'right-0'
-				: 'left-0'} z-20 mt-1 flex max-h-80 min-w-full flex-col rounded-px border border-edge bg-raised"
+				: 'left-0'} z-20 mt-1 flex max-h-96 min-w-full flex-col rounded-px border border-edge bg-raised"
 		>
 			{#if searchable}
 				<!-- svelte-ignore a11y_autofocus -->
