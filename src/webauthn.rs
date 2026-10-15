@@ -16,7 +16,7 @@ const TIMEOUT_MS: u64 = 300_000;
 
 pub struct Relying {
 	pub id: String,
-	pub origin: String,
+	pub secure: bool,
 }
 
 impl Relying {
@@ -24,7 +24,7 @@ impl Relying {
 		let url = url::Url::parse(url)?;
 		Ok(Self {
 			id: url.host_str().unwrap_or("localhost").to_owned(),
-			origin: url.origin().ascii_serialization(),
+			secure: url.scheme() == "https",
 		})
 	}
 }
@@ -196,7 +196,14 @@ pub fn verify(
 fn client(rp: &Relying, raw: &str, kind: &str, challenge: &str) -> Result<Vec<u8>, &'static str> {
 	let bytes = decode(raw)?;
 	let data: ClientData = serde_json::from_slice(&bytes).map_err(|_| "unreadable client data")?;
-	if data.kind != kind || data.challenge != challenge || data.origin != rp.origin {
+	// any port on the host, like the browser scopes passkeys, so the dev server on another port works
+	let origin = url::Url::parse(&data.origin).map_err(|_| "unreadable origin")?;
+	let scheme = if rp.secure { "https" } else { origin.scheme() };
+	if data.kind != kind
+		|| data.challenge != challenge
+		|| origin.host_str() != Some(&rp.id)
+		|| origin.scheme() != scheme
+	{
 		return Err("ceremony mismatch");
 	}
 	Ok(bytes)
@@ -313,7 +320,7 @@ mod tests {
 	fn rp() -> Relying {
 		Relying {
 			id: "localhost".into(),
-			origin: ORIGIN.into(),
+			secure: false,
 		}
 	}
 
