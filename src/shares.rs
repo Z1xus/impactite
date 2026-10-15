@@ -232,7 +232,7 @@ impl App {
 		self.conn()
 			.query_row(
 				"select h.slug, s.domain, s.timezone, h.name, h.password from shares h
-				join sites s on s.id = h.site where h.slug = ?1 and s.team is not null",
+				join sites s on s.id = h.site where h.slug = ?1 and s.domain not like '~%'",
 				[slug],
 				|row| {
 					Ok(Share {

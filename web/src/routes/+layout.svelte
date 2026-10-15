@@ -17,7 +17,9 @@
 	$effect(() => {
 		if (!session.ready) return;
 		const path = page.url.pathname;
-		if (session.setup && !path.startsWith("/setup")) goto(resolve("/setup"));
+		// shared dashboards stay readable before anyone has set the server up
+		if (session.setup && !path.startsWith("/setup") && !path.startsWith("/share"))
+			goto(resolve("/setup"));
 		else if (!session.setup && !session.me && !open.some((prefix) => path.startsWith(prefix)))
 			goto(resolve("/login"));
 	});
