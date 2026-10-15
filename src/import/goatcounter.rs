@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -13,7 +14,12 @@ use super::insert;
 use crate::app::Site;
 use crate::ingest::referrer::{self, Traffic};
 
-pub fn import(db: &Db, site: &Site, path: &Path) -> anyhow::Result<(u64, Option<i64>)> {
+pub fn import(
+	db: &Db,
+	site: &Site,
+	path: &Path,
+	titles: &mut HashMap<String, String>,
+) -> anyhow::Result<(u64, Option<i64>)> {
 	let file = BufReader::new(File::open(path).context("open export")?);
 	let reader: Box<dyn Read> = match path.extension().is_some_and(|ext| ext == "gz") {
 		true => Box::new(MultiGzDecoder::new(file)),
@@ -85,6 +91,9 @@ pub fn import(db: &Db, site: &Site, path: &Path) -> anyhow::Result<(u64, Option<
 			true => (field(0), ""),
 			false => ("pageview", field(0)),
 		};
+		if !page.is_empty() && !field(1).is_empty() {
+			titles.insert(page.to_owned(), field(1).to_owned());
+		}
 		for (dim, value) in [
 			(Dim::Name, name),
 			(Dim::Hostname, site.domain.as_str()),

@@ -28,6 +28,7 @@ mod shields;
 mod sites;
 mod stats;
 mod teams;
+mod titles;
 mod tracker;
 mod webauthn;
 

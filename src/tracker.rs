@@ -12,7 +12,7 @@ use rust_embed::RustEmbed;
 #[allow_missing = true]
 struct Modules;
 
-const MODULES: [&str; 9] = [
+const MODULES: [&str; 10] = [
 	"hash",
 	"manual",
 	"local",
@@ -22,6 +22,7 @@ const MODULES: [&str; 9] = [
 	"form-submissions",
 	"exclusions",
 	"pageview-props",
+	"titles",
 ];
 
 type Built = Arc<(Vec<u8>, Vec<u8>)>;

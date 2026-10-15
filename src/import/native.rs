@@ -31,6 +31,9 @@ pub fn import(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<(u
 		let name = goal["name"].as_str().map_or(name, str::to_owned);
 		let _ = app.add_goal(site.id, page, value, &name, scroll, currency);
 	}
+	for (page, title) in meta["titles"].as_object().into_iter().flatten() {
+		app.set_title(site.id, page, title.as_str().unwrap_or_default())?;
+	}
 	let source = meta["timezone"]
 		.as_str()
 		.and_then(|zone| TimeZone::get(zone).ok())

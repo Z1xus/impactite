@@ -88,6 +88,7 @@ pub async fn count(
 		props: Vec::new(),
 		revenue: None,
 		at: None,
+		title: param("t").to_owned(),
 		interactive: true,
 		scroll_depth: None,
 		engagement_ms: 0,

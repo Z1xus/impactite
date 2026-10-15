@@ -22,6 +22,7 @@
 					fallback?: string;
 					href?: string;
 					extra?: string;
+					note?: string;
 			  }[]
 			| null;
 		loading?: boolean;
@@ -67,6 +68,11 @@
 					></span>
 					<span class="relative flex min-w-0 items-center gap-1.5 pl-2">
 						<span class="truncate text-[14px] text-fg">{row.label}</span>
+						{#if row.note}
+							<span class="min-w-0 shrink-[2] truncate text-[13px] text-dim"
+								>{row.note}</span
+							>
+						{/if}
 						{#if row.href}
 							<!-- eslint-disable svelte/no-navigation-without-resolve -- external page -->
 							<a

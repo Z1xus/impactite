@@ -39,6 +39,7 @@ pub struct Hit {
 	pub revenue: Option<(u32, String)>,
 	// past hits from the goatcounter api, live hits use now
 	pub at: Option<Timestamp>,
+	pub title: String,
 }
 
 pub struct Client<'a> {
@@ -71,6 +72,7 @@ pub struct Ingest {
 	sites: RwLock<HashMap<String, Arc<Tracked>>>,
 	salts: Mutex<HashMap<(u64, i32), [u8; 32]>>,
 	sessions: Vec<Shard>,
+	titles: Mutex<HashMap<(u64, String), String>>,
 }
 
 impl Ingest {
@@ -83,6 +85,7 @@ impl Ingest {
 			sites: RwLock::default(),
 			salts: Mutex::default(),
 			sessions: (0..SHARDS).map(|_| Mutex::default()).collect(),
+			titles: Mutex::default(),
 		}
 	}
 
@@ -217,7 +220,32 @@ impl Ingest {
 			.filter(|(key, _)| site.shields.keeps(key))
 			.collect();
 
-		self.db.insert(Box::new(event)).map_err(|_| Rejected::Busy)
+		self.db
+			.insert(Box::new(event))
+			.map_err(|_| Rejected::Busy)?;
+		if hit.name == "pageview" {
+			self.title(site.site.id, &hit.path, &hit.title);
+		}
+		Ok(())
+	}
+
+	// writes only changed titles, the cache keeps unchanged pages off the database
+	fn title(&self, site: u64, path: &str, title: &str) {
+		let title: String = title.trim().chars().take(300).collect();
+		if title.is_empty() {
+			return;
+		}
+		let mut titles = lock(&self.titles);
+		let key = (site, path.to_owned());
+		if titles.get(&key) == Some(&title) {
+			return;
+		}
+		if titles.len() > 100_000 {
+			titles.clear();
+		}
+		if self.app.set_title(site, path, &title).is_ok() {
+			titles.insert(key, title);
+		}
 	}
 
 	pub fn current_visitors(&self, site: u64) -> usize {

@@ -30,6 +30,7 @@ struct Payload {
 	h: Option<Value>,
 	sd: Option<Value>,
 	e: Option<Value>,
+	t: Option<String>,
 	#[serde(rename = "$", alias = "revenue")]
 	revenue: Option<Value>,
 }
@@ -99,6 +100,7 @@ pub async fn event(
 			.unwrap_or_default() as u32,
 		revenue: revenue.clone(),
 		at: None,
+		title: payload.t.clone().unwrap_or_default(),
 	};
 
 	let ua = headers

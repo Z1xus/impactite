@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::bail;
@@ -31,7 +32,11 @@ pub fn plausible_zip(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Re
 }
 
 pub fn goatcounter_csv(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<u64> {
-	let (count, first) = goatcounter::import(db, site, path)?;
+	let mut titles = HashMap::new();
+	let (count, first) = goatcounter::import(db, site, path, &mut titles)?;
+	for (page, title) in titles {
+		app.set_title(site.id, &page, &title)?;
+	}
 	if let Some(first) = first {
 		app.backdate(site.id, first)?;
 	}

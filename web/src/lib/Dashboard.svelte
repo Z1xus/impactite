@@ -218,6 +218,7 @@
 		}
 	];
 	let goals = $state<string[]>([]);
+	let titles = $state<Record<string, string>>({});
 	let funnels = $state<{ id: number; name: string }[]>([]);
 	let funnelId = $state(0);
 	let revenue = $state(false);
@@ -245,6 +246,9 @@
 	});
 
 	$effect(() => {
+		api<Record<string, string>>(`/api/app/sites/${domain}/titles`)
+			.then((result) => (titles = result))
+			.catch(() => (titles = {}));
 		api<{ goals: { name: string; currency: string }[] }>(`/api/app/sites/${domain}/goals`)
 			.then((result) => {
 				goals = result.goals.map((goal) => goal.name);
@@ -878,7 +882,12 @@
 							/>
 						{:else}
 							<Rows
-								rows={ranked[panel.id] ?? null}
+								rows={PAGES.has(dimOf(panel.id))
+									? (ranked[panel.id]?.map((row) => ({
+											...row,
+											note: titles[row.key]
+										})) ?? null)
+									: (ranked[panel.id] ?? null)}
 								loading={loading[panel.id]}
 								format={(value) => format("visitors", value)}
 								pick={tabs[panel.id] === "funnels"

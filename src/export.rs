@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Write};
 use std::sync::Arc;
 
@@ -78,11 +78,12 @@ pub async fn export(
 	};
 	let db = web.stats.db.clone();
 	let goals = web.app.goals(period.site.id).unwrap_or_default();
+	let titles = web.app.titles(period.site.id).unwrap_or_default();
 	let format = body.format;
 	let built = tokio::task::spawn_blocking(move || match format {
 		Format::Plausible => build(&db, period.site.id, period.from, period.to, filters),
-		Format::Impactite => native(&db, &period.site, &goals, period.from, period.to),
-		Format::Goatcounter => goatcounter(&db, &period.site, period.from, period.to),
+		Format::Impactite => native(&db, &period.site, &goals, &titles, period.from, period.to),
+		Format::Goatcounter => goatcounter(&db, &period.site, &titles, period.from, period.to),
 	})
 	.await;
 	match built {
@@ -381,7 +382,14 @@ fn utc(local: i64, tz: &TimeZone) -> anyhow::Result<Timestamp> {
 	Ok(civil.to_zoned(tz.clone())?.timestamp())
 }
 
-fn native(db: &Db, site: &Site, goals: &[Goal], from: Date, to: Date) -> anyhow::Result<Vec<u8>> {
+fn native(
+	db: &Db,
+	site: &Site,
+	goals: &[Goal],
+	titles: &HashMap<String, String>,
+	from: Date,
+	to: Date,
+) -> anyhow::Result<Vec<u8>> {
 	let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
 	zip.start_file("site.json", SimpleFileOptions::default())?;
 	serde_json::to_writer_pretty(
@@ -392,6 +400,7 @@ fn native(db: &Db, site: &Site, goals: &[Goal], from: Date, to: Date) -> anyhow:
 			"domain": site.domain,
 			"timezone": site.timezone,
 			"goals": goals.iter().map(|goal| json!({ "page": goal.page, "value": goal.value, "name": goal.name, "scroll": goal.scroll, "currency": goal.currency })).collect::<Vec<_>>(),
+			"titles": titles,
 		}),
 	)?;
 	zip.start_file("events.ndjson", SimpleFileOptions::default())?;
@@ -439,7 +448,13 @@ fn native(db: &Db, site: &Site, goals: &[Goal], from: Date, to: Date) -> anyhow:
 	Ok(zip.finish()?.into_inner())
 }
 
-pub(crate) fn goatcounter(db: &Db, site: &Site, from: Date, to: Date) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn goatcounter(
+	db: &Db,
+	site: &Site,
+	titles: &HashMap<String, String>,
+	from: Date,
+	to: Date,
+) -> anyhow::Result<Vec<u8>> {
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let mut csv = csv::Writer::from_writer(GzEncoder::new(Vec::new(), Compression::default()));
 	csv.write_record([
@@ -497,7 +512,13 @@ pub(crate) fn goatcounter(db: &Db, site: &Site, from: Date, to: Date) -> anyhow:
 			} else {
 				event.dims[Dim::Page].clone()
 			},
-			String::new(),
+			match custom {
+				true => String::new(),
+				false => titles
+					.get(&event.dims[Dim::Page])
+					.cloned()
+					.unwrap_or_default(),
+			},
 			custom.to_string(),
 			String::new(),
 			joined(&event.dims[Dim::Browser], &event.dims[Dim::BrowserVersion]),

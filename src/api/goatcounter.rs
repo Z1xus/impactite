@@ -50,6 +50,8 @@ struct CountHit {
 	#[serde(default, rename = "ref")]
 	referrer: String,
 	#[serde(default)]
+	title: String,
+	#[serde(default)]
 	query: String,
 	#[serde(default)]
 	bot: u32,
@@ -174,6 +176,7 @@ fn ask(
 struct Entry {
 	id: u64,
 	path: String,
+	title: String,
 	event: bool,
 	count: u64,
 }
@@ -187,6 +190,7 @@ fn path_id(path: &str, event: bool) -> u64 {
 }
 
 fn entries(web: &Web, site: &Site, range: (Date, Date)) -> Result<Vec<Entry>, Fail> {
+	let titles = web.app.titles(site.id).map_err(broken)?;
 	let pages = ask(
 		web,
 		site,
@@ -209,6 +213,10 @@ fn entries(web: &Web, site: &Site, range: (Date, Date)) -> Result<Vec<Entry>, Fa
 			let path = dimensions.swap_remove(0);
 			Entry {
 				id: path_id(&path, event),
+				title: match event {
+					true => String::new(),
+					false => titles.get(&path).cloned().unwrap_or_default(),
+				},
 				path,
 				event,
 				count,
@@ -343,6 +351,7 @@ async fn count(State(web): State<Arc<Web>>, call: Call) -> Response {
 				scroll_depth: None,
 				engagement_ms: 0,
 				at: hit.created_at.as_deref().and_then(|at| at.parse().ok()),
+				title: hit.title,
 			};
 			let _ = web.ingest.track(&tracked, tracked_hit, &client);
 		}
@@ -369,7 +378,7 @@ async fn paths(State(web): State<Arc<Web>>, call: Call) -> Response {
 		Ok(json!({
 			"paths": entries
 				.iter()
-				.map(|entry| json!({ "id": entry.id, "path": entry.path, "title": "", "event": entry.event }))
+				.map(|entry| json!({ "id": entry.id, "path": entry.path, "title": entry.title, "event": entry.event }))
 				.collect::<Vec<_>>(),
 			"more": more,
 		}))
@@ -457,7 +466,7 @@ async fn hits(State(web): State<Arc<Web>>, call: Call) -> Response {
 					"path_id": entry.id,
 					"path": entry.path,
 					"event": entry.event,
-					"title": "",
+					"title": entry.title,
 					"count": entry.count,
 					"max": counts.and_then(|counts| counts.values().max()).copied().unwrap_or_default(),
 					"stats": stats,
@@ -626,9 +635,12 @@ async fn download(State(web): State<Arc<Web>>, Path(_id): Path<u64>, call: Call)
 		return reply(Err(broken("period")));
 	};
 	let db = web.stats.db.clone();
+	let titles = web.app.titles(site.id).unwrap_or_default();
 	let name = format!("{}.goatcounter.csv.gz", site.domain);
-	match tokio::task::spawn_blocking(move || export::goatcounter(&db, &site, all.from, all.to))
-		.await
+	match tokio::task::spawn_blocking(move || {
+		export::goatcounter(&db, &site, &titles, all.from, all.to)
+	})
+	.await
 	{
 		Ok(Ok(body)) => (
 			[

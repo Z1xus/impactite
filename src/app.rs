@@ -206,6 +206,14 @@ const MIGRATIONS: &[&str] = &[
 	);
 	",
 	"alter table sites add column counter integer not null default 0;",
+	"
+	create table titles (
+		site integer not null references sites (id) on delete cascade,
+		path text not null,
+		title text not null,
+		primary key (site, path)
+	) without rowid;
+	",
 ];
 
 #[derive(Debug, Clone)]
