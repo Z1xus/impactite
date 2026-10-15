@@ -339,11 +339,18 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 
 	let sweeper = tokio::spawn({
 		let ingest = ingest.clone();
+		let app = web.app.clone();
+		let db = db.clone();
 		async move {
 			let mut interval = tokio::time::interval(Duration::from_secs(60));
+			let mut minutes = 0u64;
 			loop {
 				interval.tick().await;
 				ingest.sweep();
+				if minutes.is_multiple_of(60) {
+					prune(&app, &db);
+				}
+				minutes += 1;
 			}
 		}
 	});
@@ -434,6 +441,21 @@ fn find_or_create(app: &App, domain: &str, timezone: &str) -> anyhow::Result<app
 		None => None,
 	};
 	Ok(app.add_site(domain, timezone, team)?)
+}
+
+// drops days older than each site keeps
+fn prune(app: &App, db: &Db) {
+	let Ok(sites) = app.retentions() else {
+		return;
+	};
+	for (site, days) in sites {
+		let tz = jiff::tz::TimeZone::get(&site.timezone).unwrap_or(jiff::tz::TimeZone::UTC);
+		let today = jiff::Timestamp::now().to_zoned(tz).date();
+		let before = stats::day_number(today) - days as i32;
+		if let Err(err) = db.prune(site.id, before) {
+			tracing::warn!(%err, site = site.domain, "prune");
+		}
+	}
 }
 
 async fn redirect(url: String) {

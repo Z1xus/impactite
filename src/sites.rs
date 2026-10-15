@@ -30,6 +30,7 @@ pub fn routes() -> Router<Arc<Web>> {
 			get(list).post(upload).layer(DefaultBodyLimit::max(UPLOAD)),
 		)
 		.route("/api/app/sites/{domain}/imports/{id}", delete(remove))
+		.route("/api/app/sites/{domain}/reset", axum::routing::post(reset))
 		.route(
 			"/api/app/sites/{domain}/guests",
 			get(guests).post(invite_guest),
@@ -48,6 +49,8 @@ pub fn routes() -> Router<Arc<Web>> {
 struct Update {
 	timezone: Option<String>,
 	team: Option<i64>,
+	domain: Option<String>,
+	retention: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -79,6 +82,27 @@ async fn update(
 		}
 		web.ingest.forget(&site.domain);
 	}
+	if let Some(days) = body.retention
+		&& web.app.set_retention(site.id, days).is_err()
+	{
+		return broken();
+	}
+	if let Some(raw) = &body.domain {
+		let Some(domain) = accounts::clean_domain(raw) else {
+			return fail(StatusCode::BAD_REQUEST, "Use a valid domain.");
+		};
+		if domain != site.domain {
+			match web.app.rename_site(site.id, &domain) {
+				Err(rusqlite::Error::SqliteFailure(err, _))
+					if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+				{
+					return fail(StatusCode::CONFLICT, "This domain is already tracked.");
+				}
+				Err(_) => return broken(),
+				Ok(()) => web.ingest.forget(&site.domain),
+			}
+		}
+	}
 	if let Some(team) = body.team {
 		if !manages(&web, viewer.user, &site) || !manager(&web, viewer.user, team) {
 			return fail(
@@ -91,6 +115,31 @@ async fn update(
 		}
 	}
 	StatusCode::NO_CONTENT.into_response()
+}
+
+async fn reset(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	let Some(site) = managed(&web, viewer.user, &domain) else {
+		return fail(
+			StatusCode::FORBIDDEN,
+			"Only owners and admins can reset stats.",
+		);
+	};
+	let db = web.stats.db.clone();
+	let id = site.id;
+	if !matches!(
+		tokio::task::spawn_blocking(move || db.reset_site(id)).await,
+		Ok(Ok(()))
+	) {
+		return broken();
+	}
+	match web.app.clear_imports(site.id) {
+		Ok(()) => StatusCode::NO_CONTENT.into_response(),
+		Err(_) => broken(),
+	}
 }
 
 async fn guests(
@@ -316,6 +365,48 @@ impl App {
 			[site as i64],
 			|row| row.get(0),
 		)
+	}
+
+	pub fn rename_site(&self, site: u64, domain: &str) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set domain = ?2 where id = ?1",
+			params![site as i64, domain],
+		)?;
+		Ok(())
+	}
+
+	pub fn set_retention(&self, site: u64, days: u32) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set retention = ?2 where id = ?1",
+			params![site as i64, days],
+		)?;
+		Ok(())
+	}
+
+	pub fn clear_imports(&self, site: u64) -> rusqlite::Result<()> {
+		self.conn()
+			.execute("delete from imports where site = ?1", [site as i64])?;
+		Ok(())
+	}
+
+	pub fn retentions(&self) -> rusqlite::Result<Vec<(Site, i64)>> {
+		let conn = self.conn();
+		let mut stmt = conn.prepare(
+			"select id, domain, timezone, created_at, retention from sites
+			where team is not null and retention > 0",
+		)?;
+		stmt.query_map([], |row| {
+			Ok((
+				Site {
+					id: row.get::<_, i64>(0)? as u64,
+					domain: row.get(1)?,
+					timezone: row.get(2)?,
+					created_at: row.get(3)?,
+				},
+				row.get(4)?,
+			))
+		})?
+		.collect()
 	}
 
 	pub fn move_site(&self, site: u64, team: i64) -> rusqlite::Result<()> {

@@ -28,10 +28,16 @@ const WAL_AGE: Duration = Duration::from_secs(3600);
 
 type Key = (u64, i32);
 
+enum Change {
+	Drop,
+	Reset,
+	Prune(i32),
+}
+
 enum Msg {
 	Event(Box<Event>),
 	Sync(SyncSender<io::Result<()>>),
-	Drop(u64, SyncSender<io::Result<()>>),
+	Change(u64, Change, SyncSender<io::Result<()>>),
 	Stop(SyncSender<io::Result<()>>),
 }
 
@@ -80,10 +86,27 @@ impl Db {
 			})
 	}
 
-	pub fn drop_site(&self, site: u64) -> io::Result<()> {
+	fn change(&self, site: u64, change: Change) -> io::Result<()> {
 		let (tx, rx) = mpsc::sync_channel(1);
-		self.tx.send(Msg::Drop(site, tx)).map_err(|_| stopped())?;
+		self.tx
+			.send(Msg::Change(site, change, tx))
+			.map_err(|_| stopped())?;
 		rx.recv().map_err(|_| stopped())?
+	}
+
+	// removes the site for good, its id never takes events again
+	pub fn drop_site(&self, site: u64) -> io::Result<()> {
+		self.change(site, Change::Drop)
+	}
+
+	// removes all data but keeps the site collecting
+	pub fn reset_site(&self, site: u64) -> io::Result<()> {
+		self.change(site, Change::Reset)
+	}
+
+	// removes sealed days before `day`
+	pub fn prune(&self, site: u64, day: i32) -> io::Result<()> {
+		self.change(site, Change::Prune(day))
 	}
 
 	pub fn sync(&self) -> io::Result<()> {
@@ -713,6 +736,8 @@ struct Writer {
 	sealed: HashMap<Key, u64>,
 	published: u64,
 	dropped: HashSet<u64>,
+	// wal files up to this seq hold reset data of the site
+	resets: HashMap<u64, u64>,
 }
 
 impl Writer {
@@ -735,6 +760,17 @@ impl Writer {
 			Err(err) if err.kind() == ErrorKind::NotFound => HashSet::new(),
 			Err(err) => return Err(err),
 		};
+		let resets = match fs::read_to_string(shared.dir.join("resets")) {
+			Ok(text) => text
+				.lines()
+				.filter_map(|line| {
+					let (site, seq) = line.split_once(' ')?;
+					Some((site.parse().ok()?, seq.parse().ok()?))
+				})
+				.collect(),
+			Err(err) if err.kind() == ErrorKind::NotFound => HashMap::new(),
+			Err(err) => return Err(err),
+		};
 		let mut writer = Self {
 			shared,
 			wal,
@@ -747,13 +783,14 @@ impl Writer {
 			sealed: HashMap::new(),
 			published: 0,
 			dropped,
+			resets,
 		};
 
 		for seq in seqs {
 			let (_, events) = Wal::open(&wal_path(&wal_dir, seq))?;
 			let mut keys = HashSet::new();
 			for event in events {
-				if writer.dropped.contains(&event.site) {
+				if writer.gone(event.site, seq) {
 					continue;
 				}
 				let key = (event.site, event.day());
@@ -778,7 +815,7 @@ impl Writer {
 		let mut batch = Vec::new();
 		let mut replies = Vec::new();
 		let mut stop = None;
-		let mut drops = Vec::new();
+		let mut changes = Vec::new();
 		loop {
 			let first = match rx.recv_timeout(TICK) {
 				Ok(msg) => Some(msg),
@@ -789,13 +826,19 @@ impl Writer {
 				match msg {
 					Msg::Event(event) => batch.push(*event),
 					Msg::Sync(reply) => replies.push(reply),
-					Msg::Drop(site, reply) => drops.push((site, reply)),
+					Msg::Change(site, change, reply) => changes.push((site, change, reply)),
 					Msg::Stop(reply) => stop = Some(reply),
 				}
 			}
-			for (site, reply) in drops.drain(..) {
-				batch.retain(|event| event.site != site);
-				let _ = reply.send(self.drop_site(site));
+			for (site, change, reply) in changes.drain(..) {
+				if !matches!(change, Change::Prune(_)) {
+					batch.retain(|event| event.site != site);
+				}
+				let _ = reply.send(match change {
+					Change::Drop => self.drop_site(site),
+					Change::Reset => self.reset_site(site),
+					Change::Prune(day) => self.prune(site, day),
+				});
 			}
 
 			let stop_requested = stop.is_some();
@@ -972,35 +1015,84 @@ impl Writer {
 		}
 	}
 
-	fn drop_site(&mut self, site: u64) -> io::Result<()> {
+	fn gone(&self, site: u64, seq: u64) -> bool {
+		self.dropped.contains(&site) || self.resets.get(&site).is_some_and(|&cut| seq <= cut)
+	}
+
+	fn record(&self, name: &str, line: &str) -> io::Result<()> {
 		let mut file = fs::OpenOptions::new()
 			.create(true)
 			.append(true)
-			.open(self.shared.dir.join("dropped"))?;
-		writeln!(file, "{site}")?;
-		file.sync_data()?;
+			.open(self.shared.dir.join(name))?;
+		writeln!(file, "{line}")?;
+		file.sync_data()
+	}
+
+	fn drop_site(&mut self, site: u64) -> io::Result<()> {
+		self.record("dropped", &site.to_string())?;
 		self.dropped.insert(site);
-		let keys: Vec<Key> = self
-			.memtable
-			.keys()
-			.copied()
-			.filter(|key| key.0 == site)
-			.collect();
-		for key in keys {
-			self.memtable.remove(&key);
-			self.shared.publish(key, None);
-		}
-		self.sealed.retain(|key, _| key.0 != site);
-		lock(&self.shared.versions).retain(|key, _| key.0 != site);
-		lock(&self.shared.dicts).remove(&site);
-		*lock(&self.shared.cache) = Cache::new(CACHE);
-		*lock(&self.shared.ranges) = Cache::new(CACHE);
-		*lock(&self.shared.imports) = Cache::new(CACHE);
+		self.forget(site, None);
 		match fs::remove_dir_all(self.shared.site_dir(site)) {
 			Err(err) if err.kind() != ErrorKind::NotFound => return Err(err),
 			_ => {}
 		}
 		self.drop_sealed_wals()
+	}
+
+	fn reset_site(&mut self, site: u64) -> io::Result<()> {
+		self.rotate()?;
+		let cut = self.seq - 1;
+		self.record("resets", &format!("{site} {cut}"))?;
+		self.resets.insert(site, cut);
+		self.forget(site, None);
+		match fs::remove_dir_all(self.shared.site_dir(site)) {
+			Err(err) if err.kind() != ErrorKind::NotFound => return Err(err),
+			_ => {}
+		}
+		self.drop_sealed_wals()
+	}
+
+	fn prune(&mut self, site: u64, before: i32) -> io::Result<()> {
+		self.forget(site, Some(before));
+		let entries = match fs::read_dir(self.shared.site_dir(site)) {
+			Ok(entries) => entries,
+			Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+			Err(err) => return Err(err),
+		};
+		for entry in entries {
+			let path = entry?.path();
+			let day = path
+				.file_stem()
+				.and_then(|stem| stem.to_str())
+				.and_then(|stem| stem.parse::<i32>().ok());
+			if day.is_some_and(|day| day < before) {
+				fs::remove_file(path)?;
+			}
+		}
+		Ok(())
+	}
+
+	// drops in-memory state of the site, for days before `before` or all of it
+	fn forget(&mut self, site: u64, before: Option<i32>) {
+		let which = |day: i32| before.is_none_or(|before| day < before);
+		let keys: Vec<Key> = self
+			.memtable
+			.keys()
+			.copied()
+			.filter(|key| key.0 == site && which(key.1))
+			.collect();
+		for key in keys {
+			self.memtable.remove(&key);
+			self.shared.publish(key, None);
+		}
+		self.sealed.retain(|key, _| key.0 != site || !which(key.1));
+		lock(&self.shared.versions).retain(|key, _| key.0 != site || !which(key.1));
+		if before.is_none() {
+			lock(&self.shared.dicts).remove(&site);
+		}
+		*lock(&self.shared.cache) = Cache::new(CACHE);
+		*lock(&self.shared.ranges) = Cache::new(CACHE);
+		*lock(&self.shared.imports) = Cache::new(CACHE);
 	}
 
 	fn rotate(&mut self) -> io::Result<()> {
@@ -1023,7 +1115,7 @@ impl Writer {
 			let keys: Vec<Key> = self.wal_keys[&seq].iter().copied().collect();
 			let mut done = true;
 			for key in keys {
-				done &= self.dropped.contains(&key.0)
+				done &= self.gone(key.0, seq)
 					|| self.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq);
 			}
 			if done {

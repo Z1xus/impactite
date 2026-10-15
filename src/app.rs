@@ -172,6 +172,9 @@ const MIGRATIONS: &[&str] = &[
 		created_at integer not null
 	);
 	",
+	"
+	alter table sites add column retention integer not null default 0;
+	",
 ];
 
 #[derive(Debug, Clone)]

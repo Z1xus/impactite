@@ -1,4 +1,10 @@
-export type Site = { id: number; domain: string; timezone: string; role: string };
+export type Site = {
+	id: number;
+	domain: string;
+	timezone: string;
+	retention: number;
+	role: string;
+};
 export type Team = { id: number; name: string; personal: boolean; role: string; sites: Site[] };
 export type Me = {
 	id: number;

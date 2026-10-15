@@ -379,16 +379,8 @@ async fn add_site(
 	if !matches!(web.app.role(viewer.user, body.team), Ok(Some(role)) if role != "viewer") {
 		return fail(StatusCode::FORBIDDEN, "You can't add sites to this team.");
 	}
-	let domain = body
-		.domain
-		.trim()
-		.trim_start_matches("https://")
-		.trim_start_matches("http://")
-		.trim_start_matches("www.")
-		.trim_end_matches('/')
-		.to_lowercase();
-	if domain.is_empty() || domain.contains('/') || jiff::tz::TimeZone::get(&body.timezone).is_err()
-	{
+	let domain = clean_domain(&body.domain).unwrap_or_default();
+	if domain.is_empty() || jiff::tz::TimeZone::get(&body.timezone).is_err() {
 		return fail(StatusCode::BAD_REQUEST, "Use a valid domain and timezone.");
 	}
 	match web.app.add_site(&domain, &body.timezone, Some(body.team)) {
@@ -488,6 +480,17 @@ pub async fn signup(
 		Ok(user) => signed_in(&web, user, None),
 		Err((status, message)) => fail(status, message),
 	}
+}
+
+pub fn clean_domain(raw: &str) -> Option<String> {
+	let domain = raw
+		.trim()
+		.trim_start_matches("https://")
+		.trim_start_matches("http://")
+		.trim_start_matches("www.")
+		.trim_end_matches('/')
+		.to_lowercase();
+	(!domain.is_empty() && !domain.contains('/') && !domain.contains(' ')).then_some(domain)
 }
 
 pub(crate) fn hash(password: &str) -> rusqlite::Result<String> {
@@ -749,13 +752,15 @@ impl App {
 			"select t.id, t.name, t.personal, m.role from teams t join members m on m.team = t.id
 			where m.user = ?1 order by t.personal desc, t.name",
 		)?;
-		let mut sites_stmt =
-			conn.prepare("select id, domain, timezone from sites where team = ?1 order by domain")?;
+		let mut sites_stmt = conn.prepare(
+			"select id, domain, timezone, retention from sites where team = ?1 order by domain",
+		)?;
 		let site = |row: &rusqlite::Row, role: String| {
 			Ok(json!({
 				"id": row.get::<_, i64>(0)?,
 				"domain": row.get::<_, String>(1)?,
 				"timezone": row.get::<_, String>(2)?,
+				"retention": row.get::<_, i64>(3)?,
 				"role": role,
 			}))
 		};
@@ -778,11 +783,11 @@ impl App {
 		}
 		let shared = conn
 			.prepare(
-				"select s.id, s.domain, s.timezone, g.role from guests g join sites s on s.id = g.site
+				"select s.id, s.domain, s.timezone, s.retention, g.role from guests g join sites s on s.id = g.site
 				where g.user = ?1 and s.team is not null
 				and s.team not in (select team from members where user = ?1) order by s.domain",
 			)?
-			.query_map([user], |row| site(row, row.get(3)?))?
+			.query_map([user], |row| site(row, row.get(4)?))?
 			.collect::<rusqlite::Result<Vec<_>>>()?;
 		if !shared.is_empty() {
 			teams.push(json!({ "id": 0, "name": "Shared with me", "personal": false, "role": "guest", "sites": shared }));

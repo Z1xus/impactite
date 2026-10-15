@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { api } from "#lib/api.ts";
@@ -230,6 +231,42 @@
 		imports = (await api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`)).imports;
 	}
 
+	const RETENTION = [
+		{ key: 0, label: "forever" },
+		{ key: 30, label: "30 days" },
+		{ key: 90, label: "90 days" },
+		{ key: 180, label: "180 days" },
+		{ key: 365, label: "1 year" },
+		{ key: 730, label: "2 years" },
+		{ key: 1095, label: "3 years" },
+		{ key: 1825, label: "5 years" }
+	];
+	let domainName = $state(untrack(() => page.params.site ?? ""));
+	let resetConfirm = $state("");
+
+	async function renameSite() {
+		const id = site?.id;
+		await api(`/api/app/sites/${domain}`, { domain: domainName }, "PATCH");
+		await refresh();
+		const next = session.me?.teams
+			.flatMap((team) => team.sites)
+			.find((item) => item.id === id)?.domain;
+		if (next) await goto(resolve("/[site]/settings", { site: next }));
+	}
+
+	const setRetention = (retention: number) =>
+		attempt(async () => {
+			await api(`/api/app/sites/${domain}`, { retention }, "PATCH");
+			await refresh();
+		});
+
+	async function resetStats() {
+		if (resetConfirm !== "reset") throw new Error("Type reset to confirm.");
+		await api(`/api/app/sites/${domain}/reset`, {});
+		resetConfirm = "";
+		imports = [];
+	}
+
 	async function destroy() {
 		if (confirm !== domain) throw new Error(`Type ${domain} to confirm.`);
 		await api(`/api/app/sites/${domain}`, undefined, "DELETE");
@@ -384,7 +421,16 @@
 			{/snippet}
 
 			<Section id="general" label="general">
-				<div class="grid gap-4 sm:grid-cols-2">
+				<Form action="rename" submit={renameSite} inline>
+					<Field label="domain" bind:value={domainName} required />
+				</Form>
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					<Select
+						label="keep data"
+						value={site.retention}
+						options={RETENTION}
+						pick={setRetention}
+					/>
 					<Select
 						label="timezone"
 						value={site.timezone}
@@ -546,6 +592,12 @@
 
 			{#if owner}
 				<Section id="danger" label="danger" danger>
+					<Form action="reset stats" submit={resetStats} inline danger>
+						<Field
+							label="type reset to remove all stats but keep the site and its settings"
+							bind:value={resetConfirm}
+						/>
+					</Form>
 					<Form action="delete site" submit={destroy} inline danger>
 						<Field
 							label="type {domain} to delete it and all its data"
