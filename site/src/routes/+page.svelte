@@ -22,50 +22,50 @@
 	const REPO = "https://github.com/z1xus/impactite";
 	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
 
-	// from impactite-benchmarks, results/2026-10-15T120020Z.jsonl
-	const BENCH_RESULTS = [
+	// impactite-benchmarks, results/2026-10-15T130903Z.jsonl. impactite runs on its own api,
+	// which is plausible's, the others on theirs
+	const STATS: {
+		label: string;
+		unit: string;
+		better: "more" | "less";
+		digits?: number;
+		values: [number, number, number];
+	}[] = [
+		{ label: "pageviews per second", unit: "/s", better: "more", values: [159799, 7753, 9738] },
 		{
-			name: "plausible",
-			charts: [
-				{
-					label: "pageviews per second, more is better",
-					unit: "/s",
-					ours: 160876,
-					theirs: 8581
-				},
-				{
-					label: "top pages query, less is better",
-					unit: "ms",
-					digits: 2,
-					ours: 0.35,
-					theirs: 54.8
-				},
-				{ label: "memory, less is better", unit: "MiB", ours: 448, theirs: 1902 },
-				{ label: "disk, less is better", unit: "MiB", ours: 129, theirs: 1333 },
-				{ label: "tracker gzipped, less is better", unit: "B", ours: 930, theirs: 1324 }
-			]
+			label: "top pages query",
+			unit: "ms",
+			better: "less",
+			digits: 2,
+			values: [0.34, 56.5, 1.34]
 		},
 		{
-			name: "goatcounter",
-			charts: [
-				{
-					label: "pageviews per second, more is better",
-					unit: "/s",
-					ours: 75850,
-					theirs: 10181
-				},
-				{
-					label: "top pages query, less is better",
-					unit: "ms",
-					digits: 2,
-					ours: 0.96,
-					theirs: 1.26
-				},
-				{ label: "memory, less is better", unit: "MiB", ours: 374, theirs: 577 },
-				{ label: "disk, less is better", unit: "MiB", ours: 129, theirs: 11 },
-				{ label: "tracker gzipped, less is better", unit: "B", ours: 1481, theirs: 3259 }
-			]
-		}
+			label: "cpu for 1M pageviews",
+			unit: "s",
+			better: "less",
+			digits: 1,
+			values: [21.5, 1248.2, 137.9]
+		},
+		{ label: "idle memory", unit: "MiB", better: "less", values: [18, 942, 37] },
+		{ label: "idle cpu", unit: "%", better: "less", digits: 2, values: [0, 2.69, 0.02] },
+		{ label: "memory after 1M", unit: "MiB", better: "less", values: [124, 2217, 482] },
+		{
+			label: "disk after 1M",
+			unit: "MiB",
+			better: "less",
+			values: [23.5, 1331.7, 11.6]
+		},
+		{ label: "image size", unit: "MiB", better: "less", values: [19, 987, 36] },
+		{ label: "tracker gzipped", unit: "B", better: "less", values: [930, 1324, 3259] }
+	];
+	const TOOLS = ["impactite", "plausible", "goatcounter"];
+	// the same goatcounter requests and queries sent to both
+	const DROPIN = [
+		["pageviews per second", "66,488", "9,738"],
+		["top pages query", "0.86 ms", "1.34 ms"],
+		["cpu for 1M pageviews", "43.9 s", "137.9 s"],
+		["memory after 1M", "100 MiB", "482 MiB"],
+		["visits counted", "869,192", "869,192"]
 	];
 
 	// 28 days of the demo site, with the day it hit the front page
@@ -188,33 +188,60 @@
 			<h2 class="font-mono text-[32px] tracking-tight">Measured, side by side.</h2>
 			<p class="max-w-2xl text-[17px] text-dim">
 				A million pageviews sent to each tool through its own tracker endpoint, then the
-				same queries through its own API. One machine, one tool at a time.
+				same queries through its own API. One machine, one tool at a time. The best of each
+				is solid.
 			</p>
 		</div>
-		<div class="grid gap-16 md:grid-cols-2">
-			{#each BENCH_RESULTS as group (group.name)}
-				<div class="flex flex-col gap-8">
-					<h3 class="label text-fg">against {group.name}, on its api</h3>
-					{#each group.charts as chart (chart.label)}
-						<div class="flex flex-col gap-4">
-							<span class="label">{chart.label}</span>
-							<Race
-								on={speed}
-								unit={chart.unit}
-								digits={chart.digits ?? 0}
-								rows={[
-									{ label: "impactite", value: chart.ours, ours: true },
-									{ label: group.name, value: chart.theirs }
-								]}
-							/>
-						</div>
-					{/each}
+		<div class="grid gap-x-12 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
+			{#each STATS as stat (stat.label)}
+				<div class="flex flex-col gap-4">
+					<span class="label">{stat.label}, {stat.better} is better</span>
+					<Race
+						on={speed}
+						unit={stat.unit}
+						digits={stat.digits ?? 0}
+						better={stat.better}
+						rows={TOOLS.map((label, i) => ({
+							label,
+							value: stat.values[i],
+							ours: i === 0
+						}))}
+					/>
 				</div>
 			{/each}
 		</div>
+		<div class="flex flex-col gap-4">
+			<h3 class="label text-fg">as a goatcounter drop-in</h3>
+			<p class="max-w-2xl text-[15px] text-dim">
+				The same GoatCounter requests and queries, sent to impactite and to GoatCounter.
+				Both count every visit the same.
+			</p>
+			<div class="max-w-2xl overflow-x-auto rounded-px border border-line">
+				<table class="w-full min-w-[22rem] text-[14px]">
+					<thead>
+						<tr class="border-b border-line">
+							<th class="px-4 py-2 text-left label font-normal"></th>
+							<th class="px-4 py-2 text-right label font-normal text-fg">impactite</th
+							>
+							<th class="px-4 py-2 text-right label font-normal">goatcounter</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each DROPIN as [label, ours, theirs] (label)}
+							<tr class="border-b border-line last:border-0">
+								<td class="px-4 py-2 text-dim">{label}</td>
+								<td class="px-4 py-2 text-right font-mono">{ours}</td>
+								<td class="px-4 py-2 text-right font-mono text-dim">{theirs}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
 		<p class="text-[14px] text-dim">
-			Ryzen 5 7600X, Podman, October 15, 2026. Plausible CE 3.2.1, GoatCounter 2.7.0. Disk is
-			for an open day, which impactite keeps raw until the day closes.
+			Ryzen 5 7600X, Podman, October 15, 2026. Plausible CE 3.2.1, GoatCounter 2.7.0. Disk
+			holds an open day, GoatCounter keeps only counts while impactite keeps every event, so
+			any filter works later.
 			<a href={BENCH} class="text-cyan hover:text-fg">See the benchmark sources</a> and run it yourself.
 		</p>
 	</section>
