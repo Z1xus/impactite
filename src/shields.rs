@@ -162,7 +162,7 @@ fn respond(web: &Web, site: u64) -> Response {
 }
 
 impl App {
-	fn shields(&self, site: u64) -> rusqlite::Result<Vec<(i64, String, String)>> {
+	pub(crate) fn shields(&self, site: u64) -> rusqlite::Result<Vec<(i64, String, String)>> {
 		let conn = self.conn();
 		let mut stmt = conn
 			.prepare("select id, kind, value from shields where site = ?1 order by kind, value")?;
@@ -172,7 +172,7 @@ impl App {
 		.collect()
 	}
 
-	fn add_shield(&self, site: u64, kind: &str, value: &str) -> rusqlite::Result<()> {
+	pub(crate) fn add_shield(&self, site: u64, kind: &str, value: &str) -> rusqlite::Result<()> {
 		self.conn().execute(
 			"insert into shields (site, kind, value) values (?1, ?2, ?3) on conflict do nothing",
 			params![site as i64, kind, value],
@@ -180,7 +180,7 @@ impl App {
 		Ok(())
 	}
 
-	fn remove_shield(&self, site: u64, id: i64) -> rusqlite::Result<()> {
+	pub(crate) fn remove_shield(&self, site: u64, id: i64) -> rusqlite::Result<()> {
 		self.conn().execute(
 			"delete from shields where site = ?1 and id = ?2",
 			params![site as i64, id],

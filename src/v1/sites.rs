@@ -252,12 +252,17 @@ async fn create(State(web): State<Arc<Web>>, call: Call) -> Response {
 }
 
 async fn show(State(web): State<Arc<Web>>, Path(domain): Path<String>, call: Call) -> Response {
-	reply(call.site(&web, &domain, 0).map(|site| {
+	reply((|| {
+		let site = call.site(&web, &domain, 0)?;
 		let mut value = site_json(&site);
-		// every property is kept, so none need an allow list
-		value["custom_properties"] = json!([]);
-		value
-	}))
+		value["custom_properties"] = json!(
+			props(&web, &site)?
+				.into_iter()
+				.map(|(_, prop)| prop)
+				.collect::<Vec<_>>()
+		);
+		Ok(value)
+	})())
 }
 
 async fn update(State(web): State<Arc<Web>>, Path(domain): Path<String>, call: Call) -> Response {
@@ -475,23 +480,45 @@ async fn share(State(web): State<Arc<Web>>, call: Call) -> Response {
 }
 
 async fn add_prop(State(web): State<Arc<Web>>, call: Call) -> Response {
-	reply(
-		call.param("site_id")
-			.and_then(|domain| call.site(&web, domain, 1))
-			.map(|_| json!({ "created": true })),
-	)
+	reply((|| {
+		let site = call.site(&web, call.param("site_id")?, 1)?;
+		let prop = call.param("property")?;
+		if prop.len() > 300 {
+			return Err((StatusCode::BAD_REQUEST, "property: is too long".to_owned()));
+		}
+		web.app.add_shield(site.id, "prop", prop).map_err(broken)?;
+		web.ingest.forget(&site.domain);
+		Ok(json!({ "created": true }))
+	})())
 }
 
 async fn remove_prop(
 	State(web): State<Arc<Web>>,
-	Path(_property): Path<String>,
+	Path(prop): Path<String>,
 	call: Call,
 ) -> Response {
-	reply(
-		call.param("site_id")
-			.and_then(|domain| call.site(&web, domain, 1))
-			.map(|_| json!({ "deleted": true })),
-	)
+	reply((|| {
+		let site = call.site(&web, call.param("site_id")?, 1)?;
+		for (id, _) in props(&web, &site)?
+			.into_iter()
+			.filter(|(_, kept)| *kept == prop)
+		{
+			web.app.remove_shield(site.id, id).map_err(broken)?;
+		}
+		web.ingest.forget(&site.domain);
+		Ok(json!({ "deleted": true }))
+	})())
+}
+
+fn props(web: &Web, site: &Site) -> Result<Vec<(i64, String)>, Fail> {
+	Ok(web
+		.app
+		.shields(site.id)
+		.map_err(broken)?
+		.into_iter()
+		.filter(|(_, kind, _)| kind == "prop")
+		.map(|(id, _, prop)| (id, prop))
+		.collect())
 }
 
 impl App {
