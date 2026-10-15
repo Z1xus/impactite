@@ -27,6 +27,8 @@
 
 	const REPO = "https://github.com/z1xus/impactite";
 	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
+	// a public dashboard on a demo instance, served over tailscale until there's a real host
+	const DEMO = "https://hq.neko-notothen.ts.net:10002/share/impactite.dev";
 
 	// impactite-benchmarks, results/2026-10-15T130903Z.jsonl. impactite runs on its own api,
 	// which is plausible's, the others on theirs
@@ -138,7 +140,8 @@
 		<nav class="flex items-center gap-6">
 			<a href="#speed" class="hidden label hover:text-fg sm:block">speed</a>
 			<a href="#compatible" class="hidden label hover:text-fg sm:block">compatible</a>
-			<a href="#install" class="label hover:text-fg">install</a>
+			<a href={DEMO} class="label hover:text-fg">demo</a>
+			<a href="#install" class="hidden label hover:text-fg sm:block">install</a>
 			<a href={REPO} class="label hover:text-fg">source</a>
 		</nav>
 	</header>
@@ -158,9 +161,9 @@
 					>install</a
 				>
 				<a
-					href="#speed"
+					href={DEMO}
 					class="flex h-9 items-center rounded-px border border-edge px-4 label text-fg hover:border-dim"
-					>see it fly</a
+					>live demo</a
 				>
 			</div>
 		</div>
