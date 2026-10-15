@@ -228,8 +228,8 @@
 		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Just change the host.</h2>
 			<p class="text-dim">
-				Fully compatible with the Plausible and GoatCounter trackers. Their APIs and exports
-				work as they are, and your history comes along.
+				Keep your Plausible or GoatCounter script. Their APIs work too, and you can import
+				your existing stats.
 			</p>
 		</div>
 		<div class="flex flex-col gap-4">
