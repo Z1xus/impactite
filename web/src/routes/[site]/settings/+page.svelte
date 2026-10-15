@@ -406,6 +406,9 @@
 				{#snippet actions()}
 					<Button variant="quiet" onclick={() => (adding = true)}>add goal</Button>
 				{/snippet}
+				{#if goals?.length === 0}
+					<span class="text-[14px] text-dim">No goals yet.</span>
+				{/if}
 				<List
 					items={goals?.map((goal) => ({
 						key: goal.id,
@@ -445,6 +448,8 @@
 					<span class="text-[14px] text-dim"
 						>Add two goals to build a funnel from them.</span
 					>
+				{:else if funnels?.length === 0}
+					<span class="text-[14px] text-dim">No funnels yet.</span>
 				{/if}
 				<List
 					items={funnels?.map((funnel) => ({
