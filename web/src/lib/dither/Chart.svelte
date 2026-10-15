@@ -7,6 +7,7 @@
 		values,
 		previous = [],
 		labels = [],
+		keys = labels,
 		format = (value: number) => String(value),
 		height = 220,
 		cell = 2,
@@ -15,6 +16,8 @@
 		values: number[];
 		previous?: number[];
 		labels?: string[];
+		// what each point stands for, the full time, so a shift isn't faked by repeating labels
+		keys?: string[];
 		format?: (value: number) => string;
 		height?: number;
 		cell?: number;
@@ -34,6 +37,10 @@
 	let frame = 0;
 
 	const MORPH = 280;
+	const SLIDE = 420;
+	// labels the drawn series had, and a scroll in progress when time moved on
+	let shownLabels: string[] = [];
+	let slide: { series: number[]; shift: number; offset: number } | null = null;
 	const ease = (t: number) => 1 - (1 - t) ** 3;
 
 	const peak = $derived(nice(Math.max(1, ...values, ...previous)));
@@ -45,6 +52,25 @@
 			[1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * step).find((n) => n >= max) ??
 			max
 		);
+	}
+
+	// how many points the new series moved along in time, 0 when it changed another way
+	function shiftOf(next: string[]) {
+		const k = shownLabels.indexOf(next[0]);
+		if (k <= 0 || next.length !== shownLabels.length || k > next.length / 2) return 0;
+		return next.slice(0, next.length - k).every((label, i) => label === shownLabels[i + k])
+			? k
+			: 0;
+	}
+
+	// the value drawn at a column, read off the scrolling series while it slides
+	function at(x: number, columns: number) {
+		if (!slide) return sample(shown, x, columns);
+		const n = shown.length;
+		const position = slide.offset + (columns === 1 ? 0 : (x / (columns - 1)) * (n - 1));
+		const low = Math.floor(position);
+		const high = Math.min(slide.series.length - 1, low + 1);
+		return slide.series[low] + (slide.series[high] - slide.series[low]) * (position - low);
 	}
 
 	function resample(source: number[], length: number) {
@@ -100,9 +126,9 @@
 			}
 		}
 
-		let lastY = top(sample(shown, 0, columns));
+		let lastY = top(at(0, columns));
 		for (let x = 0; x < columns; x++) {
-			const y = top(sample(shown, x, columns));
+			const y = top(at(x, columns));
 			for (let yy = y + 1; yy < rows; yy++) {
 				const depth = (yy - y) / Math.max(1, rows - y);
 				const density = 0.62 * (1 - depth) ** 1.6;
@@ -144,10 +170,33 @@
 		if (t < 1) frame = requestAnimationFrame(animate);
 	}
 
+	function glide(now: number) {
+		if (!slide) return;
+		const t = Math.min(1, (now - started) / SLIDE);
+		slide.offset = slide.shift * ease(t);
+		if (t >= 1) slide = null;
+		draw();
+		if (slide) frame = requestAnimationFrame(glide);
+	}
+
 	$effect(() => {
 		const next = values;
 		const nextPrevious = previous;
+		const nextLabels = keys;
 		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+		const shift = untrack(() => shiftOf(nextLabels));
+		shownLabels = nextLabels;
+		cancelAnimationFrame(frame);
+		// time moved on, so the line scrolls instead of every point changing height
+		if (shift && !still) {
+			slide = { series: [...shown.slice(0, shift), ...next], shift, offset: 0 };
+			shown = next;
+			shownPrevious = nextPrevious;
+			started = performance.now();
+			frame = requestAnimationFrame(glide);
+			return () => cancelAnimationFrame(frame);
+		}
+		slide = null;
 		from = resample(shown, next.length);
 		fromPrevious = resample(shownPrevious, nextPrevious.length);
 		cancelAnimationFrame(frame);

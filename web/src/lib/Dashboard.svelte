@@ -869,6 +869,7 @@
 						values={series}
 						previous={previousSeries}
 						{labels}
+						keys={lines.map((line) => line.key)}
 						format={(value) => format(chartMetric, value)}
 					/>
 				{/if}
