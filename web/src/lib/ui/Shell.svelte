@@ -70,7 +70,13 @@
 <div class="min-h-dvh">
 	<header class="border-b border-line">
 		<div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-6">
-			<a href={resolve("/")} class="mr-1 font-mono text-[15px] text-fg">impactite</a>
+			<a
+				href={resolve("/")}
+				class="mr-1 flex items-center gap-2 font-mono text-[15px] text-fg"
+			>
+				<img src="/favicon.svg" alt="" width="22" height="22" class="pixelated" />
+				impactite
+			</a>
 			{#if team}
 				<Menu
 					label={team.personal ? "personal" : team.name}
