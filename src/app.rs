@@ -175,6 +175,15 @@ const MIGRATIONS: &[&str] = &[
 	"
 	alter table sites add column retention integer not null default 0;
 	",
+	"
+	create table shields (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		kind text not null,
+		value text not null,
+		unique (site, kind, value)
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

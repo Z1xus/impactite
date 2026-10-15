@@ -14,6 +14,7 @@ use jiff::tz::TimeZone;
 use crate::app::{App, Site};
 use crate::geo::Geo;
 use crate::net::Proxies;
+use crate::shields::Shields;
 
 const SESSION_SECS: i64 = 30 * 60;
 const SHARDS: usize = 64;
@@ -22,6 +23,7 @@ const CLICK_IDS: &[&str] = &["gclid", "gbraid", "wbraid", "msclkid", "fbclid", "
 pub struct Tracked {
 	pub site: Site,
 	tz: TimeZone,
+	shields: Shields,
 }
 
 pub struct Hit {
@@ -46,6 +48,7 @@ pub struct Client<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rejected {
 	Bot,
+	Blocked,
 	NoSession,
 	Busy,
 	Failed,
@@ -112,7 +115,8 @@ impl Ingest {
 
 	fn remember(&self, site: Site) -> Arc<Tracked> {
 		let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
-		let tracked = Arc::new(Tracked { site, tz });
+		let shields = Shields::load(&self.app, site.id);
+		let tracked = Arc::new(Tracked { site, tz, shields });
 		self.sites
 			.write()
 			.unwrap_or_else(PoisonError::into_inner)
@@ -163,6 +167,12 @@ impl Ingest {
 		{
 			location.country = country.clone();
 		}
+		if site
+			.shields
+			.blocks(client.ip, &location.country, &hit.path, &hit.hostname)
+		{
+			return Err(Rejected::Blocked);
+		}
 
 		let mut event = Event {
 			site: site.site.id,
@@ -199,7 +209,11 @@ impl Ingest {
 		] {
 			event.dims[dim] = value.to_owned();
 		}
-		event.props = hit.props;
+		event.props = hit
+			.props
+			.into_iter()
+			.filter(|(key, _)| site.shields.keeps(key))
+			.collect();
 
 		self.db.insert(Box::new(event)).map_err(|_| Rejected::Busy)
 	}

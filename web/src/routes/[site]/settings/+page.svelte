@@ -55,6 +55,20 @@
 	let adding = $state(false);
 	let renaming = $state<Goal | null>(null);
 	type Funnel = { id: number; name: string; steps: number[] };
+	type Kind = "ip" | "country" | "page" | "hostname" | "prop";
+	type Shield = { id: number; kind: Kind; value: string };
+	const KINDS: { key: Kind; label: string; meta: string; example: string }[] = [
+		{ key: "ip", label: "ip", meta: "blocked ip", example: "203.0.113.0/24" },
+		{ key: "country", label: "country", meta: "blocked country", example: "NL" },
+		{ key: "page", label: "page", meta: "blocked page", example: "/admin/*" },
+		{ key: "hostname", label: "hostname", meta: "allowed hostname", example: "*.example.com" },
+		{ key: "prop", label: "prop", meta: "allowed prop", example: "plan" }
+	];
+	const IGNORE = 'localStorage.plausible_ignore = "true"';
+	let shields = $state<Shield[] | null>(null);
+	let shielding = $state(false);
+	let shieldKind = $state<Kind>("ip");
+	let shieldValue = $state("");
 	let funnels = $state<Funnel[] | null>(null);
 	let building = $state(false);
 	let funnelName = $state("");
@@ -131,6 +145,9 @@
 		api<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`).then(
 			(r) => (funnels = r.funnels)
 		);
+		api<{ shields: Shield[] }>(`/api/app/sites/${domain}/shields`).then(
+			(r) => (shields = r.shields)
+		);
 		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
 			(r) => (segments = r.segments)
 		);
@@ -167,6 +184,32 @@
 		).goals;
 		value = goalName = scroll = "";
 		adding = false;
+	}
+
+	async function addShield() {
+		shields = (
+			await api<{ shields: Shield[] }>(`/api/app/sites/${domain}/shields`, {
+				kind: shieldKind,
+				value: shieldValue
+			})
+		).shields;
+		shieldValue = "";
+		shielding = false;
+	}
+
+	const removeShield = (id: string | number) =>
+		attempt(async () => {
+			shields = (
+				await api<{ shields: Shield[] }>(
+					`/api/app/sites/${domain}/shields/${id}`,
+					undefined,
+					"DELETE"
+				)
+			).shields;
+		});
+
+	async function myIp() {
+		shieldValue = (await api<{ ip: string }>("/api/app/ip")).ip;
 	}
 
 	function startFunnel() {
@@ -302,6 +345,7 @@
 		{ id: "funnels", label: "funnels" },
 		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
 		{ id: "imports", label: "imports" },
+		{ id: "shields", label: "shields" },
 		...(owner
 			? [
 					{ id: "guests", label: "guests" },
@@ -401,6 +445,25 @@
 				>
 			</div>
 		{/if}
+	</Form>
+</Dialog>
+
+<Dialog title="add rule" bind:open={shielding}>
+	<Form action="add rule" submit={addShield}>
+		<Toggle label="kind" bind:value={shieldKind} options={KINDS} />
+		<div class="flex items-end gap-2">
+			<div class="flex-1">
+				<Field
+					label={KINDS.find((kind) => kind.key === shieldKind)?.meta ?? "value"}
+					placeholder={KINDS.find((kind) => kind.key === shieldKind)?.example}
+					bind:value={shieldValue}
+					required
+				/>
+			</div>
+			{#if shieldKind === "ip"}
+				<Button type="button" variant="quiet" onclick={myIp}>use my ip</Button>
+			{/if}
+		</div>
 	</Form>
 </Dialog>
 
@@ -545,6 +608,27 @@
 					/>
 				</Form>
 				<Message tone="cyan">{imported}</Message>
+			</Section>
+
+			<Section id="shields" label="shields">
+				{#snippet actions()}
+					<Button variant="quiet" onclick={() => (shielding = true)}>add rule</Button>
+				{/snippet}
+				{#if shields?.length === 0}
+					<span class="text-[14px] text-dim">Every visit counts.</span>
+				{/if}
+				<List
+					items={shields?.map((rule) => ({
+						key: rule.id,
+						title: rule.value,
+						meta: [KINDS.find((kind) => kind.key === rule.kind)?.meta ?? rule.kind]
+					})) ?? null}
+					remove={removeShield}
+				/>
+				<span class="text-[14px] text-dim"
+					>To skip your own browser, run this in its console on your site.</span
+				>
+				<Code code={IGNORE} />
 			</Section>
 
 			{#if owner && people}

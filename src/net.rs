@@ -59,7 +59,7 @@ impl Proxies {
 
 	pub fn visitor(&self, peer: SocketAddr, headers: &HeaderMap) -> Visitor {
 		let peer = peer.ip().to_canonical();
-		if !self.trusts(peer) {
+		if !self.contains(peer) {
 			return Visitor {
 				ip: peer,
 				country: None,
@@ -87,7 +87,7 @@ impl Proxies {
 		Visitor { ip, country }
 	}
 
-	fn trusts(&self, ip: IpAddr) -> bool {
+	pub fn contains(&self, ip: IpAddr) -> bool {
 		self.0.iter().any(|&(range, bits)| match (range, ip) {
 			(IpAddr::V4(range), IpAddr::V4(ip)) => {
 				let mask = u32::MAX.checked_shl(32 - u32::from(bits)).unwrap_or(0);

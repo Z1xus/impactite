@@ -131,7 +131,7 @@ impl Matcher {
 	}
 }
 
-fn glob(pattern: &str, text: &str) -> bool {
+pub fn glob(pattern: &str, text: &str) -> bool {
 	let mut parts = pattern.split('*');
 	let first = parts.next().unwrap_or_default();
 	let Some(mut rest) = text.strip_prefix(first) else {

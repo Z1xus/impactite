@@ -19,6 +19,7 @@ use crate::passkeys;
 use crate::prefs;
 use crate::profile;
 use crate::segments;
+use crate::shields;
 use crate::sites;
 use crate::stats::{self, Stats};
 use crate::teams;
@@ -47,6 +48,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(admin::routes())
 				.merge(segments::routes())
 				.merge(prefs::routes())
+				.merge(shields::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))

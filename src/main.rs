@@ -19,6 +19,7 @@ mod prefs;
 mod profile;
 mod segments;
 mod server;
+mod shields;
 mod sites;
 mod stats;
 mod teams;
@@ -200,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
 			if jiff::tz::TimeZone::get(&timezone).is_err() {
 				bail!("unknown timezone {timezone}");
 			}
-			let site = app.add_site(&domain, &timezone, None)?;
+			let site = app.add_site(&domain, &timezone, default_team(&app)?)?;
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
@@ -436,11 +437,15 @@ fn find_or_create(app: &App, domain: &str, timezone: &str) -> anyhow::Result<app
 	if let Some(site) = app.site(domain)? {
 		return Ok(site);
 	}
-	let team = match app.first_user()? {
+	Ok(app.add_site(domain, timezone, default_team(app)?)?)
+}
+
+// before setup sites stay without a team, setup adopts them
+fn default_team(app: &App) -> anyhow::Result<Option<i64>> {
+	Ok(match app.first_user()? {
 		Some(user) => Some(app.personal_team(user)?),
 		None => None,
-	};
-	Ok(app.add_site(domain, timezone, team)?)
+	})
 }
 
 // drops days older than each site keeps
