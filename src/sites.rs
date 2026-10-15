@@ -51,6 +51,7 @@ struct Update {
 	team: Option<i64>,
 	domain: Option<String>,
 	retention: Option<u32>,
+	counter: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -84,6 +85,11 @@ async fn update(
 	}
 	if let Some(days) = body.retention
 		&& web.app.set_retention(site.id, days).is_err()
+	{
+		return broken();
+	}
+	if let Some(counter) = body.counter
+		&& web.app.set_counter(site.id, counter).is_err()
 	{
 		return broken();
 	}
@@ -373,6 +379,22 @@ impl App {
 			params![site as i64, domain],
 		)?;
 		Ok(())
+	}
+
+	pub fn set_counter(&self, site: u64, counter: bool) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set counter = ?2 where id = ?1",
+			params![site as i64, counter],
+		)?;
+		Ok(())
+	}
+
+	pub fn counter(&self, site: u64) -> rusqlite::Result<bool> {
+		self.conn().query_row(
+			"select counter from sites where id = ?1",
+			[site as i64],
+			|row| row.get(0),
+		)
 	}
 
 	pub fn set_retention(&self, site: u64, days: u32) -> rusqlite::Result<()> {

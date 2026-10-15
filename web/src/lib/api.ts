@@ -3,6 +3,7 @@ export type Site = {
 	domain: string;
 	timezone: string;
 	retention: number;
+	counter: boolean;
 	role: string;
 };
 export type Team = { id: number; name: string; personal: boolean; role: string; sites: Site[] };

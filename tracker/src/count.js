@@ -91,6 +91,25 @@
 		}
 	};
 
+	gc.visit_count = (opt = {}) => {
+		const type = opt.type || "html";
+		const url = new URL(
+			`${opt.base || endpoint().replace(/\/count$/, "")}/counter/${encodeURIComponent(opt.path || l.pathname)}.${type}`,
+		);
+		url.searchParams.set("site", l.hostname);
+		for (const key of ["start", "end", "style"]) if (opt[key]) url.searchParams.set(key, opt[key]);
+		if (opt.no_branding) url.searchParams.set("no_branding", 1);
+		const element = d.createElement(type === "html" ? "iframe" : "img");
+		element.src = url.href;
+		if (type === "html") {
+			element.style.border = "0";
+			element.width = 200;
+			element.height = opt.no_branding ? 60 : 80;
+		}
+		for (const [name, item] of Object.entries(opt.attr || {})) element.setAttribute(name, item);
+		d.querySelector(opt.append || "body")?.append(element);
+	};
+
 	const start = () => {
 		if (!gc.no_onload) {
 			if (d.visibilityState === "prerender") {

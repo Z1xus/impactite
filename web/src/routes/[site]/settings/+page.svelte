@@ -382,6 +382,16 @@
 		if (next) await goto(resolve("/[site]/settings", { site: next }));
 	}
 
+	// split so the svelte parser does not end this block
+	const scriptEnd = "</" + "script>";
+	const counterSnippet = `<script>window.goatcounter = { no_onload: true }${scriptEnd}\n<script async src="${location.origin}/count.js" onload="goatcounter.visit_count({ append: 'body' })">${scriptEnd}`;
+
+	const setCounter = (counter: boolean) =>
+		attempt(async () => {
+			await api(`/api/app/sites/${domain}`, { counter }, "PATCH");
+			await refresh();
+		});
+
 	const setRetention = (retention: number) =>
 		attempt(async () => {
 			await api(`/api/app/sites/${domain}`, { retention }, "PATCH");
@@ -790,6 +800,22 @@
 					<Code
 						code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
 					/>
+				{/if}
+				<div class="flex items-center justify-between gap-4">
+					<span class="text-[14px] text-dim">Pages can show their visitor count.</span>
+					<Toggle
+						bind:value={
+							() => (site?.counter ? "on" : "off"),
+							(mode: "off" | "on") => setCounter(mode === "on")
+						}
+						options={[
+							{ key: "off", label: "off" },
+							{ key: "on", label: "on" }
+						]}
+					/>
+				</div>
+				{#if site?.counter}
+					<Code code={counterSnippet} />
 				{/if}
 			</Section>
 

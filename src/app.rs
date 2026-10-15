@@ -205,6 +205,7 @@ const MIGRATIONS: &[&str] = &[
 		unique (site, kind, email)
 	);
 	",
+	"alter table sites add column counter integer not null default 0;",
 ];
 
 #[derive(Debug, Clone)]

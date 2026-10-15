@@ -10,6 +10,7 @@ use crate::accounts::{self, Web};
 use crate::admin;
 use crate::api;
 use crate::assets;
+use crate::counter;
 use crate::export;
 use crate::funnels;
 use crate::goals;
@@ -60,6 +61,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/api/app/props", post(stats::props))
 				.route("/api/app/export", post(export::export))
 				.route("/api/app/icon/{host}", get(icons::icon))
+				.route("/counter/{*file}", get(counter::counter))
 				.with_state(web),
 		)
 		.route("/js/{file}", get(tracker::script))
