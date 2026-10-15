@@ -16,11 +16,57 @@
 	import Code from "#lib/ui/Code.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
-	import Count from "../lib/Count.svelte";
 	import Race from "../lib/Race.svelte";
 	import { reveal } from "../lib/reveal.ts";
 
 	const REPO = "https://github.com/z1xus/impactite";
+	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
+
+	// from impactite-benchmarks, results/2026-10-15T120020Z.jsonl
+	const BENCH_RESULTS = [
+		{
+			name: "plausible",
+			charts: [
+				{
+					label: "pageviews per second, more is better",
+					unit: "/s",
+					ours: 160876,
+					theirs: 8581
+				},
+				{
+					label: "top pages query, less is better",
+					unit: "ms",
+					digits: 2,
+					ours: 0.35,
+					theirs: 54.8
+				},
+				{ label: "memory, less is better", unit: "MiB", ours: 448, theirs: 1902 },
+				{ label: "disk, less is better", unit: "MiB", ours: 129, theirs: 1333 },
+				{ label: "tracker gzipped, less is better", unit: "B", ours: 930, theirs: 1324 }
+			]
+		},
+		{
+			name: "goatcounter",
+			charts: [
+				{
+					label: "pageviews per second, more is better",
+					unit: "/s",
+					ours: 75850,
+					theirs: 10181
+				},
+				{
+					label: "top pages query, less is better",
+					unit: "ms",
+					digits: 2,
+					ours: 0.96,
+					theirs: 1.26
+				},
+				{ label: "memory, less is better", unit: "MiB", ours: 374, theirs: 577 },
+				{ label: "disk, less is better", unit: "MiB", ours: 129, theirs: 11 },
+				{ label: "tracker gzipped, less is better", unit: "B", ours: 1481, theirs: 3259 }
+			]
+		}
+	];
 
 	// 28 days of the demo site, with the day it hit the front page
 	const days = Array.from({ length: 28 }, (_, i) => {
@@ -74,8 +120,6 @@
 	const GOATCOUNTER = `<script data-goatcounter="https://stats.example.com/count" async src="https://stats.example.com/count.js">${end}`;
 
 	let speed = $state(false);
-	let size = $state(false);
-	let stack = $state(false);
 </script>
 
 <div id="top" class="mx-auto flex max-w-6xl flex-col px-6">
@@ -139,48 +183,40 @@
 		</div>
 	</section>
 
-	<section id="speed" class="flex flex-col gap-10 py-28" use:reveal={(on) => (speed = on)}>
-		<h2 class="font-mono text-[32px] tracking-tight">Built on its own engine.</h2>
-		<div
-			class="grid gap-px overflow-hidden rounded-px border border-line bg-line md:grid-cols-4"
-		>
-			{#each [{ value: 2, digits: 0, unit: "µs", label: "warm query, 9M events" }, { value: 3, digits: 0, unit: "ms", label: "cold query, same data" }, { value: 1.1, digits: 1, unit: "M/s", label: "events ingested" }, { value: 12, digits: 0, unit: "B", label: "stored per event" }] as stat, i (stat.label)}
-				<div class="flex flex-col gap-3 bg-panel p-6">
-					<span class="text-big">
-						<Count value={stat.value} on={speed} digits={stat.digits} delay={i * 220} />
-						<span class="font-mono text-[18px] text-cyan">{stat.unit}</span>
-					</span>
-					<span class="label">{stat.label}</span>
+	<section id="speed" class="flex flex-col gap-14 py-28" use:reveal={(on) => (speed = on)}>
+		<div class="flex flex-col gap-4">
+			<h2 class="font-mono text-[32px] tracking-tight">Measured, side by side.</h2>
+			<p class="max-w-2xl text-[17px] text-dim">
+				A million pageviews sent to each tool through its own tracker endpoint, then the
+				same queries through its own API. One machine, one tool at a time.
+			</p>
+		</div>
+		<div class="grid gap-16 md:grid-cols-2">
+			{#each BENCH_RESULTS as group (group.name)}
+				<div class="flex flex-col gap-8">
+					<h3 class="label text-fg">against {group.name}, on its api</h3>
+					{#each group.charts as chart (chart.label)}
+						<div class="flex flex-col gap-4">
+							<span class="label">{chart.label}</span>
+							<Race
+								on={speed}
+								unit={chart.unit}
+								digits={chart.digits ?? 0}
+								rows={[
+									{ label: "impactite", value: chart.ours, ours: true },
+									{ label: group.name, value: chart.theirs }
+								]}
+							/>
+						</div>
+					{/each}
 				</div>
 			{/each}
 		</div>
-	</section>
-
-	<section class="grid gap-16 pb-28 md:grid-cols-2">
-		<div class="flex flex-col gap-6" use:reveal={(on) => (size = on)}>
-			<h3 class="label">tracker, brotli</h3>
-			<Race
-				on={size}
-				unit="B"
-				rows={[
-					{ label: "impactite", value: 795, ours: true },
-					{ label: "plausible", value: 1123 },
-					{ label: "goatcounter", value: 2795 }
-				]}
-			/>
-		</div>
-		<div class="flex flex-col gap-6" use:reveal={(on) => (stack = on)}>
-			<h3 class="label">services to run</h3>
-			<Race
-				on={stack}
-				unit=""
-				rows={[
-					{ label: "impactite", value: 1, ours: true },
-					{ label: "goatcounter", value: 1 },
-					{ label: "plausible", value: 3 }
-				]}
-			/>
-		</div>
+		<p class="text-[14px] text-dim">
+			Ryzen 5 7600X, Podman, October 15, 2026. Plausible CE 3.2.1, GoatCounter 2.7.0. Disk is
+			for an open day, which impactite keeps raw until the day closes.
+			<a href={BENCH} class="text-cyan hover:text-fg">See the benchmark sources</a> and run it yourself.
+		</p>
 	</section>
 
 	<section id="compatible" class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]">
