@@ -16,7 +16,7 @@ use crate::accounts::{Viewer, Web, fail, internal};
 use crate::app::{App, Site};
 use crate::stats::{self, day_number};
 
-const KINDS: [&str; 4] = ["weekly", "monthly", "spike", "drop"];
+const KINDS: [&str; 6] = ["daily", "weekly", "biweekly", "monthly", "spike", "drop"];
 const SEND_HOUR: i8 = 7;
 
 pub fn routes() -> Router<Arc<Web>> {
@@ -60,20 +60,26 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 	let today = now.date();
 	let morning = now.hour() >= SEND_HOUR;
 	match report.kind.as_str() {
-		"weekly" | "monthly" => {
-			let end = match report.kind.as_str() {
-				"weekly" => {
-					today.checked_sub(i64::from(today.weekday().to_monday_one_offset()).days())?
+		"daily" | "weekly" | "biweekly" | "monthly" => {
+			let sunday =
+				today.checked_sub(i64::from(today.weekday().to_monday_one_offset()).days())?;
+			let (start, end) = match report.kind.as_str() {
+				"daily" => {
+					let day = today.checked_sub(1.day())?;
+					(day, day)
 				}
-				_ => today.first_of_month().checked_sub(1.day())?,
+				"weekly" => (sunday.checked_sub(6.days())?, sunday),
+				"biweekly" => (sunday.checked_sub(13.days())?, sunday),
+				_ => {
+					let end = today.first_of_month().checked_sub(1.day())?;
+					(end.first_of_month(), end)
+				}
 			};
-			if !morning || report.last >= i64::from(day_number(end)) {
+			// biweekly skips every other sunday
+			let gap = if report.kind == "biweekly" { 14 } else { 1 };
+			if !morning || i64::from(day_number(end)) - report.last < gap {
 				return Ok(());
 			}
-			let start = match report.kind.as_str() {
-				"weekly" => end.checked_sub(6.days())?,
-				_ => end.first_of_month(),
-			};
 			summary(web, report, start, end).await?;
 			web.app.mark_report(report.id, day_number(end).into())?;
 		}

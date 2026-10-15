@@ -66,10 +66,12 @@
 	];
 	const IGNORE = 'localStorage.plausible_ignore = "true"';
 	type Link = { id: number; slug: string; name: string; locked: boolean };
-	type ReportKind = "weekly" | "monthly" | "spike" | "drop";
+	type ReportKind = "daily" | "weekly" | "biweekly" | "monthly" | "spike" | "drop";
 	type Report = { id: number; kind: ReportKind; email: string; threshold: number };
 	const REPORTS: { key: ReportKind; label: string; meta: (threshold: number) => string }[] = [
+		{ key: "daily", label: "daily", meta: () => "daily report" },
 		{ key: "weekly", label: "weekly", meta: () => "weekly report" },
+		{ key: "biweekly", label: "biweekly", meta: () => "report every two weeks" },
 		{ key: "monthly", label: "monthly", meta: () => "monthly report" },
 		{ key: "spike", label: "spike", meta: (n) => `alert at ${n} current visitors` },
 		{ key: "drop", label: "drop", meta: (n) => `alert under ${n} visitors a day` }
