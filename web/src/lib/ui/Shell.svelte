@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import user from "pixelarticons/svg/user.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
@@ -72,13 +73,15 @@
 <div class="min-h-dvh">
 	<header class="border-b border-line">
 		<div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-6">
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
-				href={resolve("/")}
+				href={session.me ? resolve("/") : page.url.pathname}
 				class="mr-1 flex items-center gap-2 font-mono text-[15px] text-fg"
 			>
 				<img src="/favicon.svg" alt="impactite" width="22" height="22" class="pixelated" />
 				<span class="hidden sm:inline">impactite</span>
 			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{#if team}
 				<Menu
 					label={team.personal ? "personal" : team.name}
