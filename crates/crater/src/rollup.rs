@@ -171,17 +171,20 @@ struct Scan<'a> {
 
 impl<'a> Scan<'a> {
 	fn new(parts: &'a [&'a Columns], names: &'a Names, since: u32) -> Self {
+		// only days with props need where each row's props start
 		let offsets = parts
 			.iter()
-			.map(|part| {
-				part.props
+			.map(|part| match part.keys.len() {
+				0 => Vec::new(),
+				_ => part
+					.props
 					.iter()
-					.scan(0, |sum, &n| {
+					.scan(0, |sum, n| {
 						let at = *sum;
 						*sum += n;
 						Some(at)
 					})
-					.collect()
+					.collect(),
 			})
 			.collect();
 		Self {
@@ -195,13 +198,13 @@ impl<'a> Scan<'a> {
 	fn rows(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
 		self.parts.iter().enumerate().flat_map(move |(p, part)| {
 			(0..part.rows())
-				.filter(move |&row| part.time[row] >= self.since)
+				.filter(move |&row| part.time.get(row) >= self.since)
 				.map(move |row| (p, row))
 		})
 	}
 
 	fn name(&self, p: usize, row: usize) -> Option<u32> {
-		Some(self.parts[p].dims[Dim::Name as usize][row])
+		Some(self.parts[p].dims[Dim::Name as usize].get(row))
 	}
 
 	fn is_pageview(&self, p: usize, row: usize) -> bool {
@@ -214,19 +217,22 @@ impl<'a> Scan<'a> {
 
 	fn prop(&self, p: usize, row: usize, key: u32) -> u32 {
 		let part = self.parts[p];
-		let start = self.offsets[p][row] as usize;
-		let end = start + part.props[row] as usize;
+		let Some(&start) = self.offsets[p].get(row) else {
+			return MISSING;
+		};
+		let start = start as usize;
+		let end = start + part.props.get(row) as usize;
 		(start..end)
-			.find(|&i| part.keys[i] == key)
-			.map_or(MISSING, |i| part.values[i])
+			.find(|&i| part.keys.get(i) == key)
+			.map_or(MISSING, |i| part.values.get(i))
 	}
 
 	fn event_value(&self, slot: Slot, p: usize, row: usize) -> u32 {
 		match slot {
-			Slot::Dim(dim) => self.parts[p].dims[dim as usize][row],
+			Slot::Dim(dim) => self.parts[p].dims[dim as usize].get(row),
 			Slot::Prop(key) => self.prop(p, row, key),
-			Slot::Scroll => self.parts[p].scroll[row],
-			Slot::Currency => self.parts[p].currency[row],
+			Slot::Scroll => self.parts[p].scroll.get(row),
+			Slot::Currency => self.parts[p].currency.get(row),
 			Slot::Entry | Slot::Exit => MISSING,
 		}
 	}
@@ -256,7 +262,7 @@ impl Counts {
 	pub(crate) fn rollup_slots(parts: &[&Columns]) -> Vec<Slot> {
 		let mut keys: HashMap<u32, usize> = HashMap::new();
 		for part in parts {
-			for &key in &part.keys {
+			for key in part.keys.iter() {
 				*keys.entry(key).or_default() += 1;
 			}
 		}
@@ -306,9 +312,9 @@ impl Counts {
 		];
 		for (p, row) in scan.rows() {
 			let part = parts[p];
-			let time = part.time[row];
-			let visit = &mut visits[part.session[row] as usize];
-			visit.visitor = part.visitor[row];
+			let time = part.time.get(row);
+			let visit = &mut visits[part.session.get(row) as usize];
+			visit.visitor = part.visitor.get(row);
 			visit.start = visit.start.min(time);
 			visit.end = visit.end.max(time);
 			if scan.is_engagement(p, row) {
@@ -319,14 +325,14 @@ impl Counts {
 			}
 			if scan.is_pageview(p, row) {
 				visit.pageviews += 1;
-				let page = part.dims[Dim::Page as usize][row];
+				let page = part.dims[Dim::Page as usize].get(row);
 				if time < visit.entry.0 || visit.entry.1 == MISSING {
 					visit.entry = (time, page);
 				}
 				if time >= visit.exit.0 {
 					visit.exit = (time, page);
 				}
-			} else if part.interactive[row] == 1 {
+			} else if part.interactive.get(row) == 1 {
 				visit.engaged = true;
 			}
 		}
@@ -340,7 +346,7 @@ impl Counts {
 		// a scroll filter can only match engagement events, which carry the depth
 		let scrolling = event_filters.iter().any(|m| m.slot == Slot::Scroll);
 		let is_hit = |visits: &[Visit], p: usize, row: usize| {
-			visits[parts[p].session[row] as usize].selected
+			visits[parts[p].session.get(row) as usize].selected
 				&& scan.is_engagement(p, row) == scrolling
 				&& event_filters
 					.iter()
@@ -355,9 +361,9 @@ impl Counts {
 			}
 			let part = parts[p];
 			let pageview = u64::from(scan.is_pageview(p, row));
-			let hour = (part.time[row] / 3600) as usize;
-			let visit = &mut visits[part.session[row] as usize];
-			let revenue = u64::from(part.revenue[row]);
+			let hour = (part.time.get(row) / 3600) as usize;
+			let visit = &mut visits[part.session.get(row) as usize];
+			let revenue = u64::from(part.revenue.get(row));
 			visit.hit_events += 1;
 			visit.hit_pageviews += pageview;
 			visit.hit_revenue += revenue;
@@ -365,9 +371,9 @@ impl Counts {
 			hours[hour].pageviews += pageview;
 			hours[hour].revenue += revenue;
 			if let Some(since) = since {
-				minutes[((part.time[row] - since) / 60) as usize] += pageview;
+				minutes[((part.time.get(row) - since) / 60) as usize] += pageview;
 			}
-			visitor_hours[part.visitor[row] as usize] |= 1 << hour;
+			visitor_hours[part.visitor.get(row) as usize] |= 1 << hour;
 		}
 		for visit in &mut visits {
 			visit.selected &= visit.hit_events > 0;
@@ -392,7 +398,7 @@ impl Counts {
 		let mut engaged: HashMap<(u32, u32), (u64, u32)> = HashMap::new();
 		for (p, row) in scan.rows() {
 			let part = parts[p];
-			let session = part.session[row];
+			let session = part.session.get(row);
 			if !visits[session as usize].selected
 				|| !scan.is_engagement(p, row)
 				|| !event_filters
@@ -401,10 +407,10 @@ impl Counts {
 			{
 				continue;
 			}
-			let page = part.dims[Dim::Page as usize][row];
+			let page = part.dims[Dim::Page as usize].get(row);
 			let entry = engaged.entry((page, session)).or_default();
-			entry.0 += u64::from(part.engagement[row]);
-			entry.1 = entry.1.max(part.scroll[row]);
+			entry.0 += u64::from(part.engagement.get(row));
+			entry.1 = entry.1.max(part.scroll.get(row));
 		}
 		for &pair in engaged.values() {
 			total.engage(pair);
@@ -414,22 +420,24 @@ impl Counts {
 		let mut fields = HashMap::new();
 		for &slot in slots {
 			let mut entries = match slot.is_event() {
-				true => event_breakdown(
-					scan.rows()
-						.filter(|&(p, row)| is_hit(&visits, p, row))
-						.map(|(p, row)| {
-							let session = parts[p].session[row];
-							(
-								scan.event_value(slot, p, row),
-								session,
-								scan.is_pageview(p, row),
-								parts[p].revenue[row],
-							)
-						})
-						.filter(|hit| hit.0 != MISSING)
-						.collect(),
-					&visits,
-				),
+				true => {
+					// value and session packed in one word keeps this small on big days
+					let mut pairs = Vec::new();
+					let mut sums: HashMap<u32, Metrics> = HashMap::new();
+					for (p, row) in scan.rows().filter(|&(p, row)| is_hit(&visits, p, row)) {
+						let value = scan.event_value(slot, p, row);
+						if value == MISSING {
+							continue;
+						}
+						let session = parts[p].session.get(row);
+						pairs.push(u64::from(value) << 32 | u64::from(session));
+						let sum = sums.entry(value).or_default();
+						sum.events += 1;
+						sum.pageviews += u64::from(scan.is_pageview(p, row));
+						sum.revenue += u64::from(parts[p].revenue.get(row));
+					}
+					event_breakdown(pairs, &sums, &visits)
+				}
 				false => visit_breakdown(
 					visits
 						.iter()
@@ -548,26 +556,28 @@ fn visit_breakdown(mut pairs: Vec<(u32, &Visit)>) -> Vec<(u32, Metrics)> {
 		.collect()
 }
 
-fn event_breakdown(mut hits: Vec<(u32, u32, bool, u32)>, visits: &[Visit]) -> Vec<(u32, Metrics)> {
-	hits.sort_unstable();
-	hits.chunk_by(|a, b| a.0 == b.0)
+fn event_breakdown(
+	mut pairs: Vec<u64>,
+	sums: &HashMap<u32, Metrics>,
+	visits: &[Visit],
+) -> Vec<(u32, Metrics)> {
+	pairs.sort_unstable();
+	pairs.dedup();
+	pairs
+		.chunk_by(|a, b| a >> 32 == b >> 32)
 		.map(|group| {
-			let mut metrics = Metrics {
-				events: group.len() as u64,
-				pageviews: group.iter().filter(|hit| hit.2).count() as u64,
-				revenue: group.iter().map(|hit| u64::from(hit.3)).sum(),
-				..Metrics::default()
-			};
+			let value = (group[0] >> 32) as u32;
+			let mut metrics = sums.get(&value).copied().unwrap_or_default();
 			let mut visitors = Vec::new();
-			for same in group.chunk_by(|a, b| a.1 == b.1) {
-				let visit = &visits[same[0].1 as usize];
+			for &pair in group {
+				let visit = &visits[(pair & u64::from(u32::MAX)) as usize];
 				metrics.add_visit(visit);
 				visitors.push(visit.visitor);
 			}
 			visitors.sort_unstable();
 			visitors.dedup();
 			metrics.visitors = visitors.len() as u64;
-			(group[0].0, metrics)
+			(value, metrics)
 		})
 		.collect()
 }
@@ -620,7 +630,7 @@ pub(crate) fn funnel(
 	let scan = Scan::new(parts, names, 0);
 	let mut rows: Vec<(u32, u32, usize, usize)> = scan
 		.rows()
-		.map(|(p, row)| (parts[p].session[row], parts[p].time[row], p, row))
+		.map(|(p, row)| (parts[p].session.get(row), parts[p].time.get(row), p, row))
 		.collect();
 	rows.sort_unstable();
 	let matches = |matchers: &[Matcher], p: usize, row: usize| {
@@ -651,7 +661,7 @@ pub(crate) fn funnel(
 			}
 		}
 		for step in &mut reached[..progress] {
-			step.push(parts[p].visitor[row]);
+			step.push(parts[p].visitor.get(row));
 		}
 	}
 	reached

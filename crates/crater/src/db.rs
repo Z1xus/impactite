@@ -15,16 +15,17 @@ use crate::dict::Dict;
 use crate::event::{Dim, Event};
 use crate::query::{Field, Filter, MISSING, Matcher, Query, Report, Slot};
 use crate::rollup::{Counts, Metrics, Names};
-use crate::segment::{Columns, Dense, Segment};
+use crate::segment::{Checkpoint, Columns, Dense, Raw, Segment};
 use crate::wal::Wal;
 
 const QUEUE: usize = 1 << 16;
 const CACHE: usize = 1 << 14;
 const BATCH: usize = 1 << 14;
+const PACK_ROWS: usize = 1 << 12;
 const TICK: Duration = Duration::from_secs(1);
 const QUIET: Duration = Duration::from_secs(10);
 const LATE: i64 = 2 * 3600;
-const WAL_BYTES: u64 = 64 << 20;
+const WAL_BYTES: u64 = 8 << 20;
 const WAL_AGE: Duration = Duration::from_secs(3600);
 
 type Key = (u64, i32);
@@ -380,23 +381,23 @@ impl Db {
 				for row in 0..part.rows() {
 					let mut event = Event {
 						site,
-						ts: i64::from(day) * 86_400 + i64::from(part.time[row]),
+						ts: i64::from(day) * 86_400 + i64::from(part.time.get(row)),
 						offset: 0,
-						visitor: id(part.visitor[row]),
-						session: id(part.session[row]),
-						interactive: part.interactive[row] == 1,
-						scroll_depth: part.scroll[row].checked_sub(1).map(|depth| depth as u8),
-						engagement_ms: part.engagement[row],
-						revenue: (part.currency[row] != MISSING)
-							.then(|| (part.revenue[row], text(part.currency[row]))),
+						visitor: id(part.visitor.get(row)),
+						session: id(part.session.get(row)),
+						interactive: part.interactive.get(row) == 1,
+						scroll_depth: part.scroll.get(row).checked_sub(1).map(|depth| depth as u8),
+						engagement_ms: part.engagement.get(row),
+						revenue: (part.currency.get(row) != MISSING)
+							.then(|| (part.revenue.get(row), text(part.currency.get(row)))),
 						..Event::default()
 					};
 					for dim in Dim::ALL {
-						event.dims[dim] = text(part.dims[dim as usize][row]);
+						event.dims[dim] = text(part.dims[dim as usize].get(row));
 					}
-					let count = part.props[row] as usize;
+					let count = part.props.get(row) as usize;
 					event.props = (prop..prop + count)
-						.map(|i| (text(part.keys[i]), text(part.values[i])))
+						.map(|i| (text(part.keys.get(i)), text(part.values.get(i))))
 						.collect();
 					prop += count;
 					each(event);
@@ -429,8 +430,8 @@ impl Db {
 				.map(|live| live.parts.clone());
 			match live {
 				Some(parts) => {
-					for key in parts.iter().flat_map(|part| &part.keys) {
-						*counts.entry(*key).or_default() += 1;
+					for key in parts.iter().flat_map(|part| part.keys.iter()) {
+						*counts.entry(key).or_default() += 1;
 					}
 				}
 				None => {
@@ -739,6 +740,8 @@ struct Live {
 	parts: Vec<Arc<Columns>>,
 	pending: Vec<Event>,
 	touched: Instant,
+	// parts, visitors and sessions already on disk in the seg or a checkpoint
+	saved: (usize, usize, usize),
 }
 
 struct Writer {
@@ -751,6 +754,7 @@ struct Writer {
 	memtable: HashMap<Key, Live>,
 	offsets: HashMap<u64, i32>,
 	sealed: HashMap<Key, u64>,
+	checkpointed: HashMap<Key, u64>,
 	published: u64,
 	dropped: HashSet<u64>,
 	// wal files up to this seq hold reset data of the site
@@ -798,6 +802,7 @@ impl Writer {
 			memtable: HashMap::new(),
 			offsets: HashMap::new(),
 			sealed: HashMap::new(),
+			checkpointed: HashMap::new(),
 			published: 0,
 			dropped,
 			resets,
@@ -812,7 +817,7 @@ impl Writer {
 				}
 				let key = (event.site, event.day());
 				keys.insert(key);
-				if writer.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq) {
+				if writer.covered(key)? >= Some(seq) {
 					continue;
 				}
 				writer.stage(event)?;
@@ -821,6 +826,34 @@ impl Writer {
 				writer.repair(key)?;
 			}
 			writer.wal_keys.insert(seq, keys);
+		}
+
+		// days with checkpoints but nothing left in the wal still have to be live
+		let sites = match fs::read_dir(writer.shared.dir.join("sites")) {
+			Ok(sites) => sites.collect::<io::Result<Vec<_>>>()?,
+			Err(err) if err.kind() == ErrorKind::NotFound => Vec::new(),
+			Err(err) => return Err(err),
+		};
+		for site in sites {
+			let Some(site_id) = site.file_name().to_str().and_then(|name| name.parse().ok()) else {
+				continue;
+			};
+			for entry in fs::read_dir(site.path())? {
+				let path = entry?.path();
+				let day = path
+					.file_stem()
+					.and_then(|stem| stem.to_str())
+					.and_then(|stem| stem.parse().ok());
+				if let (Some(day), true) = (day, path.extension().is_some_and(|ext| ext == "part"))
+				{
+					let key = (site_id, day);
+					if !writer.memtable.contains_key(&key) && !writer.gone(site_id, u64::MAX) {
+						let live = writer.revive(key)?;
+						writer.memtable.insert(key, live);
+						writer.show(key);
+					}
+				}
+			}
 		}
 
 		writer.drop_sealed_wals()?;
@@ -887,7 +920,9 @@ impl Writer {
 			self.stage(event)?;
 		}
 		if self.wal.size >= WAL_BYTES || self.opened.elapsed() >= WAL_AGE {
+			self.checkpoint()?;
 			self.rotate()?;
+			self.drop_sealed_wals()?;
 		}
 		Ok(())
 	}
@@ -899,11 +934,16 @@ impl Writer {
 			let live = self.revive(key)?;
 			self.memtable.insert(key, live);
 		}
-		if let Some(live) = self.memtable.get_mut(&key) {
-			live.pending.push(event);
-			live.touched = Instant::now();
+		let Some(live) = self.memtable.get_mut(&key) else {
+			return Ok(());
+		};
+		live.pending.push(event);
+		live.touched = Instant::now();
+		// unpacked events are big, so a busy day packs them often instead of once a tick
+		match live.pending.len() >= PACK_ROWS {
+			true => self.flush(key),
+			false => Ok(()),
 		}
-		Ok(())
 	}
 
 	fn revive(&mut self, key: Key) -> io::Result<Live> {
@@ -912,13 +952,91 @@ impl Writer {
 			parts: Vec::new(),
 			pending: Vec::new(),
 			touched: Instant::now(),
+			saved: (0, 0, 0),
 		};
-		if self.sealed_seq(key)?.is_some() {
+		let sealed = self.sealed_seq(key)?;
+		if sealed.is_some() {
 			let seg = Segment::read(&self.shared.path(key, "seg"))?;
 			live.dense = Dense::from_lists(seg.visitors, seg.sessions);
 			live.parts.push(Arc::new(seg.cols));
 		}
+		for checkpoint in Checkpoint::read_all(&self.shared.path(key, "part"))? {
+			// left over when a crash came between the seal and removing the checkpoints
+			if sealed >= Some(checkpoint.seq) {
+				continue;
+			}
+			live.dense.extend(checkpoint.visitors, checkpoint.sessions);
+			for part in checkpoint.parts {
+				if !part
+					.raw()
+					.is_consistent(live.dense.visitors.len(), live.dense.sessions.len())
+				{
+					return Err(io::Error::new(ErrorKind::InvalidData, "bad checkpoint"));
+				}
+				live.parts.push(Arc::new(part));
+			}
+		}
+		live.saved = (
+			live.parts.len(),
+			live.dense.visitors.len(),
+			live.dense.sessions.len(),
+		);
 		Ok(live)
+	}
+
+	// writes what open days packed since their last checkpoint, so the wal behind it can go
+	fn checkpoint(&mut self) -> io::Result<()> {
+		let keys: Vec<Key> = self.memtable.keys().copied().collect();
+		for key in keys {
+			self.flush(key)?;
+			let Some(live) = self.memtable.get_mut(&key) else {
+				continue;
+			};
+			let (parts, visitors, sessions) = live.saved;
+			if parts == live.parts.len() {
+				continue;
+			}
+			let dict = self.shared.dict(key.0)?;
+			dict.write()
+				.unwrap_or_else(PoisonError::into_inner)
+				.flush()?;
+			fs::create_dir_all(self.shared.site_dir(key.0))?;
+			Checkpoint {
+				seq: self.seq,
+				visitors: live.dense.visitors[visitors..].to_vec(),
+				sessions: live.dense.sessions[sessions..].to_vec(),
+				parts: live.parts[parts..]
+					.iter()
+					.map(|part| (**part).clone())
+					.collect(),
+			}
+			.append(&self.shared.path(key, "part"))?;
+			live.saved = (
+				live.parts.len(),
+				live.dense.visitors.len(),
+				live.dense.sessions.len(),
+			);
+			self.checkpointed.insert(key, self.seq);
+		}
+		Ok(())
+	}
+
+	// the last wal seq whose events for the day are on disk outside the wal
+	fn covered(&mut self, key: Key) -> io::Result<Option<u64>> {
+		let sealed = self.sealed_seq(key)?;
+		let checkpointed = match self.checkpointed.get(&key) {
+			Some(&seq) => Some(seq),
+			None => {
+				let last = Checkpoint::read_all(&self.shared.path(key, "part"))?
+					.last()
+					.map(|checkpoint| checkpoint.seq);
+				if let Some(seq) = last {
+					self.checkpointed.insert(key, seq);
+				}
+				last
+			}
+		};
+		Ok(sealed.max(checkpointed))
 	}
 
 	fn tick(&mut self, force: bool) -> io::Result<()> {
@@ -963,11 +1081,20 @@ impl Writer {
 		}
 		let dict = self.shared.dict(key.0)?;
 		let mut dict = dict.write().unwrap_or_else(PoisonError::into_inner);
-		let mut cols = Columns::new();
+		let mut cols = Raw::new();
 		for event in live.pending.drain(..) {
 			cols.push(&event, &mut live.dense, &mut dict);
 		}
-		live.parts.push(Arc::new(cols));
+		live.parts.push(Arc::new(cols.pack()));
+		self.show(key);
+		Ok(())
+	}
+
+	// makes the day's current parts visible to queries
+	fn show(&mut self, key: Key) {
+		let Some(live) = self.memtable.get(&key) else {
+			return;
+		};
 		self.published += 1;
 		self.shared.publish(
 			key,
@@ -978,7 +1105,6 @@ impl Writer {
 				sessions: live.dense.sessions.len(),
 			}),
 		);
-		Ok(())
 	}
 
 	fn seal(&mut self, key: Key) -> io::Result<()> {
@@ -1000,7 +1126,11 @@ impl Writer {
 		lock(&self.shared.versions).insert(key, self.seq);
 		self.shared.publish(key, None);
 		self.sealed.insert(key, self.seq);
-		Ok(())
+		self.checkpointed.remove(&key);
+		match fs::remove_file(self.shared.path(key, "part")) {
+			Err(err) if err.kind() != ErrorKind::NotFound => Err(err),
+			_ => Ok(()),
+		}
 	}
 
 	fn repair(&mut self, key: Key) -> io::Result<()> {
@@ -1120,12 +1250,11 @@ impl Writer {
 				continue;
 			};
 			let mut seg = Segment::read(&path)?;
-			let column = &seg.cols.dims[dim as usize];
-			if !column.contains(&id) {
+			let column = seg.cols.dims[dim as usize].clone();
+			if !column.iter().any(|value| value == id) {
 				continue;
 			}
-			let column = column.clone();
-			seg.cols = seg.cols.keep(|row| column[row] != id);
+			seg.cols = seg.cols.keep(|row| column.get(row) != id);
 			seg.seq = seq;
 			seg.write(&path)?;
 			let key = (site, day);
@@ -1150,6 +1279,8 @@ impl Writer {
 			self.shared.publish(key, None);
 		}
 		self.sealed.retain(|key, _| key.0 != site || !which(key.1));
+		self.checkpointed
+			.retain(|key, _| key.0 != site || !which(key.1));
 		lock(&self.shared.versions).retain(|key, _| key.0 != site || !which(key.1));
 		if before.is_none() {
 			lock(&self.shared.dicts).remove(&site);
@@ -1179,8 +1310,7 @@ impl Writer {
 			let keys: Vec<Key> = self.wal_keys[&seq].iter().copied().collect();
 			let mut done = true;
 			for key in keys {
-				done &= self.gone(key.0, seq)
-					|| self.sealed_seq(key)?.is_some_and(|sealed| sealed >= seq);
+				done &= self.gone(key.0, seq) || self.covered(key)? >= Some(seq);
 			}
 			if done {
 				match fs::remove_file(wal_path(&self.shared.dir.join("wal"), seq)) {

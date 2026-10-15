@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::io;
+use std::fs::File;
+use std::io::{self, Write};
 use std::path::Path;
 
 use crate::codec::{Reader, put_packed, put_uvar};
@@ -9,12 +10,14 @@ use crate::frame::{self, invalid};
 use crate::query::MISSING;
 
 const MAGIC: &[u8; 5] = b"CRSG\x01";
+const CHECKPOINT: &[u8; 5] = b"CRCP\x01";
 
 // dims stored before revenue, later ones go after it
 const LEGACY_DIMS: usize = 19;
 
+// columns while a part is built, packed into `Columns` once it is done
 #[derive(Clone)]
-pub(crate) struct Columns {
+pub(crate) struct Raw {
 	pub(crate) time: Vec<u32>,
 	pub(crate) visitor: Vec<u32>,
 	pub(crate) session: Vec<u32>,
@@ -31,7 +34,7 @@ pub(crate) struct Columns {
 	pub(crate) currency: Vec<u32>,
 }
 
-impl Columns {
+impl Raw {
 	pub(crate) fn new() -> Self {
 		Self {
 			time: Vec::new(),
@@ -78,25 +81,21 @@ impl Columns {
 		}
 	}
 
-	pub(crate) fn concat<'a>(parts: impl IntoIterator<Item = &'a Columns>) -> Self {
-		let mut all = Self::new();
-		for part in parts {
-			all.time.extend(&part.time);
-			all.visitor.extend(&part.visitor);
-			all.session.extend(&part.session);
-			all.interactive.extend(&part.interactive);
-			all.scroll.extend(&part.scroll);
-			all.engagement.extend(&part.engagement);
-			for (all, part) in all.dims.iter_mut().zip(&part.dims) {
-				all.extend(part);
-			}
-			all.props.extend(&part.props);
-			all.keys.extend(&part.keys);
-			all.values.extend(&part.values);
-			all.revenue.extend(&part.revenue);
-			all.currency.extend(&part.currency);
+	pub(crate) fn pack(&self) -> Columns {
+		Columns {
+			time: Col::pack(&self.time),
+			visitor: Col::pack(&self.visitor),
+			session: Col::pack(&self.session),
+			interactive: Col::pack(&self.interactive),
+			scroll: Col::pack(&self.scroll),
+			engagement: Col::pack(&self.engagement),
+			dims: self.dims.iter().map(|dim| Col::pack(dim)).collect(),
+			props: Col::pack(&self.props),
+			keys: Col::pack(&self.keys),
+			values: Col::pack(&self.values),
+			revenue: Col::pack(&self.revenue),
+			currency: Col::pack(&self.currency),
 		}
-		all
 	}
 
 	pub(crate) fn keep(&self, keep: impl Fn(usize) -> bool) -> Self {
@@ -129,7 +128,7 @@ impl Columns {
 		kept
 	}
 
-	fn is_consistent(&self, visitors: usize, sessions: usize) -> bool {
+	pub(crate) fn is_consistent(&self, visitors: usize, sessions: usize) -> bool {
 		let rows = self.rows();
 		let columns = [
 			&self.visitor,
@@ -153,6 +152,282 @@ impl Columns {
 	}
 }
 
+// a column bit-packed at the width its values need above the smallest one, a column
+// that never changes takes no space
+#[derive(Clone)]
+pub(crate) struct Col {
+	base: u32,
+	width: u32,
+	len: usize,
+	words: Vec<u64>,
+}
+
+impl Col {
+	pub(crate) fn pack(values: &[u32]) -> Self {
+		let base = values.iter().copied().min().unwrap_or(0);
+		let width = values
+			.iter()
+			.map(|&value| value - base)
+			.max()
+			.map_or(0, |max| 32 - max.leading_zeros());
+		let mut words = vec![0u64; (values.len() * width as usize).div_ceil(64)];
+		if width > 0 {
+			for (i, &value) in values.iter().enumerate() {
+				let bit = i * width as usize;
+				let (word, offset) = (bit / 64, bit % 64);
+				let value = u64::from(value - base);
+				words[word] |= value << offset;
+				if offset + width as usize > 64 {
+					words[word + 1] |= value >> (64 - offset);
+				}
+			}
+		}
+		Self {
+			base,
+			width,
+			len: values.len(),
+			words,
+		}
+	}
+
+	#[inline]
+	pub(crate) fn get(&self, i: usize) -> u32 {
+		if self.width == 0 {
+			return self.base;
+		}
+		let bit = i * self.width as usize;
+		let (word, offset) = (bit / 64, bit % 64);
+		let mut value = self.words[word] >> offset;
+		if offset + self.width as usize > 64 {
+			value |= self.words[word + 1] << (64 - offset);
+		}
+		self.base + (value & ((1 << self.width) - 1)) as u32
+	}
+
+	pub(crate) fn len(&self) -> usize {
+		self.len
+	}
+
+	pub(crate) fn iter(&self) -> impl Iterator<Item = u32> + '_ {
+		(0..self.len).map(|i| self.get(i))
+	}
+
+	fn unpack(&self) -> Vec<u32> {
+		self.iter().collect()
+	}
+
+	fn put(&self, buf: &mut Vec<u8>) {
+		put_uvar(buf, self.base.into());
+		put_uvar(buf, self.width.into());
+		put_uvar(buf, self.len as u64);
+		for word in &self.words {
+			buf.extend_from_slice(&word.to_le_bytes());
+		}
+	}
+
+	fn read(r: &mut Reader) -> Option<Self> {
+		let base = u32::try_from(r.uvar()?).ok()?;
+		let width = u32::try_from(r.uvar()?).ok().filter(|&width| width <= 32)?;
+		let len = usize::try_from(r.uvar()?).ok()?;
+		let words = (0..len.checked_mul(width as usize)?.div_ceil(64))
+			.map(|_| r.u64())
+			.collect::<Option<_>>()?;
+		Some(Self {
+			base,
+			width,
+			len,
+			words,
+		})
+	}
+}
+
+#[derive(Clone)]
+pub(crate) struct Columns {
+	pub(crate) time: Col,
+	pub(crate) visitor: Col,
+	pub(crate) session: Col,
+	pub(crate) interactive: Col,
+	pub(crate) scroll: Col,
+	pub(crate) engagement: Col,
+	pub(crate) dims: Vec<Col>,
+	pub(crate) props: Col,
+	pub(crate) keys: Col,
+	pub(crate) values: Col,
+	pub(crate) revenue: Col,
+	pub(crate) currency: Col,
+}
+
+impl Columns {
+	pub(crate) fn rows(&self) -> usize {
+		self.time.len()
+	}
+
+	pub(crate) fn raw(&self) -> Raw {
+		Raw {
+			time: self.time.unpack(),
+			visitor: self.visitor.unpack(),
+			session: self.session.unpack(),
+			interactive: self.interactive.unpack(),
+			scroll: self.scroll.unpack(),
+			engagement: self.engagement.unpack(),
+			dims: self.dims.iter().map(Col::unpack).collect(),
+			props: self.props.unpack(),
+			keys: self.keys.unpack(),
+			values: self.values.unpack(),
+			revenue: self.revenue.unpack(),
+			currency: self.currency.unpack(),
+		}
+	}
+
+	pub(crate) fn concat<'a>(parts: impl IntoIterator<Item = &'a Columns>) -> Self {
+		let mut all = Raw::new();
+		for part in parts {
+			let part = part.raw();
+			all.time.extend(part.time);
+			all.visitor.extend(part.visitor);
+			all.session.extend(part.session);
+			all.interactive.extend(part.interactive);
+			all.scroll.extend(part.scroll);
+			all.engagement.extend(part.engagement);
+			for (all, part) in all.dims.iter_mut().zip(part.dims) {
+				all.extend(part);
+			}
+			all.props.extend(part.props);
+			all.keys.extend(part.keys);
+			all.values.extend(part.values);
+			all.revenue.extend(part.revenue);
+			all.currency.extend(part.currency);
+		}
+		all.pack()
+	}
+
+	pub(crate) fn keep(&self, keep: impl Fn(usize) -> bool) -> Self {
+		self.raw().keep(keep).pack()
+	}
+
+	fn put(&self, buf: &mut Vec<u8>) {
+		for col in [
+			&self.time,
+			&self.visitor,
+			&self.session,
+			&self.interactive,
+			&self.scroll,
+			&self.engagement,
+			&self.props,
+			&self.keys,
+			&self.values,
+			&self.revenue,
+			&self.currency,
+		] {
+			col.put(buf);
+		}
+		put_uvar(buf, self.dims.len() as u64);
+		for dim in &self.dims {
+			dim.put(buf);
+		}
+	}
+
+	fn read(r: &mut Reader) -> Option<Self> {
+		let mut col = || Col::read(r);
+		let (time, visitor, session, interactive, scroll, engagement) =
+			(col()?, col()?, col()?, col()?, col()?, col()?);
+		let (props, keys, values, revenue, currency) = (col()?, col()?, col()?, col()?, col()?);
+		let count = usize::try_from(r.uvar()?)
+			.ok()
+			.filter(|&count| count <= Dim::COUNT)?;
+		let mut dims = (0..count)
+			.map(|_| Col::read(r))
+			.collect::<Option<Vec<_>>>()?;
+		// dims added after this checkpoint was written
+		dims.resize(Dim::COUNT, Col::pack(&vec![MISSING; time.len()]));
+		Some(Self {
+			time,
+			visitor,
+			session,
+			interactive,
+			scroll,
+			engagement,
+			dims,
+			props,
+			keys,
+			values,
+			revenue,
+			currency,
+		})
+	}
+}
+
+// what an open day packed since its last checkpoint, with the wal seq it covers and the
+// visitors and sessions it added
+pub(crate) struct Checkpoint {
+	pub(crate) seq: u64,
+	pub(crate) visitors: Vec<u64>,
+	pub(crate) sessions: Vec<u64>,
+	pub(crate) parts: Vec<Columns>,
+}
+
+impl Checkpoint {
+	pub(crate) fn read_all(path: &Path) -> io::Result<Vec<Self>> {
+		if !path.try_exists()? {
+			return Ok(Vec::new());
+		}
+		let mut all = Vec::new();
+		let mut bad = false;
+		frame::open_log(path, CHECKPOINT, |payload| {
+			match decode_checkpoint(payload) {
+				Some(checkpoint) => {
+					all.push(checkpoint);
+					true
+				}
+				None => {
+					bad = true;
+					false
+				}
+			}
+		})?;
+		match bad {
+			true => Err(invalid("bad checkpoint")),
+			false => Ok(all),
+		}
+	}
+
+	pub(crate) fn append(&self, path: &Path) -> io::Result<()> {
+		let mut file: File = frame::open_log(path, CHECKPOINT, |_| true)?;
+		let mut buf = Vec::new();
+		frame::put(&mut buf, |buf| {
+			put_uvar(buf, self.seq);
+			for ids in [&self.visitors, &self.sessions] {
+				put_uvar(buf, ids.len() as u64);
+				for id in ids {
+					buf.extend_from_slice(&id.to_le_bytes());
+				}
+			}
+			put_uvar(buf, self.parts.len() as u64);
+			for part in &self.parts {
+				part.put(buf);
+			}
+		});
+		file.write_all(&buf)?;
+		file.sync_data()
+	}
+}
+
+fn decode_checkpoint(buf: &[u8]) -> Option<Checkpoint> {
+	let mut r = Reader::new(buf);
+	let seq = r.uvar()?;
+	let mut ids = || -> Option<Vec<u64>> { (0..r.uvar()?).map(|_| r.u64()).collect() };
+	let (visitors, sessions) = (ids()?, ids()?);
+	let parts = (0..r.uvar()?)
+		.map(|_| Columns::read(&mut r))
+		.collect::<Option<_>>()?;
+	r.is_empty().then_some(Checkpoint {
+		seq,
+		visitors,
+		sessions,
+		parts,
+	})
+}
+
 #[derive(Default)]
 pub(crate) struct Dense {
 	pub(crate) visitors: Vec<u64>,
@@ -174,6 +449,15 @@ impl Dense {
 			session_ids: index(&sessions),
 			visitors,
 			sessions,
+		}
+	}
+
+	pub(crate) fn extend(&mut self, visitors: Vec<u64>, sessions: Vec<u64>) {
+		for id in visitors {
+			self.visitor(id);
+		}
+		for id in sessions {
+			self.session(id);
 		}
 	}
 
@@ -202,7 +486,7 @@ pub(crate) struct Segment {
 
 impl Segment {
 	pub(crate) fn write(&self, path: &Path) -> io::Result<()> {
-		let cols = &self.cols;
+		let cols = &self.cols.raw();
 		let mut buf = Vec::new();
 		frame::put(&mut buf, |buf| {
 			put_uvar(buf, self.seq);
@@ -247,14 +531,7 @@ impl Segment {
 			return Err(invalid("truncated segment"));
 		};
 		let (seq, rows) = header(head).ok_or_else(|| invalid("bad segment header"))?;
-		decode(data, seq)
-			.filter(|seg| {
-				seg.cols.rows() == rows
-					&& seg
-						.cols
-						.is_consistent(seg.visitors.len(), seg.sessions.len())
-			})
-			.ok_or_else(|| invalid("bad segment data"))
+		decode(data, seq, rows).ok_or_else(|| invalid("bad segment data"))
 	}
 
 	pub(crate) fn read_seq(path: &Path) -> io::Result<u64> {
@@ -272,12 +549,12 @@ fn header(buf: &[u8]) -> Option<(u64, usize)> {
 	Some((r.uvar()?, usize::try_from(r.uvar()?).ok()?))
 }
 
-fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
+fn decode(buf: &[u8], seq: u64, rows: usize) -> Option<Segment> {
 	let mut r = Reader::new(buf);
 	let mut ids = || -> Option<Vec<u64>> { (0..r.uvar()?).map(|_| r.u64()).collect() };
 	let visitors = ids()?;
 	let sessions = ids()?;
-	let mut cols = Columns {
+	let mut cols = Raw {
 		time: r.packed()?,
 		visitor: r.packed()?,
 		session: r.packed()?,
@@ -312,12 +589,13 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 		};
 		cols.dims.push(column);
 	}
-	r.is_empty().then_some(Segment {
-		seq,
-		visitors,
-		sessions,
-		cols,
-	})
+	(r.is_empty() && cols.rows() == rows && cols.is_consistent(visitors.len(), sessions.len()))
+		.then(|| Segment {
+			seq,
+			cols: cols.pack(),
+			visitors,
+			sessions,
+		})
 }
 
 fn put_strings(buf: &mut Vec<u8>, ids: &[u32]) {
