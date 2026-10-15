@@ -2,6 +2,7 @@
 	import { untrack } from "svelte";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
+	import { attempt } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { goto } from "$app/navigation";
@@ -130,7 +131,6 @@
 	let guestEmail = $state("");
 	let guestRole = $state<"viewer" | "editor">("viewer");
 	let guestLink = $state("");
-	let error = $state("");
 
 	$effect(() => {
 		if (owner) api<People>(`/api/app/sites/${domain}/guests`).then((r) => (people = r));
@@ -196,15 +196,6 @@
 			(r) => (imports = r.imports)
 		);
 	});
-
-	async function attempt(action: () => Promise<unknown>) {
-		error = "";
-		try {
-			await action();
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Something went wrong.";
-		}
-	}
 
 	const setTimezone = (timezone: string) =>
 		attempt(async () => {
@@ -658,7 +649,6 @@
 						{domain}
 					</a>
 				</Title>
-				<Message tone="bad">{error}</Message>
 			{/snippet}
 
 			<Section id="general" label="general">

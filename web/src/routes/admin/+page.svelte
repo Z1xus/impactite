@@ -1,9 +1,9 @@
 <script lang="ts">
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import List from "#lib/ui/List.svelte";
-	import Message from "#lib/ui/Message.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
@@ -22,8 +22,6 @@
 	type Admin = { signup: boolean; mail: boolean; users: User[] };
 
 	let info = $state<Admin | null>(null);
-	let note = $state("");
-	let error = $state("");
 
 	const date = (seconds: number) =>
 		new Date(seconds * 1000).toLocaleDateString("en-US", {
@@ -36,29 +34,25 @@
 		api<Admin>("/api/app/admin").then((result) => (info = result));
 	});
 
-	async function attempt(action: () => Promise<Admin | void>) {
-		error = note = "";
-		try {
+	const update = (action: () => Promise<Admin | void>) =>
+		attempt(async () => {
 			info = (await action()) || info;
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Something went wrong.";
-		}
-	}
+		});
 
 	const setSignup = (mode: "invite" | "open") =>
-		attempt(() => api<Admin>("/api/app/admin", { signup: mode === "open" }, "PATCH"));
+		update(() => api<Admin>("/api/app/admin", { signup: mode === "open" }, "PATCH"));
 
 	const testMail = () =>
-		attempt(async () => {
+		update(async () => {
 			const { sent } = await api<{ sent: string }>("/api/app/admin/mail", {});
-			note = `Sent a test mail to ${sent}.`;
+			toast(`Sent a test mail to ${sent}.`);
 		});
 
 	const setAdmin = (user: number, admin: boolean) =>
-		attempt(() => api<Admin>(`/api/app/admin/users/${user}`, { admin }, "PATCH"));
+		update(() => api<Admin>(`/api/app/admin/users/${user}`, { admin }, "PATCH"));
 
 	const remove = (user: string | number) =>
-		attempt(() => {
+		update(() => {
 			if (!window.confirm("Delete this user and the sites only they own?"))
 				return Promise.resolve();
 			return api<Admin>(`/api/app/admin/users/${user}`, undefined, "DELETE");
@@ -75,8 +69,6 @@
 		<Settings {sections}>
 			{#snippet title()}
 				<Title>Instance</Title>
-				<Message tone="bad">{error}</Message>
-				<Message tone="cyan">{note}</Message>
 			{/snippet}
 
 			<Section id="signup" label="sign-up">

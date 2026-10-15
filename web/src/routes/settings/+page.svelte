@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import qrcode from "qrcode-generator";
 	import { display, saveDisplay } from "#lib/display.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
 	import { adopt, refresh, session } from "#lib/session.svelte.ts";
@@ -37,14 +38,12 @@
 	let email = $state(session.me?.email ?? "");
 	let current = $state("");
 	let next = $state("");
-	let saved = $state("");
 	let passkeys = $state<Passkey[] | null>(null);
 	let sessions = $state<Session[] | null>(null);
 	let keys = $state<Key[] | null>(null);
 	let keyName = $state("");
 	let fresh = $state("");
 	let confirm = $state("");
-	let error = $state("");
 	let pending = $state<{ secret: string; uri: string } | null>(null);
 	let totpCode = $state("");
 	let recovery = $state<string[] | null>(null);
@@ -69,26 +68,17 @@
 		api<{ keys: Key[] }>("/api/app/keys").then((r) => (keys = r.keys));
 	});
 
-	async function attempt(action: () => Promise<unknown>) {
-		error = "";
-		try {
-			await action();
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Something went wrong.";
-		}
-	}
-
 	async function saveProfile() {
 		await api("/api/app/me", { name, email }, "PATCH");
 		await refresh();
-		saved = "Profile saved.";
+		toast("Profile saved.");
 	}
 
 	async function savePassword() {
 		await api("/api/app/me/password", { current, password: next }, "PUT");
 		await refresh();
 		current = next = "";
-		saved = "Password saved.";
+		toast("Password saved.");
 	}
 
 	const startTotp = () =>
@@ -180,8 +170,6 @@
 	<Settings {sections}>
 		{#snippet title()}
 			<Title>Account</Title>
-			<Message tone="bad">{error}</Message>
-			<Message tone="cyan">{saved}</Message>
 		{/snippet}
 
 		<Section id="profile" label="profile">

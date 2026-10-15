@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
+	import { attempt } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { currentTeam, refresh, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
@@ -53,7 +54,6 @@
 	let inviteRole = $state<Role>("editor");
 	let link = $state("");
 	let confirm = $state("");
-	let error = $state("");
 
 	$effect(() => {
 		if (current && (current.personal || current.id === 0)) goto(resolve("/"));
@@ -63,15 +63,6 @@
 	async function load() {
 		team = await api<Team>(`/api/app/teams/${id}`);
 		name = team.name;
-	}
-
-	async function attempt(action: () => Promise<unknown>) {
-		error = "";
-		try {
-			await action();
-		} catch (err) {
-			error = err instanceof Error ? err.message : "Something went wrong.";
-		}
 	}
 
 	async function rename() {
@@ -160,7 +151,6 @@
 		<Settings {sections}>
 			{#snippet title()}
 				<Title>{team?.name}</Title>
-				<Message tone="bad">{error}</Message>
 			{/snippet}
 
 			{#if manager}
