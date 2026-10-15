@@ -221,7 +221,7 @@
 			/>
 			<span class="label">docker</span>
 			<Code
-				code="docker run -d -p 443:443 -p 80:80 -v impactite:/data ghcr.io/z1xus/impactite serve --url https://stats.example.com --acme"
+				code="docker run -d -p 443:8000 -p 80:80 -v impactite:/data ghcr.io/z1xus/impactite serve --url https://stats.example.com --acme"
 			/>
 		</div>
 	</section>
