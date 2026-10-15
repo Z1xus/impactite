@@ -439,7 +439,7 @@ fn native(db: &Db, site: &Site, goals: &[Goal], from: Date, to: Date) -> anyhow:
 	Ok(zip.finish()?.into_inner())
 }
 
-fn goatcounter(db: &Db, site: &Site, from: Date, to: Date) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn goatcounter(db: &Db, site: &Site, from: Date, to: Date) -> anyhow::Result<Vec<u8>> {
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let mut csv = csv::Writer::from_writer(GzEncoder::new(Vec::new(), Compression::default()));
 	csv.write_record([

@@ -43,6 +43,19 @@ pub async fn script(Path(file): Path<String>, headers: HeaderMap) -> Response {
 		return (StatusCode::NOT_FOUND, "tracker not built").into_response();
 	};
 
+	javascript(&built, &headers)
+}
+
+pub async fn count(headers: HeaderMap) -> Response {
+	static COUNT: LazyLock<Option<Built>> =
+		LazyLock::new(|| compress(Modules::get("count.js")?.data.into_owned()));
+	match &*COUNT {
+		Some(built) => javascript(built, &headers),
+		None => (StatusCode::NOT_FOUND, "tracker not built").into_response(),
+	}
+}
+
+fn javascript(built: &Built, headers: &HeaderMap) -> Response {
 	let brotli = headers
 		.get(header::ACCEPT_ENCODING)
 		.and_then(|value| value.to_str().ok())
@@ -77,12 +90,16 @@ fn build(modules: Vec<&'static str>) -> Option<Built> {
 	}
 	js.extend_from_slice(&Modules::get("core.js")?.data);
 	js.extend_from_slice(b"})()");
+	let built = compress(js)?;
+	cache.insert(modules, built.clone());
+	Some(built)
+}
+
+fn compress(js: Vec<u8>) -> Option<Built> {
 	let mut compressed = Vec::new();
 	{
 		let mut writer = brotli::CompressorWriter::new(&mut compressed, 4096, 11, 22);
 		writer.write_all(&js).ok()?;
 	}
-	let built = Arc::new((js, compressed));
-	cache.insert(modules, built.clone());
-	Some(built)
+	Some(Arc::new((js, compressed)))
 }

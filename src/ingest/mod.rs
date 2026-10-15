@@ -37,6 +37,8 @@ pub struct Hit {
 	pub scroll_depth: Option<u8>,
 	pub engagement_ms: u32,
 	pub revenue: Option<(u32, String)>,
+	// past hits from the goatcounter api, live hits use now
+	pub at: Option<Timestamp>,
 }
 
 pub struct Client<'a> {
@@ -128,7 +130,7 @@ impl Ingest {
 		if ua::is_bot(client.ua) {
 			return Err(Rejected::Bot);
 		}
-		let now = Timestamp::now();
+		let now = hit.at.unwrap_or_else(Timestamp::now);
 		let ts = now.as_second();
 		let offset = site.tz.to_offset(now).seconds();
 		let day = (ts + i64::from(offset)).div_euclid(86_400) as i32;

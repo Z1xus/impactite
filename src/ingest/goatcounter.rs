@@ -23,12 +23,24 @@ pub async fn count(
 	};
 	let flag = |key: &str| matches!(param(key), "true" | "1" | "on");
 
-	let host = headers
-		.get(header::HOST)
-		.and_then(|host| host.to_str().ok())
-		.map(|host| host.split(':').next().unwrap_or(host))
+	let header = |name| {
+		headers
+			.get(name)
+			.and_then(|value| value.to_str().ok())
+			.unwrap_or_default()
+	};
+	let host = header(header::HOST);
+	let host = host.split(':').next().unwrap_or(host);
+	// on a shared server the page that sent the hit names the site
+	let page = [header(header::ORIGIN), header(header::REFERER)]
+		.into_iter()
+		.find_map(|value| url::Url::parse(value).ok()?.host_str().map(str::to_owned))
 		.unwrap_or_default();
-	let Some(site) = ingest.site(host).or_else(|| ingest.only_site()) else {
+	let Some(site) = ingest
+		.site(host)
+		.or_else(|| ingest.site(&page))
+		.or_else(|| ingest.only_site())
+	else {
 		return gif(
 			StatusCode::BAD_REQUEST,
 			Some(&format!("no site at this domain (\"{host}\")")),
@@ -60,7 +72,14 @@ pub async fn count(
 		hostname: site.site.domain.clone(),
 		path: match event {
 			true => String::new(),
-			false => format!("/{}", path.trim_start_matches('/')),
+			// count.js sends the query in the path too, it arrives apart in `q`
+			false => format!(
+				"/{}",
+				path.split('?')
+					.next()
+					.unwrap_or(path)
+					.trim_start_matches('/')
+			),
 		},
 		params: url::form_urlencoded::parse(query.as_bytes())
 			.into_owned()
@@ -68,6 +87,7 @@ pub async fn count(
 		referrer: param("r").to_owned(),
 		props: Vec::new(),
 		revenue: None,
+		at: None,
 		interactive: true,
 		scroll_depth: None,
 		engagement_ms: 0,

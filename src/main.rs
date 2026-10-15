@@ -1,5 +1,6 @@
 mod accounts;
 mod admin;
+mod api;
 mod app;
 mod assets;
 mod cli;
@@ -26,7 +27,6 @@ mod sites;
 mod stats;
 mod teams;
 mod tracker;
-mod v1;
 mod webauthn;
 
 use std::fs;
