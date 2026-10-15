@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
+	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { currentTeam, refresh, session } from "#lib/session.svelte.ts";
@@ -89,7 +90,12 @@
 	const setRole = (user: number, next: string) =>
 		attempt(async () => {
 			if (next === "owner") {
-				if (!window.confirm("Hand over this team? You become an admin.")) return;
+				const yes = await ask({
+					title: "Hand over this team?",
+					body: "You become an admin.",
+					action: "hand over"
+				});
+				if (!yes) return;
 				await api(`/api/app/teams/${id}/owner`, { user });
 				await refresh();
 			} else {
@@ -100,6 +106,17 @@
 
 	const remove = (key: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: String(key)[0] === "m" ? "Remove this member?" : "Revoke this invite?",
+					body:
+						String(key)[0] === "m"
+							? "They lose access to the team's sites."
+							: undefined,
+					action: String(key)[0] === "m" ? "remove member" : "revoke invite"
+				}))
+			)
+				return;
 			const [kind, value] = [String(key)[0], String(key).slice(1)];
 			const path = kind === "m" ? "members" : "invites";
 			await api(`/api/app/teams/${id}/${path}/${value}`, undefined, "DELETE");
@@ -115,6 +132,14 @@
 
 	const leave = () =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: `Leave ${team?.name ?? "this team"}?`,
+					body: "You'll lose access to its sites.",
+					action: "leave team"
+				}))
+			)
+				return;
 			await api(`/api/app/teams/${id}/members/${session.me?.id}`, undefined, "DELETE");
 			await refresh();
 			await goto(resolve("/"));

@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import qrcode from "qrcode-generator";
 	import { display, saveDisplay } from "#lib/display.svelte.ts";
+	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
@@ -121,6 +122,14 @@
 
 	const removePasskey = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Remove this passkey?",
+					body: "You can't sign in with it anymore.",
+					action: "remove passkey"
+				}))
+			)
+				return;
 			passkeys = (
 				await api<{ passkeys: Passkey[] }>(
 					`/api/app/passkeys/${encodeURIComponent(id)}`,
@@ -157,6 +166,14 @@
 
 	const removeKey = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Delete this API key?",
+					body: "Anything that uses it stops working.",
+					action: "delete key"
+				}))
+			)
+				return;
 			keys = (await api<{ keys: Key[] }>(`/api/app/keys/${id}`, undefined, "DELETE")).keys;
 		});
 

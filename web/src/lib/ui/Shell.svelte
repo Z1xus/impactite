@@ -10,6 +10,7 @@
 	import Field from "./Field.svelte";
 	import Form from "./Form.svelte";
 	import Menu from "./Menu.svelte";
+	import Ask from "./Ask.svelte";
 	import Toasts from "./Toasts.svelte";
 
 	let { children, actions }: { children: Snippet; actions?: Snippet } = $props();
@@ -99,3 +100,4 @@
 </div>
 
 <Toasts />
+<Ask />

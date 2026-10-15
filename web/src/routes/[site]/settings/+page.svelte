@@ -2,6 +2,7 @@
 	import { untrack } from "svelte";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
+	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
@@ -159,6 +160,14 @@
 
 	const removeGuest = (user: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Remove this guest?",
+					body: "They lose access to this site.",
+					action: "remove guest"
+				}))
+			)
+				return;
 			people = await api<People>(
 				`/api/app/sites/${domain}/guests/${user}`,
 				undefined,
@@ -249,6 +258,15 @@
 
 	const setPublic = (on: boolean) =>
 		attempt(async () => {
+			if (
+				!on &&
+				!(await ask({
+					title: "Make the dashboard private?",
+					body: "The public link stops working.",
+					action: "make private"
+				}))
+			)
+				return;
 			links = (
 				on
 					? await api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`, {
@@ -276,6 +294,14 @@
 
 	const removeLink = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Delete this shared link?",
+					body: "Anyone with the link loses access.",
+					action: "delete link"
+				}))
+			)
+				return;
 			links = (
 				await api<{ shares: Link[] }>(
 					`/api/app/sites/${domain}/shares/${id}`,
@@ -293,6 +319,14 @@
 
 	const disconnectGoogle = () =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Disconnect Search Console?",
+					body: "Search terms stop showing until you connect again.",
+					action: "disconnect"
+				}))
+			)
+				return;
 			await api(`/api/app/sites/${domain}/google`, undefined, "DELETE");
 			google = await api<Google>(`/api/app/sites/${domain}/google`);
 		});
@@ -341,6 +375,13 @@
 
 	const removeFunnel = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: `Delete funnel "${funnels?.find((funnel) => funnel.id === id)?.name ?? ""}"?`,
+					action: "delete funnel"
+				}))
+			)
+				return;
 			funnels = (
 				await api<{ funnels: Funnel[] }>(
 					`/api/app/sites/${domain}/funnels/${id}`,
@@ -364,6 +405,14 @@
 
 	const removeGoal = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: `Delete goal "${goals?.find((goal) => goal.id === id)?.name ?? ""}"?`,
+					body: "Its conversions stop showing.",
+					action: "delete goal"
+				}))
+			)
+				return;
 			goals = (
 				await api<{ goals: Goal[] }>(
 					`/api/app/sites/${domain}/goals/${id}`,
@@ -502,6 +551,14 @@
 
 	const removeSegment = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Delete this segment?",
+					body: "Everyone it's shared with loses it too.",
+					action: "delete segment"
+				}))
+			)
+				return;
 			segments = (
 				await api<{ segments: Segment[] }>(
 					`/api/app/sites/${domain}/segments/${id}`,
@@ -513,6 +570,14 @@
 
 	const removeImport = (id: string | number) =>
 		attempt(async () => {
+			if (
+				!(await ask({
+					title: "Remove this import?",
+					body: "Its imported stats are deleted.",
+					action: "remove import"
+				}))
+			)
+				return;
 			imports = (
 				await api<{ imports: Import[] }>(
 					`/api/app/sites/${domain}/imports/${id}`,

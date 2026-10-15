@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { session } from "#lib/session.svelte.ts";
@@ -58,10 +59,13 @@
 		update(() => api<Admin>(`/api/app/admin/users/${user}`, { admin }, "PATCH"));
 
 	const remove = (user: string | number) =>
-		update(() => {
-			if (!window.confirm("Delete this user and the sites only they own?"))
-				return Promise.resolve();
-			return api<Admin>(`/api/app/admin/users/${user}`, undefined, "DELETE");
+		update(async () => {
+			const yes = await ask({
+				title: "Delete this user?",
+				body: "Sites only they own are deleted too.",
+				action: "delete user"
+			});
+			if (yes) return api<Admin>(`/api/app/admin/users/${user}`, undefined, "DELETE");
 		});
 	const sections = [
 		{ id: "version", label: "version" },
