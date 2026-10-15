@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail, internal};
 use crate::app::App;
+use crate::shares::Reader;
 use crate::stats::{self, day_number};
 
 pub fn routes() -> Router<Arc<Web>> {
@@ -43,10 +44,10 @@ fn site(web: &Web, user: i64, domain: &str, write: bool) -> Option<u64> {
 	web.app.site(domain).ok().flatten().map(|site| site.id)
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match site(&web, viewer.user, &domain, false) {
-		Some(site) => respond(&web, site),
-		None => fail(StatusCode::NOT_FOUND, "Site not found."),
+async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
+	match web.app.site(&domain) {
+		Ok(Some(site)) if reader.reads(&web, &domain) => respond(&web, site.id),
+		_ => fail(StatusCode::NOT_FOUND, "Site not found."),
 	}
 }
 
@@ -96,10 +97,10 @@ async fn remove(
 
 async fn compute(
 	State(web): State<Arc<Web>>,
-	viewer: Viewer,
+	reader: Reader,
 	Json(body): Json<Request>,
 ) -> Response {
-	if site(&web, viewer.user, &body.site_id, false).is_none() {
+	if !reader.reads(&web, &body.site_id) {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
 	}
 	let result = (|| -> Result<Value, String> {

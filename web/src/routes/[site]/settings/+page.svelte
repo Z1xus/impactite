@@ -65,6 +65,14 @@
 		{ key: "prop", label: "prop", meta: "allowed prop", example: "plan" }
 	];
 	const IGNORE = 'localStorage.plausible_ignore = "true"';
+	type Link = { id: number; slug: string; name: string; locked: boolean };
+	let links = $state<Link[] | null>(null);
+	let linking = $state(false);
+	let linkName = $state("");
+	let linkPassword = $state("");
+	const publicLink = $derived(links?.find((link) => link.slug === domain));
+	const embedLink = $derived(publicLink ?? links?.find((link) => !link.locked) ?? links?.[0]);
+	const url = (slug: string) => `${location.origin}/share/${slug}`;
 	let shields = $state<Shield[] | null>(null);
 	let shielding = $state(false);
 	let shieldKind = $state<Kind>("ip");
@@ -148,6 +156,7 @@
 		api<{ shields: Shield[] }>(`/api/app/sites/${domain}/shields`).then(
 			(r) => (shields = r.shields)
 		);
+		api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`).then((r) => (links = r.shares));
 		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
 			(r) => (segments = r.segments)
 		);
@@ -206,6 +215,44 @@
 					"DELETE"
 				)
 			).shields;
+		});
+
+	const setPublic = (on: boolean) =>
+		attempt(async () => {
+			links = (
+				on
+					? await api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`, {
+							name: "public",
+							public: true
+						})
+					: await api<{ shares: Link[] }>(
+							`/api/app/sites/${domain}/shares/${publicLink?.id}`,
+							undefined,
+							"DELETE"
+						)
+			).shares;
+		});
+
+	async function addLink() {
+		links = (
+			await api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`, {
+				name: linkName,
+				password: linkPassword
+			})
+		).shares;
+		linkName = linkPassword = "";
+		linking = false;
+	}
+
+	const removeLink = (id: string | number) =>
+		attempt(async () => {
+			links = (
+				await api<{ shares: Link[] }>(
+					`/api/app/sites/${domain}/shares/${id}`,
+					undefined,
+					"DELETE"
+				)
+			).shares;
 		});
 
 	async function myIp() {
@@ -346,6 +393,7 @@
 		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
 		{ id: "imports", label: "imports" },
 		{ id: "shields", label: "shields" },
+		{ id: "sharing", label: "sharing" },
 		...(owner
 			? [
 					{ id: "guests", label: "guests" },
@@ -464,6 +512,13 @@
 				<Button type="button" variant="quiet" onclick={myIp}>use my ip</Button>
 			{/if}
 		</div>
+	</Form>
+</Dialog>
+
+<Dialog title="add shared link" bind:open={linking}>
+	<Form action="add link" submit={addLink}>
+		<Field label="name" placeholder="Investors" bind:value={linkName} required />
+		<Field label="password" type="password" placeholder="optional" bind:value={linkPassword} />
 	</Form>
 </Dialog>
 
@@ -629,6 +684,54 @@
 					>To skip your own browser, run this in its console on your site.</span
 				>
 				<Code code={IGNORE} />
+			</Section>
+
+			<Section id="sharing" label="sharing">
+				{#snippet actions()}
+					<Button variant="quiet" onclick={() => (linking = true)}>add link</Button>
+				{/snippet}
+				<div class="flex items-center justify-between gap-4">
+					<span class="text-[14px] text-dim"
+						>Anyone can view the dashboard at {url(domain)}</span
+					>
+					<Toggle
+						bind:value={
+							() => (publicLink ? "public" : "private"),
+							(mode: "private" | "public") => setPublic(mode === "public")
+						}
+						options={[
+							{ key: "private", label: "private" },
+							{ key: "public", label: "public" }
+						]}
+					/>
+				</div>
+				<List
+					items={links
+						?.filter((link) => link.slug !== domain)
+						.map((link) => ({
+							key: link.id,
+							title: link.name,
+							meta: [url(link.slug), ...(link.locked ? ["password"] : [])]
+						})) ?? null}
+					remove={removeLink}
+				>
+					{#snippet control(key)}
+						{@const link = links?.find((link) => link.id === key)}
+						{#if link}
+							<Button
+								variant="plain"
+								onclick={() => navigator.clipboard.writeText(url(link.slug))}
+								>copy</Button
+							>
+						{/if}
+					{/snippet}
+				</List>
+				{#if embedLink}
+					<span class="text-[14px] text-dim">Embed the dashboard in another page.</span>
+					<Code
+						code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
+					/>
+				{/if}
 			</Section>
 
 			{#if owner && people}

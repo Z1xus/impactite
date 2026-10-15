@@ -184,6 +184,16 @@ const MIGRATIONS: &[&str] = &[
 		unique (site, kind, value)
 	);
 	",
+	"
+	create table shares (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		slug text not null unique,
+		name text not null,
+		password text not null,
+		created_at integer not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

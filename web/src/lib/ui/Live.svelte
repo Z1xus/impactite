@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { access } from "#lib/api.ts";
 	import Num from "./Num.svelte";
 
 	let { site }: { site: string } = $props();
@@ -6,7 +7,8 @@
 	let count = $state<number | null>(null);
 
 	$effect(() => {
-		const source = new EventSource(`/api/app/live/${encodeURIComponent(site)}`);
+		const share = access.share ? `?share=${encodeURIComponent(access.share)}` : "";
+		const source = new EventSource(`/api/app/live/${encodeURIComponent(site)}${share}`);
 		source.onmessage = (event) => (count = Number(event.data));
 		return () => source.close();
 	});

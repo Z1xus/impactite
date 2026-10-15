@@ -12,6 +12,7 @@ use serde_json::json;
 
 use crate::accounts::{Viewer, Web, fail};
 use crate::app::App;
+use crate::shares::Reader;
 
 #[derive(Debug, Clone)]
 pub struct Goal {
@@ -81,11 +82,11 @@ struct Rename {
 	name: String,
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	let Some(site) = allowed(&web, viewer.user, &domain, false) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
-	respond(&web, site)
+async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
+	match web.app.site(&domain) {
+		Ok(Some(site)) if reader.reads(&web, &domain) => respond(&web, site.id),
+		_ => fail(StatusCode::NOT_FOUND, "Site not found."),
+	}
 }
 
 async fn add(

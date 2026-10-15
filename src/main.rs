@@ -19,6 +19,7 @@ mod prefs;
 mod profile;
 mod segments;
 mod server;
+mod shares;
 mod shields;
 mod sites;
 mod stats;

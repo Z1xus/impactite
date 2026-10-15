@@ -24,11 +24,17 @@ export class ApiError extends Error {
 	}
 }
 
+// a share link token, sent so anonymous viewers can read one site
+export const access = { share: "" };
+
 export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
 	const json = body !== undefined && !(body instanceof Blob);
 	const res = await fetch(path, {
 		method: method ?? (body === undefined ? "GET" : "POST"),
-		headers: json ? { "content-type": "application/json" } : undefined,
+		headers: {
+			...(json && { "content-type": "application/json" }),
+			...(access.share && { "x-share": access.share })
+		},
 		body: json ? JSON.stringify(body) : (body as Blob | undefined)
 	});
 	if (res.status === 204) return undefined as T;

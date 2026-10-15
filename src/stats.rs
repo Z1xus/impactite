@@ -12,9 +12,10 @@ use jiff::{Span, Timestamp, ToSpan};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail};
+use crate::accounts::{Web, fail};
 use crate::app::{App, Site};
 use crate::goals::Goal;
+use crate::shares::Reader;
 
 pub struct Stats {
 	pub db: Arc<Db>,
@@ -143,9 +144,9 @@ pub async fn query(
 	}
 }
 
-pub async fn dashboard(State(web): State<Arc<Web>>, viewer: Viewer, body: Json<Value>) -> Response {
+pub async fn dashboard(State(web): State<Arc<Web>>, reader: Reader, body: Json<Value>) -> Response {
 	let domain = body.0["site_id"].as_str().unwrap_or_default();
-	if !matches!(web.app.site_role(viewer.user, domain), Ok(Some(_))) {
+	if !reader.reads(&web, domain) {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
 	}
 	match run(&web.stats, body.0) {
@@ -162,10 +163,10 @@ pub struct PropsRequest {
 
 pub async fn props(
 	State(web): State<Arc<Web>>,
-	viewer: Viewer,
+	reader: Reader,
 	Json(body): Json<PropsRequest>,
 ) -> Response {
-	if !matches!(web.app.site_role(viewer.user, &body.site_id), Ok(Some(_))) {
+	if !reader.reads(&web, &body.site_id) {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
 	}
 	let keys = period(&web.stats, &body.site_id, &body.date_range, false).and_then(|period| {

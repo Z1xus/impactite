@@ -8,7 +8,7 @@
 
 	let { children }: LayoutProps = $props();
 
-	const open = ["/setup", "/login", "/invite", "/signup"];
+	const open = ["/setup", "/login", "/invite", "/signup", "/share"];
 
 	$effect(() => {
 		refresh();

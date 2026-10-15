@@ -16,6 +16,7 @@ use crate::app::{App, key_hash, token};
 use crate::ingest::Ingest;
 use crate::mail::Mail;
 use crate::passkeys::{Failure, Proof, Purpose, device, registered};
+use crate::shares::Reader;
 use crate::stats::Stats;
 use crate::webauthn::Relying;
 
@@ -79,8 +80,8 @@ pub fn routes() -> Router<Arc<Web>> {
 		.route("/api/app/live/{domain}", get(live))
 }
 
-async fn live(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	if !matches!(web.app.site_role(viewer.user, &domain), Ok(Some(_))) {
+async fn live(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
+	if !reader.reads(&web, &domain) {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
 	}
 	let Ok(Some(site)) = web.app.site(&domain) else {
