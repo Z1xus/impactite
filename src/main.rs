@@ -22,16 +22,19 @@ mod passkeys;
 mod prefs;
 mod profile;
 mod reports;
+mod s3;
 mod segments;
 mod server;
 mod shares;
 mod shields;
 mod sites;
+mod sso;
 mod stats;
 mod teams;
 mod titles;
 mod totp;
 mod tracker;
+mod update;
 mod webauthn;
 
 use std::fs;
@@ -82,7 +85,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-	Serve(Serve),
+	Serve(Box<Serve>),
+	// replaces this binary with the latest release
+	Update,
 	Site {
 		#[command(subcommand)]
 		command: SiteCommand,
@@ -126,6 +131,14 @@ enum ImportSource {
 		#[arg(long, default_value = "UTC")]
 		timezone: String,
 	},
+	// a csv of umami's events, the readme has the query that makes it
+	Umami {
+		file: PathBuf,
+		#[arg(long)]
+		site: String,
+		#[arg(long, default_value = "UTC")]
+		timezone: String,
+	},
 	Impactite {
 		file: PathBuf,
 		#[arg(long)]
@@ -147,19 +160,40 @@ enum KeyCommand {
 
 #[derive(Args)]
 struct Serve {
-	#[arg(long, env = "IMPACTITE_LISTEN", default_value = "127.0.0.1:8000")]
-	listen: SocketAddr,
+	// 0.0.0.0:443 with tls, 127.0.0.1:8000 behind a proxy
+	#[arg(long, env = "IMPACTITE_LISTEN")]
+	listen: Option<SocketAddr>,
 	#[arg(long, env = "IMPACTITE_URL")]
 	url: Option<String>,
 	#[arg(long, env = "IMPACTITE_GEOIP")]
 	geoip: Option<PathBuf>,
 	#[arg(long, env = "IMPACTITE_TRUSTED_PROXIES")]
 	trusted_proxies: Option<String>,
-	#[arg(long, env = "IMPACTITE_ACME", conflicts_with_all = ["cert", "key"])]
+	// openid connect sign in, the issuer url, client id and secret from the identity provider
+	#[arg(long, env = "IMPACTITE_SSO_ISSUER", requires_all = ["sso_client_id", "sso_client_secret"])]
+	sso_issuer: Option<String>,
+	#[arg(long, env = "IMPACTITE_SSO_CLIENT_ID", requires = "sso_issuer")]
+	sso_client_id: Option<String>,
+	#[arg(
+		long,
+		env = "IMPACTITE_SSO_CLIENT_SECRET",
+		requires = "sso_issuer",
+		hide_env_values = true
+	)]
+	sso_client_secret: Option<String>,
+	// the provider on the sign in button
+	#[arg(long, env = "IMPACTITE_SSO_NAME", default_value = "SSO")]
+	sso_name: String,
+	#[arg(long, env = "IMPACTITE_NO_UPDATE_CHECK", action = clap::ArgAction::SetTrue, value_parser = clap::builder::BoolishValueParser::new())]
+	no_update_check: bool,
+	// a second path for the tracker and its events, ad blockers only know the usual ones
+	#[arg(long, env = "IMPACTITE_ALIAS", value_parser = alias)]
+	alias: Option<String>,
+	#[arg(long, env = "IMPACTITE_ACME", conflicts_with_all = ["cert", "key"], action = clap::ArgAction::SetTrue, value_parser = clap::builder::BoolishValueParser::new())]
 	acme: bool,
 	#[arg(long, env = "IMPACTITE_ACME_EMAIL")]
 	acme_email: Option<String>,
-	#[arg(long, env = "IMPACTITE_ACME_STAGING", hide = true)]
+	#[arg(long, env = "IMPACTITE_ACME_STAGING", hide = true, action = clap::ArgAction::SetTrue, value_parser = clap::builder::BoolishValueParser::new())]
 	acme_staging: bool,
 	#[arg(long, env = "IMPACTITE_CERT", requires = "key")]
 	cert: Option<PathBuf>,
@@ -202,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
 	let mail = Arc::new(Mail::new(cli.mail.as_deref(), &cli.mail_from)?);
 
 	match cli.command {
-		Command::Serve(serve_args) => serve(app, mail, &cli.data, serve_args).await,
+		Command::Serve(serve_args) => serve(app, mail, &cli.data, *serve_args).await,
 		Command::Mail {
 			command: MailCommand::Test { to },
 		} => {
@@ -230,10 +264,11 @@ async fn main() -> anyhow::Result<()> {
 			let (domain, timezone) = match &source {
 				ImportSource::Plausible { site, timezone, .. }
 				| ImportSource::Goatcounter { site, timezone, .. }
-				| ImportSource::Impactite { site, timezone, .. } => (site, timezone),
+				| ImportSource::Impactite { site, timezone, .. }
+				| ImportSource::Umami { site, timezone, .. } => (site, timezone),
 			};
+			let db = open_events(&cli.data, ", or import from the site settings")?;
 			let site = find_or_create(&app, domain, timezone)?;
-			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let started = std::time::Instant::now();
 			let (count, unit) = match source {
 				ImportSource::Plausible {
@@ -260,6 +295,9 @@ async fn main() -> anyhow::Result<()> {
 				ImportSource::Impactite { file, .. } => {
 					(import::native_zip(&db, &app, &site, &file)?, "events")
 				}
+				ImportSource::Umami { file, .. } => {
+					(import::umami_csv(&db, &app, &site, &file)?, "events")
+				}
 			};
 			db.sync()?;
 			db.close()?;
@@ -278,8 +316,8 @@ async fn main() -> anyhow::Result<()> {
 			days,
 			timezone,
 		} => {
+			let db = open_events(&cli.data, "")?;
 			let site = find_or_create(&app, &domain, &timezone)?;
-			let db = Db::open(cli.data.join("events")).context("open event store")?;
 			let count = demo::seed(&db, site.id, &site.domain, &site.timezone, days);
 			db.sync()?;
 			db.close()?;
@@ -287,6 +325,7 @@ async fn main() -> anyhow::Result<()> {
 			println!("{count} events  {}  {days} days", site.domain);
 			Ok(())
 		}
+		Command::Update => update::run().await,
 		Command::Key {
 			command: KeyCommand::Create { name },
 		} => {
@@ -305,20 +344,21 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyhow::Result<()> {
-	let scheme = if args.acme || args.cert.is_some() {
-		"https"
-	} else {
-		"http"
-	};
+	let tls = args.acme || args.cert.is_some();
+	let scheme = if tls { "https" } else { "http" };
+	let listen = args.listen.unwrap_or(match tls {
+		true => SocketAddr::from(([0, 0, 0, 0], 443)),
+		false => SocketAddr::from(([127, 0, 0, 1], 8000)),
+	});
 	let url = args
 		.url
 		.clone()
-		.unwrap_or_else(|| format!("{scheme}://{}", args.listen));
+		.unwrap_or_else(|| format!("{scheme}://{listen}"));
 	if args.acme && !url.starts_with("https://") {
 		bail!("--acme needs an https --url");
 	}
 	let proxies = Proxies::parse(args.trusted_proxies.as_deref())?;
-	let db = Arc::new(Db::open(data.join("events")).context("open event store")?);
+	let db = Arc::new(open_events(data, "")?);
 	let geo = Arc::new(Geo::default());
 	let geo_task = match &args.geoip {
 		Some(path) => {
@@ -357,6 +397,19 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		url: url.clone(),
 		setup: Mutex::new(setup),
 		ceremonies: Mutex::default(),
+		alias: args.alias.clone(),
+		latest: Mutex::default(),
+		sso: args
+			.sso_issuer
+			.clone()
+			.zip(args.sso_client_id.clone())
+			.zip(args.sso_client_secret.clone())
+			.map(|((issuer, id), secret)| sso::Provider {
+				issuer,
+				id,
+				secret,
+				name: args.sso_name.clone(),
+			}),
 		google: args
 			.google_client_id
 			.clone()
@@ -364,6 +417,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			.map(|(id, secret)| google::Client { id, secret }),
 	});
 
+	let checker = (!args.no_update_check).then(|| tokio::spawn(update::watch(web.clone())));
 	let sweeper = tokio::spawn({
 		let ingest = ingest.clone();
 		let app = web.app.clone();
@@ -394,7 +448,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 	});
 	let service =
 		server::router(ingest, stats, web).into_make_service_with_connect_info::<SocketAddr>();
-	tracing::info!(listen = %args.listen, %url, "listening");
+	tracing::info!(listen = %listen, %url, "listening");
 
 	if let (Some(cert), Some(key)) = (&args.cert, &args.key) {
 		let config = RustlsConfig::from_pem_file(cert, key)
@@ -411,7 +465,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 				}
 			}
 		});
-		axum_server::bind_rustls(args.listen, config)
+		axum_server::bind_rustls(listen, config)
 			.handle(handle)
 			.serve(service)
 			.await?;
@@ -439,13 +493,13 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			}
 		});
 		tokio::spawn(redirect(url.clone()));
-		axum_server::bind(args.listen)
+		axum_server::bind(listen)
 			.acceptor(acceptor)
 			.handle(handle)
 			.serve(service)
 			.await?;
 	} else {
-		axum_server::bind(args.listen)
+		axum_server::bind(listen)
 			.handle(handle)
 			.serve(service)
 			.await?;
@@ -453,6 +507,9 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 
 	sweeper.abort();
 	let _ = sweeper.await;
+	if let Some(checker) = checker {
+		checker.abort();
+	}
 	if let Some(task) = geo_task {
 		task.abort();
 		let _ = task.await;
@@ -466,6 +523,31 @@ fn find_or_create(app: &App, domain: &str, timezone: &str) -> anyhow::Result<app
 		return Ok(site);
 	}
 	Ok(app.add_site(domain, timezone, default_team(app)?)?)
+}
+
+fn open_events(data: &Path, hint: &str) -> anyhow::Result<Db> {
+	match Db::open(data.join("events")) {
+		Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+			bail!("impactite is already running with this data folder. Stop it first{hint}")
+		}
+		db => db.context("open event store"),
+	}
+}
+
+fn alias(value: &str) -> Result<String, String> {
+	let name = value.trim_matches('/');
+	let fine = !name.is_empty()
+		&& name
+			.bytes()
+			.all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+		&& !["api", "js", "count", "counter", "share"].contains(&name);
+	match fine {
+		true => Ok(format!("/{name}")),
+		false => Err(
+			"use one word of letters, digits, - or _. api, js, count, counter and share are taken"
+				.into(),
+		),
+	}
 }
 
 // before setup sites stay without a team, setup adopts them

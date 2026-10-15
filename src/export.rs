@@ -382,6 +382,13 @@ fn utc(local: i64, tz: &TimeZone) -> anyhow::Result<Timestamp> {
 	Ok(civil.to_zoned(tz.clone())?.timestamp())
 }
 
+// a whole day in the lossless format, for scheduled exports
+pub(crate) fn day_archive(web: &Web, site: &Site, day: Date) -> anyhow::Result<Vec<u8>> {
+	let goals = web.app.goals(site.id)?;
+	let titles = web.app.titles(site.id)?;
+	native(&web.stats.db, site, &goals, &titles, day, day)
+}
+
 fn native(
 	db: &Db,
 	site: &Site,

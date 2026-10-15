@@ -9,6 +9,7 @@
 	import { adopt, refresh, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Code from "#lib/ui/Code.svelte";
+	import Danger from "#lib/ui/Danger.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
@@ -269,6 +270,15 @@
 		<Section id="display" label="display">
 			<div class="flex flex-wrap gap-6">
 				<Toggle
+					label="theme"
+					bind:value={() => display.theme, (theme) => saveDisplay({ theme })}
+					options={[
+						{ key: "dark", label: "dark" },
+						{ key: "light", label: "light" },
+						{ key: "system", label: "system" }
+					]}
+				/>
+				<Toggle
 					label="week starts on"
 					bind:value={() => display.week, (week) => saveDisplay({ week })}
 					options={[
@@ -346,7 +356,7 @@
 			/>
 			{#if fresh}
 				<Code code={fresh} />
-				<Message>Copy this key now. It is shown only once.</Message>
+				<Message>Copy this key now. You won't see it again.</Message>
 			{/if}
 			<Form action="create key" submit={addKey} inline>
 				<Field label="key name" placeholder="grafana" bind:value={keyName} required />
@@ -354,9 +364,14 @@
 		</Section>
 
 		<Section id="danger" label="danger" danger>
-			<Form action="delete account" submit={deleteAccount} inline danger>
-				<Field label="type your email to delete your account" bind:value={confirm} />
-			</Form>
+			<Danger
+				title="Delete account"
+				body="Deletes your account and your personal sites. You can't undo this."
+			>
+				<Form action="delete account" submit={deleteAccount} inline danger>
+					<Field label="type your email to confirm" bind:value={confirm} />
+				</Form>
+			</Danger>
 		</Section>
 	</Settings>
 </Shell>

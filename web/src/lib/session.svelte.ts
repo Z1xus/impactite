@@ -7,12 +7,22 @@ export const session = $state<{
 	signup: boolean;
 	me: Me | null;
 	team: number | null;
-}>({ ready: false, setup: false, signup: false, me: null, team: null });
+	alias: string | null;
+	sso: string | null;
+}>({ ready: false, setup: false, signup: false, me: null, team: null, alias: null, sso: null });
 
 export async function refresh() {
-	const state = await api<{ setup: boolean; signup: boolean; me: Me | null }>("/api/app/state");
+	const state = await api<{
+		setup: boolean;
+		signup: boolean;
+		me: Me | null;
+		alias: string | null;
+		sso: string | null;
+	}>("/api/app/state");
 	session.setup = state.setup;
 	session.signup = state.signup;
+	session.alias = state.alias;
+	session.sso = state.sso;
 	adopt(state.me);
 	session.ready = true;
 }

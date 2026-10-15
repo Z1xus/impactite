@@ -121,7 +121,7 @@ pub fn import(
 	Ok((count, first))
 }
 
-fn timestamp(raw: &str) -> Option<i64> {
+pub(super) fn timestamp(raw: &str) -> Option<i64> {
 	let ts = raw.parse::<Timestamp>().ok().or_else(|| {
 		let civil: DateTime = raw
 			.trim_end_matches("+00")

@@ -145,12 +145,15 @@ pub async fn query(
 }
 
 pub(crate) fn keyed(app: &App, headers: &HeaderMap, domain: &str) -> bool {
-	let owner = headers
+	headers
 		.get(header::AUTHORIZATION)
 		.and_then(|value| value.to_str().ok())
 		.and_then(|value| value.strip_prefix("Bearer "))
-		.and_then(|key| app.key_owner(key).ok().flatten());
-	match owner {
+		.is_some_and(|key| key_reads(app, key, domain))
+}
+
+pub(crate) fn key_reads(app: &App, key: &str, domain: &str) -> bool {
+	match app.key_owner(key).ok().flatten() {
 		Some(Some(user)) => matches!(app.site_role(user, domain), Ok(Some(_))),
 		Some(None) => true,
 		None => false,
@@ -206,6 +209,8 @@ pub async fn props(
 
 pub(crate) struct Period {
 	pub(crate) site: Site,
+	// the rest of a team's sites when it is viewed as one, `team:<id>`
+	pub(crate) others: Vec<u64>,
 	tz: TimeZone,
 	pub(crate) from: Date,
 	pub(crate) to: Date,
@@ -218,11 +223,24 @@ pub(crate) fn period(
 	range: &Value,
 	trim: bool,
 ) -> Result<Period, String> {
-	let site = stats
-		.app
-		.site(site_id)
-		.map_err(|err| err.to_string())?
-		.ok_or_else(|| format!("#/site_id: Site {site_id} not found"))?;
+	let missing = || format!("#/site_id: Site {site_id} not found");
+	let (site, others) = match site_id.strip_prefix("team:") {
+		Some(team) => {
+			let team = team.parse().map_err(|_| missing())?;
+			let mut sites = stats.app.team_sites(team).map_err(|err| err.to_string())?;
+			sites.sort_by_key(|site| site.id);
+			let others = sites.iter().skip(1).map(|site| site.id).collect();
+			(sites.into_iter().next().ok_or_else(missing)?, others)
+		}
+		None => (
+			stats
+				.app
+				.site(site_id)
+				.map_err(|err| err.to_string())?
+				.ok_or_else(missing)?,
+			Vec::new(),
+		),
+	};
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let today = Timestamp::now().to_zoned(tz.clone()).date();
 	let imported = stats
@@ -238,6 +256,7 @@ pub(crate) fn period(
 	let (from, to) = date_range(range, today, created, trim)?;
 	Ok(Period {
 		site,
+		others,
 		tz,
 		from,
 		to,
@@ -255,6 +274,7 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 	let day = json!("day");
 	let Period {
 		site,
+		others,
 		tz,
 		from,
 		to,
@@ -315,7 +335,10 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 		return Err("#/dimensions: time:minute goes with the 30m date_range only".into());
 	}
 
-	let goals = stats.app.goals(site.id).map_err(|err| err.to_string())?;
+	let goals = match others.is_empty() {
+		true => stats.app.goals(site.id).map_err(|err| err.to_string())?,
+		false => Vec::new(),
+	};
 	let mut base_filters = Vec::new();
 	let mut goal_filters = Vec::new();
 	for raw in &request.filters {
@@ -334,9 +357,10 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 	let run = |filters: Vec<Filter>, breakdown: Option<Field>, daily: bool| {
 		let mut merged: Option<Report> = None;
 		for (days, since) in &windows {
-			let next = stats
-				.db
-				.query(&Query {
+			let next = query_sites(
+				stats,
+				&others,
+				Query {
 					site: site.id,
 					days: days.clone(),
 					filters: filters.clone(),
@@ -345,8 +369,8 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 					daily,
 					imports,
 					since: *since,
-				})
-				.map_err(|err| err.to_string())?;
+				},
+			)?;
 			merged = Some(match merged {
 				Some(report) => combine(report, next),
 				None => next,
@@ -398,9 +422,10 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 				Grouping::Time(Time::Hour) if from != to => (day_number(from)..=day_number(to))
 					.zip(from.series(1.day()))
 					.map(|(number, day)| {
-						let report = stats
-							.db
-							.query(&Query {
+						let report = query_sites(
+							stats,
+							&others,
+							Query {
 								site: site.id,
 								days: number..=number,
 								filters: filtered(),
@@ -409,8 +434,8 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 								daily: false,
 								imports,
 								since: None,
-							})
-							.map_err(|err| err.to_string())?;
+							},
+						)?;
 						Ok(rows(&report, grouping, day, start))
 					})
 					.collect::<Result<Vec<_>, String>>()?
@@ -508,6 +533,50 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 			"filters": request.filters,
 		}),
 	})
+}
+
+// one site, or a team's sites added up the way separate sites count their visitors
+fn query_sites(stats: &Stats, others: &[u64], query: Query) -> Result<Report, String> {
+	let mut report = stats.db.query(&query).map_err(|err| err.to_string())?;
+	for &other in others {
+		let next = stats
+			.db
+			.query(&Query {
+				site: other,
+				..query.clone()
+			})
+			.map_err(|err| err.to_string())?;
+		report.total.merge(&next.total);
+		for (day, other) in report.days.iter_mut().zip(&next.days) {
+			day.merge(other);
+		}
+		for (hour, other) in report.hours.iter_mut().zip(&next.hours) {
+			hour.merge(other);
+		}
+		for (minute, other) in report.minutes.iter_mut().zip(&next.minutes) {
+			*minute += other;
+		}
+		report.rows = add_rows(std::mem::take(&mut report.rows), next.rows);
+		report.daily = std::mem::take(&mut report.daily)
+			.into_iter()
+			.zip(next.daily)
+			.map(|(rows, other)| add_rows(rows, other))
+			.collect();
+	}
+	Ok(report)
+}
+
+fn add_rows(
+	rows: Vec<(Arc<str>, Metrics)>,
+	other: Vec<(Arc<str>, Metrics)>,
+) -> Vec<(Arc<str>, Metrics)> {
+	let mut all: HashMap<Arc<str>, Metrics> = rows.into_iter().collect();
+	for (value, metrics) in other {
+		all.entry(value).or_default().merge(&metrics);
+	}
+	let mut all: Vec<_> = all.into_iter().collect();
+	all.sort_unstable_by(|a, b| b.1.visitors.cmp(&a.1.visitors).then(a.0.cmp(&b.0)));
+	all
 }
 
 fn combine(mut report: Report, next: Report) -> Report {

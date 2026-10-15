@@ -63,6 +63,6 @@
 			</Button>
 		</div>
 	{:else}
-		<Message>open the setup link from the server log</Message>
+		<Message>Open the setup link from the server log.</Message>
 	{/if}
 </Gate>

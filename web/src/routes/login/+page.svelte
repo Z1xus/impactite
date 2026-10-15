@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import { api, ApiError, type Me } from "#lib/api.ts";
 	import { get } from "#lib/passkey.ts";
@@ -23,6 +24,16 @@
 	let sent = $state(false);
 	let code = $state("");
 	let asked = $state(false);
+
+	const SSO_ERRORS: Record<string, string> = {
+		expired: "That sign-in took too long. Try again.",
+		denied: "Sign-in was canceled.",
+		email: "Your account there has no verified email.",
+		invite: "There's no account for that email here yet. Ask an admin for an invite.",
+		provider: "Sign-in didn't work. Try again, or ask an admin to check the SSO settings.",
+		off: "Single sign-on isn't set up on this server."
+	};
+	const ssoError = $derived(SSO_ERRORS[page.url.searchParams.get("sso") ?? ""] ?? "");
 
 	async function finish(promise: Promise<{ me: Me }>) {
 		adopt((await promise).me);
@@ -57,6 +68,18 @@
 
 <Gate>
 	<div class="flex flex-col gap-3">
+		{#if session.sso}
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- a server redirect, not a page -->
+			<a
+				href="/api/app/sso"
+				class="flex h-9 w-full items-center justify-center rounded-px border border-edge label text-fg transition-colors duration-100 hover:border-dim"
+				>sign in with {session.sso}</a
+			>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		{/if}
+		{#if ssoError}
+			<Message tone="bad">{ssoError}</Message>
+		{/if}
 		{#if mode === "password"}
 			<Form block action="sign in" submit={withPassword}>
 				<Field

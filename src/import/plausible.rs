@@ -11,7 +11,7 @@ use crate::ingest::referrer::{self, Traffic};
 use crate::stats::day_number;
 
 #[derive(Default)]
-struct Day {
+pub(super) struct Day {
 	total: Metrics,
 	rows: Vec<(Field, String, Metrics)>,
 }
@@ -51,139 +51,153 @@ pub fn import(
 					.unwrap_or_default()
 					.trim_matches('\0')
 			};
-			let num = |name: &str| get(name).parse::<u64>().unwrap_or_default();
 			let date: Date = get("date")
 				.parse()
 				.with_context(|| format!("bad date in {table}"))?;
-			if date >= before {
-				continue;
-			}
-			let visit = Metrics {
-				visitors: num("visitors"),
-				visits: num("visits"),
-				pageviews: num("pageviews"),
-				events: num("pageviews"),
-				bounces: num("bounces"),
-				duration: num("visit_duration"),
-				..Metrics::default()
-			};
-			let day = days.entry(date).or_default();
-			let dim = Field::Dim;
-			match table.as_str() {
-				"visitors" => {
-					day.total.merge(&Metrics {
-						exits: visit.visits,
-						..visit
-					});
-					day.add(visit, [(dim(Dim::Name), "pageview")]);
-				}
-				"custom_events" => {
-					let metrics = Metrics {
-						visitors: num("visitors"),
-						events: num("events"),
-						..Metrics::default()
-					};
-					day.total.events += metrics.events;
-					day.add(
-						metrics,
-						[
-							(dim(Dim::Name), get("name")),
-							(Field::Prop("url".into()), get("link_url")),
-							(Field::Prop("path".into()), get("path")),
-						],
-					);
-				}
-				"sources" => {
-					let channel = referrer::channel(&Traffic {
-						referrer_host: "",
-						utm_source: get("source"),
-						utm_medium: get("utm_medium"),
-						click_id: false,
-					});
-					day.add(
-						visit,
-						[
-							(dim(Dim::Source), get("source")),
-							(dim(Dim::Referrer), get("referrer")),
-							(dim(Dim::Channel), channel),
-							(dim(Dim::UtmSource), get("utm_source")),
-							(dim(Dim::UtmMedium), get("utm_medium")),
-							(dim(Dim::UtmCampaign), get("utm_campaign")),
-							(dim(Dim::UtmContent), get("utm_content")),
-							(dim(Dim::UtmTerm), get("utm_term")),
-						],
-					);
-				}
-				"pages" => {
-					// plausible exports time on page in seconds
-					let page = Metrics {
-						engaged: num("total_time_on_page") * 1000,
-						engaged_views: num("total_time_on_page_visits"),
-						scroll: num("total_scroll_depth"),
-						scrolled: num("total_scroll_depth_visits"),
-						..visit
-					};
-					day.add(page, [(dim(Dim::Page), get("page"))]);
-					day.add(visit, [(dim(Dim::Hostname), get("hostname"))]);
-				}
-				"entry_pages" => day.add(
-					Metrics {
-						visits: num("entrances"),
-						..visit
-					},
-					[(Field::Entry, get("entry_page"))],
-				),
-				"exit_pages" => {
-					day.add(
-						Metrics {
-							visits: num("exits"),
-							..visit
-						},
-						[(Field::Exit, get("exit_page"))],
-					);
-					if !get("exit_page").is_empty() {
-						day.add(
-							Metrics {
-								exits: num("exits"),
-								..Metrics::default()
-							},
-							[(dim(Dim::Page), get("exit_page"))],
-						);
-					}
-				}
-				"locations" => day.add(
-					visit,
-					[
-						(dim(Dim::Country), get("country")),
-						(dim(Dim::Region), get("region")),
-					],
-				),
-				"devices" => day.add(visit, [(dim(Dim::Device), get("device"))]),
-				"browsers" => day.add(
-					visit,
-					[
-						(dim(Dim::Browser), get("browser")),
-						(dim(Dim::BrowserVersion), get("browser_version")),
-					],
-				),
-				"operating_systems" => day.add(
-					visit,
-					[
-						(dim(Dim::Os), get("operating_system")),
-						(dim(Dim::OsVersion), get("operating_system_version")),
-					],
-				),
-				_ => {}
+			if date < before {
+				add(days.entry(date).or_default(), &table, &get);
 			}
 		}
 	}
-	for (&date, day) in &days {
+	write(db, site, &days)
+}
+
+pub(super) fn write(
+	db: &Db,
+	site: &Site,
+	days: &BTreeMap<Date, Day>,
+) -> anyhow::Result<Option<(Date, Date)>> {
+	for (&date, day) in days {
 		db.import(site.id, day_number(date), day.total, &day.rows)?;
 	}
 	Ok(days
 		.first_key_value()
 		.zip(days.last_key_value())
 		.map(|((&first, _), (&last, _))| (first, last)))
+}
+
+// one row of a plausible imported_* table, by column name
+pub(super) fn add<'a>(day: &mut Day, table: &str, get: &dyn Fn(&str) -> &'a str) {
+	let num = |name: &str| get(name).parse::<u64>().unwrap_or_default();
+	let visit = Metrics {
+		visitors: num("visitors"),
+		visits: num("visits"),
+		pageviews: num("pageviews"),
+		events: num("pageviews"),
+		bounces: num("bounces"),
+		duration: num("visit_duration"),
+		..Metrics::default()
+	};
+	let dim = Field::Dim;
+	match table {
+		"visitors" => {
+			day.total.merge(&Metrics {
+				exits: visit.visits,
+				..visit
+			});
+			day.add(visit, [(dim(Dim::Name), "pageview")]);
+		}
+		"custom_events" => {
+			let metrics = Metrics {
+				visitors: num("visitors"),
+				events: num("events"),
+				..Metrics::default()
+			};
+			day.total.events += metrics.events;
+			day.add(
+				metrics,
+				[
+					(dim(Dim::Name), get("name")),
+					(Field::Prop("url".into()), get("link_url")),
+					(Field::Prop("path".into()), get("path")),
+				],
+			);
+		}
+		"sources" => {
+			let channel = match get("channel") {
+				"" => referrer::channel(&Traffic {
+					referrer_host: "",
+					utm_source: get("source"),
+					utm_medium: get("utm_medium"),
+					click_id: false,
+				}),
+				channel => channel,
+			};
+			day.add(
+				visit,
+				[
+					(dim(Dim::Source), get("source")),
+					(dim(Dim::Referrer), get("referrer")),
+					(dim(Dim::Channel), channel),
+					(dim(Dim::UtmSource), get("utm_source")),
+					(dim(Dim::UtmMedium), get("utm_medium")),
+					(dim(Dim::UtmCampaign), get("utm_campaign")),
+					(dim(Dim::UtmContent), get("utm_content")),
+					(dim(Dim::UtmTerm), get("utm_term")),
+				],
+			);
+		}
+		"pages" => {
+			// plausible exports time on page in seconds
+			let page = Metrics {
+				engaged: num("total_time_on_page") * 1000,
+				engaged_views: num("total_time_on_page_visits"),
+				scroll: num("total_scroll_depth"),
+				scrolled: num("total_scroll_depth_visits"),
+				..visit
+			};
+			day.add(page, [(dim(Dim::Page), get("page"))]);
+			day.add(visit, [(dim(Dim::Hostname), get("hostname"))]);
+		}
+		"entry_pages" => day.add(
+			Metrics {
+				visits: num("entrances"),
+				..visit
+			},
+			[(Field::Entry, get("entry_page"))],
+		),
+		"exit_pages" => {
+			day.add(
+				Metrics {
+					visits: num("exits"),
+					..visit
+				},
+				[(Field::Exit, get("exit_page"))],
+			);
+			if !get("exit_page").is_empty() {
+				day.add(
+					Metrics {
+						exits: num("exits"),
+						..Metrics::default()
+					},
+					[(dim(Dim::Page), get("exit_page"))],
+				);
+			}
+		}
+		"locations" => day.add(
+			visit,
+			[
+				(dim(Dim::Country), get("country")),
+				(dim(Dim::Region), get("region")),
+			],
+		),
+		"devices" => day.add(visit, [(dim(Dim::Device), get("device"))]),
+		"browsers" => day.add(
+			visit,
+			[
+				(dim(Dim::Browser), get("browser")),
+				(dim(Dim::BrowserVersion), get("browser_version")),
+			],
+		),
+		"operating_systems" => day.add(
+			visit,
+			[
+				(dim(Dim::Os), get("operating_system")),
+				(dim(Dim::OsVersion), get("operating_system_version")),
+			],
+		),
+		_ => {}
+	}
 }
 
 fn table(name: &str) -> Option<&str> {

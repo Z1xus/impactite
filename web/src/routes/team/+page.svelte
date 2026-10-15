@@ -7,6 +7,7 @@
 	import Button from "#lib/ui/Button.svelte";
 	import Code from "#lib/ui/Code.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
+	import Danger from "#lib/ui/Danger.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
@@ -206,17 +207,20 @@
 
 			<Section id="danger" label="danger" danger>
 				{#if role === "owner"}
-					<Form action="delete team" submit={destroy} inline danger>
-						<Field
-							label="type {team.name} to delete it and all its sites"
-							bind:value={confirm}
-						/>
-					</Form>
+					<Danger
+						title="Delete team"
+						body="Deletes the team and all its sites. You can't undo this."
+					>
+						<Form action="delete team" submit={destroy} inline danger>
+							<Field label="type {team.name} to confirm" bind:value={confirm} />
+						</Form>
+					</Danger>
 				{:else}
-					<div class="flex items-center justify-between gap-4">
-						<span class="text-[14px] text-dim">You lose access to its sites.</span>
-						<Button variant="danger" onclick={leave}>leave {team.name}</Button>
-					</div>
+					<Danger title="Leave team" body="You'll lose access to its sites.">
+						<div>
+							<Button variant="danger" onclick={leave}>leave {team.name}</Button>
+						</div>
+					</Danger>
 				{/if}
 			</Section>
 		</Settings>

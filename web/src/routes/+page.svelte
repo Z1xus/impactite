@@ -25,6 +25,16 @@
 	let domain = $state("");
 
 	$effect(() => {
+		if (team && team.sites.length > 1) {
+			const timezone = [...team.sites].sort((a, b) => a.id - b.id)[0].timezone;
+			query(`team:${team.id}`, {
+				metrics: ["visitors"],
+				date_range: [shift(today(timezone), -27), today(timezone)],
+				dimensions: ["time:day"]
+			}).then((result) => {
+				series.all = result.results.map((row) => row.metrics[0]);
+			});
+		}
 		for (const site of team?.sites ?? []) {
 			query(site.domain, {
 				metrics: ["visitors"],
@@ -75,6 +85,32 @@
 		</div>
 		{#if team && team.sites.length}
 			<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{#if team.sites.length > 1}
+					{@const values = series.all}
+					<li>
+						<a
+							href={resolve("/all")}
+							class="flex flex-col gap-5 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
+						>
+							<div class="flex items-center justify-between gap-4">
+								<span class="text-fg">all sites</span>
+								{#if values}
+									<Num
+										value={values.reduce((sum, value) => sum + value, 0)}
+										format={compact}
+										class="text-label text-dim"
+									/>
+								{/if}
+							</div>
+							<Chart
+								values={values ?? []}
+								axes={false}
+								height={56}
+								format={compact}
+							/>
+						</a>
+					</li>
+				{/if}
 				{#each team.sites as site (site.id)}
 					{@const values = series[site.domain]}
 					<li>

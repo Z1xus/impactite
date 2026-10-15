@@ -274,7 +274,7 @@ fn cose_key(key: &Value) -> Option<(i64, Vec<u8>)> {
 	}
 }
 
-fn rsa_der(n: &[u8], e: &[u8]) -> Vec<u8> {
+pub(crate) fn rsa_der(n: &[u8], e: &[u8]) -> Vec<u8> {
 	let mut body = der_integer(n);
 	body.extend(der_integer(e));
 	der(0x30, &body)

@@ -245,7 +245,7 @@ impl App {
 			})
 	}
 
-	fn user_by_email(&self, email: &str) -> rusqlite::Result<Option<i64>> {
+	pub(crate) fn user_by_email(&self, email: &str) -> rusqlite::Result<Option<i64>> {
 		self.conn()
 			.query_row(
 				"select id from users where email = ?1",

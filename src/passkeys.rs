@@ -26,6 +26,9 @@ pub enum Purpose {
 	Add(i64),
 	Login,
 	Google(u64),
+	Analytics(u64),
+	// nonce and pkce verifier of an sso sign in
+	Sso(String, String),
 }
 
 #[derive(Deserialize)]

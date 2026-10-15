@@ -98,12 +98,7 @@
 			<Toggle bind:value={op} options={OPS} />
 		{/if}
 	</div>
-	<Field
-		label={goal ? "goal" : "value"}
-		placeholder="type to search, enter to add"
-		bind:value={text}
-		onkeydown={add}
-	/>
+	<Field label={goal ? "goal" : "value"} placeholder="search" bind:value={text} onkeydown={add} />
 	<Checks
 		data
 		bind:value={() => values, (next) => (values = goal ? next.slice(-1) : next)}

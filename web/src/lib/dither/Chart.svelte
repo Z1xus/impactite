@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { theme } from "#lib/theme.svelte.ts";
 	import { css, threshold } from "./bayer";
 
 	let {
@@ -164,6 +165,7 @@
 	$effect(() => {
 		void width;
 		void hover;
+		void theme.shown;
 		draw();
 	});
 

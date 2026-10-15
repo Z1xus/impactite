@@ -421,8 +421,10 @@ async fn total(State(web): State<Arc<Web>>, call: Call) -> Response {
 		let stats: Vec<Value> = days(from, to)
 			.map(|day| {
 				let day = day.to_string();
-				let daily = pages.get(&day).copied().unwrap_or(0) + events.get(&day).copied().unwrap_or(0);
-				json!({ "day": day, "hourly": hourly.get(day.as_str()).copied().unwrap_or_default(), "daily": daily })
+				let daily =
+					pages.get(&day).copied().unwrap_or(0) + events.get(&day).copied().unwrap_or(0);
+				let hours = spread(hourly.get(day.as_str()).copied().unwrap_or_default(), daily);
+				json!({ "day": day, "hourly": hours, "daily": daily })
 			})
 			.collect();
 		let total = pages.values().chain(events.values()).sum::<u64>();
@@ -683,4 +685,21 @@ async fn download(State(web): State<Arc<Web>>, Path(_id): Path<u64>, call: Call)
 			.into_response(),
 		_ => reply(Err(broken("export"))),
 	}
+}
+
+// goatcounter counts a visit per page, hours here count visitors, so the day's visits are
+// shared out over its hours in their proportion, largest remainders first
+fn spread(hours: [u64; 24], total: u64) -> [u64; 24] {
+	let sum: u64 = hours.iter().sum();
+	if sum == 0 {
+		return hours;
+	}
+	let mut out = hours.map(|hour| hour * total / sum);
+	let mut rest: Vec<usize> = (0..24).collect();
+	rest.sort_by_key(|&i| std::cmp::Reverse(hours[i] * total % sum));
+	let left = total - out.iter().sum::<u64>();
+	for &i in rest.iter().take(left as usize) {
+		out[i] += 1;
+	}
+	out
 }

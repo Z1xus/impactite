@@ -46,6 +46,13 @@ async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 			"signup": web.app.signup_open(),
 			"mail": web.mail.ready(),
 			"users": users,
+			"version": crate::update::VERSION,
+			"latest": web
+				.latest
+				.lock()
+				.unwrap_or_else(std::sync::PoisonError::into_inner)
+				.as_ref()
+				.map(|(version, url)| json!({ "version": version, "url": url })),
 		}))
 		.into_response(),
 		Err(err) => internal(err),

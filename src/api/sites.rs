@@ -271,7 +271,7 @@ async fn invite(State(web): State<Arc<Web>>, call: Call) -> Response {
 		if !matches!(role, "viewer" | "editor") || !email.contains('@') {
 			return Err((
 				StatusCode::BAD_REQUEST,
-				"Use a valid email, and the viewer or editor role".to_owned(),
+				"Use a valid email and the viewer or editor role".to_owned(),
 			));
 		}
 		let people = web.app.guests(site.id).map_err(broken)?;

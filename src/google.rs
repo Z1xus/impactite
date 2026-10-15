@@ -27,6 +27,11 @@ pub struct Client {
 }
 
 static ACCESS: LazyLock<Mutex<HashMap<u64, (String, i64)>>> = LazyLock::new(Mutex::default);
+// google analytics 4 imports: an hour's access token per site, and what a running import says
+const ANALYTICS: &str = "https://www.googleapis.com/auth/analytics.readonly";
+static ANALYTICS_ACCESS: LazyLock<Mutex<HashMap<u64, (String, i64)>>> =
+	LazyLock::new(Mutex::default);
+static IMPORTS: LazyLock<Mutex<HashMap<u64, Option<String>>>> = LazyLock::new(Mutex::default);
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -36,6 +41,14 @@ pub fn routes() -> Router<Arc<Web>> {
 		)
 		.route("/api/app/sites/{domain}/google/connect", get(connect))
 		.route("/api/app/google/callback", get(callback))
+		.route(
+			"/api/app/sites/{domain}/analytics",
+			get(analytics).post(start_import),
+		)
+		.route(
+			"/api/app/sites/{domain}/analytics/connect",
+			get(connect_analytics),
+		)
 		.route("/api/app/keywords", post(keywords))
 }
 
@@ -127,8 +140,10 @@ async fn connect(
 }
 
 async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) -> Response {
-	let Some(Purpose::Google(site)) = web.take(&query.state) else {
-		return fail(StatusCode::BAD_REQUEST, "This link expired. Connect again.");
+	let site = match web.take(&query.state) {
+		Some(Purpose::Google(site)) => site,
+		Some(Purpose::Analytics(site)) => return analytics_callback(&web, site, query).await,
+		_ => return fail(StatusCode::BAD_REQUEST, "This link expired. Connect again."),
 	};
 	let Ok(Some(domain)) = web.app.site_domain(site) else {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
@@ -381,4 +396,204 @@ impl App {
 			)
 			.optional()
 	}
+}
+
+#[derive(Deserialize)]
+struct Property {
+	property: String,
+}
+
+fn token(site: u64) -> Option<String> {
+	ANALYTICS_ACCESS
+		.lock()
+		.unwrap_or_else(PoisonError::into_inner)
+		.get(&site)
+		.filter(|(_, expires)| *expires > now())
+		.map(|(token, _)| token.clone())
+}
+
+async fn connect_analytics(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	let (Some(site), Some(client)) = (editable(&web, viewer.user, &domain), &web.google) else {
+		return fail(
+			StatusCode::FORBIDDEN,
+			"Google is not set up on this server.",
+		);
+	};
+	let Some(state) = web.begin(Purpose::Analytics(site.id)) else {
+		return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
+	};
+	let query = url::form_urlencoded::Serializer::new(String::new())
+		.append_pair("client_id", &client.id)
+		.append_pair("redirect_uri", &redirect_uri(&web))
+		.append_pair("response_type", "code")
+		.append_pair("scope", ANALYTICS)
+		.append_pair("prompt", "consent")
+		.append_pair("state", &state)
+		.finish();
+	Redirect::to(&format!(
+		"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+	))
+	.into_response()
+}
+
+async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Response {
+	let Ok(Some(domain)) = web.app.site_domain(site) else {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	};
+	let back = format!("/{domain}/settings#imports");
+	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
+		return Redirect::to(&back).into_response();
+	};
+	let exchanged = web
+		.http
+		.post(TOKEN)
+		.form(&[
+			("code", code.as_str()),
+			("client_id", &client.id),
+			("client_secret", &client.secret),
+			("redirect_uri", &redirect_uri(web)),
+			("grant_type", "authorization_code"),
+		])
+		.send()
+		.await
+		.and_then(reqwest::Response::error_for_status);
+	let body: Value = match exchanged {
+		Ok(response) => response.json().await.unwrap_or_default(),
+		Err(err) => {
+			tracing::warn!(%err, "google analytics token");
+			return Redirect::to(&back).into_response();
+		}
+	};
+	if let Some(access) = body["access_token"].as_str() {
+		let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
+		ANALYTICS_ACCESS
+			.lock()
+			.unwrap_or_else(PoisonError::into_inner)
+			.insert(site, (access.to_owned(), expires));
+	}
+	Redirect::to(&back).into_response()
+}
+
+// whether google is connected, the properties it sees, and how an import is going
+async fn analytics(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	let Some(site) = editable(&web, viewer.user, &domain) else {
+		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
+	};
+	let status = IMPORTS
+		.lock()
+		.unwrap_or_else(PoisonError::into_inner)
+		.get(&site.id)
+		.cloned();
+	let mut properties = Vec::new();
+	if let Some(token) = token(site.id) {
+		let listed = web
+			.http
+			.get("https://analyticsadmin.googleapis.com/v1beta/accountSummaries?pageSize=200")
+			.bearer_auth(token)
+			.send()
+			.await
+			.and_then(reqwest::Response::error_for_status);
+		let body: Value = match listed {
+			Ok(response) => response.json().await.unwrap_or_default(),
+			Err(err) => {
+				tracing::warn!(%err, "google analytics properties");
+				Value::Null
+			}
+		};
+		for account in body["accountSummaries"].as_array().into_iter().flatten() {
+			for property in account["propertySummaries"]
+				.as_array()
+				.into_iter()
+				.flatten()
+			{
+				properties.push(json!({
+					"key": property["property"],
+					"label": format!(
+						"{} / {}",
+						account["displayName"].as_str().unwrap_or_default(),
+						property["displayName"].as_str().unwrap_or_default()
+					),
+				}));
+			}
+		}
+	}
+	Json(json!({
+		"available": web.google.is_some(),
+		"connected": token(site.id).is_some(),
+		"properties": properties,
+		"importing": matches!(status, Some(None)),
+		"error": status.flatten(),
+	}))
+	.into_response()
+}
+
+async fn start_import(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+	Json(body): Json<Property>,
+) -> Response {
+	let Some(site) = editable(&web, viewer.user, &domain) else {
+		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
+	};
+	let Some(token) = token(site.id) else {
+		return fail(
+			StatusCode::BAD_REQUEST,
+			"The Google sign-in expired. Connect again.",
+		);
+	};
+	if !body.property.starts_with("properties/") {
+		return fail(StatusCode::BAD_REQUEST, "Pick a property.");
+	}
+	{
+		let mut imports = IMPORTS.lock().unwrap_or_else(PoisonError::into_inner);
+		if matches!(imports.get(&site.id), Some(None)) {
+			return fail(StatusCode::CONFLICT, "An import is already running.");
+		}
+		imports.insert(site.id, None);
+	}
+	tokio::spawn(async move {
+		let tz = jiff::tz::TimeZone::get(&site.timezone).unwrap_or(jiff::tz::TimeZone::UTC);
+		let before = jiff::Timestamp::from_second(site.created_at)
+			.map(|ts| ts.to_zoned(tz).date())
+			.unwrap_or_default();
+		let result = crate::import::ga4::import(
+			&web.http,
+			&token,
+			&body.property,
+			&web.stats.db,
+			&site,
+			before,
+		)
+		.await
+		.and_then(|range| {
+			if let Some((first, last)) = range {
+				web.app.add_import(
+					site.id,
+					"google analytics",
+					&first.to_string(),
+					&last.to_string(),
+				)?;
+			}
+			Ok(())
+		});
+		let error = result.err().map(|err| {
+			tracing::warn!(%err, site = site.domain, "google analytics import");
+			err.to_string()
+		});
+		let mut imports = IMPORTS.lock().unwrap_or_else(PoisonError::into_inner);
+		match error {
+			Some(error) => imports.insert(site.id, Some(error)),
+			None => imports.remove(&site.id),
+		};
+	});
+	StatusCode::ACCEPTED.into_response()
 }

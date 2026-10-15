@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { COLS, CODES, GRID, ROWS } from "#lib/art/world.ts";
+	import { theme } from "#lib/theme.svelte.ts";
 	import { css, threshold } from "./bayer";
 
 	let {
@@ -26,6 +27,7 @@
 	$effect(() => {
 		const ctx = canvas.getContext("2d");
 		if (!ctx) return;
+		void theme.shown;
 		const max = Math.max(1, ...Object.values(values));
 		const [land, lit, active] = [css("--color-edge"), css("--color-cyan"), css("--color-fg")];
 		const image = ctx.createImageData(COLS * CELL, ROWS * CELL);

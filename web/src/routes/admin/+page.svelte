@@ -19,7 +19,13 @@
 		created: number;
 		sites: number;
 	};
-	type Admin = { signup: boolean; mail: boolean; users: User[] };
+	type Admin = {
+		signup: boolean;
+		mail: boolean;
+		users: User[];
+		version: string;
+		latest: { version: string; url: string } | null;
+	};
 
 	let info = $state<Admin | null>(null);
 
@@ -58,6 +64,7 @@
 			return api<Admin>(`/api/app/admin/users/${user}`, undefined, "DELETE");
 		});
 	const sections = [
+		{ id: "version", label: "version" },
 		{ id: "signup", label: "sign-up" },
 		{ id: "mail", label: "mail" },
 		{ id: "users", label: "users" }
@@ -70,6 +77,26 @@
 			{#snippet title()}
 				<Title>Instance</Title>
 			{/snippet}
+
+			<Section id="version" label="version">
+				{#if info.latest}
+					<div class="flex flex-col gap-2">
+						<span class="text-[14px] text-fg">
+							impactite {info.latest.version} is available. You're on {info.version}.
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the release page on github -->
+							<a href={info.latest.url} class="text-cyan hover:text-fg"
+								>What changed</a
+							>
+						</span>
+						<span class="text-[14px] text-dim">
+							Run impactite update or pull the new Docker image, then restart.
+						</span>
+					</div>
+				{:else}
+					<span class="text-[14px] text-dim">impactite {info.version} is up to date.</span
+					>
+				{/if}
+			</Section>
 
 			<Section id="signup" label="sign-up">
 				<div class="flex items-center justify-between gap-4">

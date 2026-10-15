@@ -16,7 +16,9 @@ use crate::accounts::{Viewer, Web, fail, internal};
 use crate::app::{App, Site};
 use crate::stats::{self, day_number};
 
-const KINDS: [&str; 6] = ["daily", "weekly", "biweekly", "monthly", "spike", "drop"];
+const KINDS: [&str; 7] = [
+	"daily", "weekly", "biweekly", "monthly", "spike", "drop", "export",
+];
 const SEND_HOUR: i8 = 7;
 
 pub fn routes() -> Router<Arc<Web>> {
@@ -83,6 +85,20 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 			summary(web, report, start, end).await?;
 			web.app.mark_report(report.id, day_number(end).into())?;
 		}
+		"export" => {
+			let yesterday = today.checked_sub(1.day())?;
+			if !morning || report.last >= i64::from(day_number(yesterday)) {
+				return Ok(());
+			}
+			let bucket = crate::s3::Bucket::parse(&report.email)?;
+			let archive = tokio::task::block_in_place(|| {
+				crate::export::day_archive(web, &report.site, yesterday)
+			})?;
+			let name = format!("{}/{yesterday}.impactite.zip", report.site.domain);
+			bucket.put(&web.http, &name, archive).await?;
+			web.app
+				.mark_report(report.id, day_number(yesterday).into())?;
+		}
 		"spike" => {
 			let ts = now.timestamp().as_second();
 			let current = web.ingest.current_visitors(report.site.id) as u64;
@@ -96,9 +112,7 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 				report.threshold,
 				link(web, report, None)
 			);
-			web.mail
-				.send(&report.email, &subject, &text, &html(&text))
-				.await?;
+			deliver(web, report, &subject, &text).await?;
 			web.app.mark_report(report.id, ts)?;
 		}
 		_ => {
@@ -117,9 +131,7 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 					report.threshold,
 					link(web, report, Some((yesterday, yesterday)))
 				);
-				web.mail
-					.send(&report.email, &subject, &text, &html(&text))
-					.await?;
+				deliver(web, report, &subject, &text).await?;
 			}
 			web.app
 				.mark_report(report.id, day_number(yesterday).into())?;
@@ -211,9 +223,30 @@ async fn summary(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Re
 		link = link(web, report, Some((from, to))),
 	);
 	let subject = format!("{} {} report", report.site.domain, report.kind);
-	web.mail
-		.send(&report.email, &subject, &text, &html(&text))
-		.await
+	deliver(web, report, &subject, &text).await
+}
+
+// mail, or a webhook: slack and discord get their own format, anything else gets json
+async fn deliver(web: &Web, report: &Report, subject: &str, text: &str) -> anyhow::Result<()> {
+	let to = report.email.as_str();
+	if !to.starts_with("https://") {
+		return web.mail.send(to, subject, text, &html(text)).await;
+	}
+	let body = if to.starts_with("https://hooks.slack.com/") {
+		json!({ "text": format!("*{subject}*\n```{text}```") })
+	} else if to.contains("discord.com/api/webhooks/") {
+		let text: String = text.chars().take(1900).collect();
+		json!({ "content": format!("**{subject}**\n```{text}```") })
+	} else {
+		json!({ "subject": subject, "text": text, "site": report.site.domain, "kind": report.kind })
+	};
+	web.http
+		.post(to)
+		.json(&body)
+		.send()
+		.await?
+		.error_for_status()?;
+	Ok(())
 }
 
 fn link(web: &Web, report: &Report, range: Option<(Date, Date)>) -> String {
@@ -221,6 +254,18 @@ fn link(web: &Web, report: &Report, range: Option<(Date, Date)>) -> String {
 	match range {
 		Some((from, to)) => format!("{base}?period=custom&from={from}&to={to}"),
 		None => format!("{base}?period=realtime"),
+	}
+}
+
+fn shown(to: &str) -> String {
+	if let Ok(bucket) = crate::s3::Bucket::parse(to) {
+		return bucket.shown();
+	}
+	match url::Url::parse(to) {
+		Ok(url) if to.starts_with("https://") => {
+			format!("webhook to {}", url.host_str().unwrap_or_default())
+		}
+		_ => to.to_owned(),
 	}
 }
 
@@ -256,14 +301,25 @@ async fn add(
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let alert = matches!(body.kind.as_str(), "spike" | "drop");
-	if !KINDS.contains(&body.kind.as_str())
-		|| !body.email.contains('@')
-		|| (alert && body.threshold == 0)
-	{
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Use a valid email, and a threshold for alerts.",
-		);
+	let to = body.email.trim();
+	if body.kind == "export" {
+		if let Err(err) = crate::s3::Bucket::parse(to) {
+			return fail(
+				StatusCode::BAD_REQUEST,
+				&format!("Check the bucket: {err}."),
+			);
+		}
+	} else {
+		let webhook = to.starts_with("https://") && url::Url::parse(to).is_ok();
+		if !KINDS.contains(&body.kind.as_str())
+			|| !(webhook || to.contains('@'))
+			|| (alert && body.threshold == 0)
+		{
+			return fail(
+				StatusCode::BAD_REQUEST,
+				"Enter an email or an https webhook. Alerts also need a threshold.",
+			);
+		}
 	}
 	// starts as sent so nothing goes out right away
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
@@ -274,7 +330,7 @@ async fn add(
 	};
 	match web
 		.app
-		.add_report(site.id, &body.kind, body.email.trim(), body.threshold, last)
+		.add_report(site.id, &body.kind, to, body.threshold, last)
 	{
 		Ok(()) => respond(&web, site.id),
 		Err(err) => internal(err),
@@ -336,7 +392,8 @@ impl App {
 			Ok(json!({
 				"id": row.get::<_, i64>(0)?,
 				"kind": row.get::<_, String>(1)?,
-				"email": row.get::<_, String>(2)?,
+				// a webhook url is its secret, only its host goes back
+				"email": shown(&row.get::<_, String>(2)?),
 				"threshold": row.get::<_, i64>(3)?,
 			}))
 		})?

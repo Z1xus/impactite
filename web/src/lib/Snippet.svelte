@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Checks from "#lib/ui/Checks.svelte";
 	import Code from "#lib/ui/Code.svelte";
+	import { session } from "#lib/session.svelte.ts";
 
 	let { domain }: { domain: string } = $props();
 
@@ -17,8 +18,13 @@
 	const file = $derived(
 		["script", ...order.filter((feature) => features.includes(feature)), "js"].join(".")
 	);
+	// with an alias the script and its events use paths ad blockers don't know
 	const code = $derived(
-		`<script defer data-domain="${domain}" src="${location.origin}/js/${file}"></` + `script>`
+		session.alias
+			? `<script defer data-domain="${domain}" data-api="${location.origin}${session.alias}/e" src="${location.origin}${session.alias}/${file}"></` +
+					`script>`
+			: `<script defer data-domain="${domain}" src="${location.origin}/js/${file}"></` +
+					`script>`
 	);
 </script>
 

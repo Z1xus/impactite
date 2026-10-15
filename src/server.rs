@@ -26,6 +26,7 @@ use crate::segments;
 use crate::shares;
 use crate::shields;
 use crate::sites;
+use crate::sso;
 use crate::stats::{self, Stats};
 use crate::teams;
 use crate::titles;
@@ -33,9 +34,20 @@ use crate::totp;
 use crate::tracker;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
-	Router::new()
+	let mut events = Router::new()
 		.route("/api/event", post(plausible::event).options(preflight))
-		.route("/count", get(goatcounter::count).post(goatcounter::count))
+		.route("/count", get(goatcounter::count).post(goatcounter::count));
+	let mut scripts = Router::new()
+		.route("/js/{file}", get(tracker::script))
+		.route("/count.js", get(tracker::count));
+	if let Some(alias) = &web.alias {
+		events = events.route(
+			&format!("{alias}/e"),
+			post(plausible::event).options(preflight),
+		);
+		scripts = scripts.route(&format!("{alias}/{{file}}"), get(tracker::script));
+	}
+	events
 		.with_state(ingest)
 		.layer(map_response(cors))
 		.merge(
@@ -61,6 +73,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(titles::routes())
 				.merge(google::routes())
 				.merge(totp::routes())
+				.merge(sso::routes())
 				.merge(api::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
@@ -70,8 +83,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/counter/{*file}", get(counter::counter))
 				.with_state(web),
 		)
-		.route("/js/{file}", get(tracker::script))
-		.route("/count.js", get(tracker::count))
+		.merge(scripts)
 		.fallback(assets::serve)
 }
 

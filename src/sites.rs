@@ -342,6 +342,8 @@ async fn upload(
 		let done = match upload.source.as_str() {
 			"plausible" => import::plausible_zip(db, &shared.app, &site, &path)
 				.map(|days| format!("{days} days")),
+			"umami" => import::umami_csv(db, &shared.app, &site, &path)
+				.map(|count| format!("{count} events")),
 			"impactite" => import::native_zip(db, &shared.app, &site, &path)
 				.map(|events| format!("{events} events")),
 			_ => import::goatcounter_csv(db, &shared.app, &site, &path)

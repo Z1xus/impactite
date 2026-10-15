@@ -12,7 +12,7 @@
 	import downloadIcon from "pixelarticons/svg/download.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
-	import { session } from "#lib/session.svelte.ts";
+	import { currentTeam, session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
 		OPS,
@@ -86,13 +86,17 @@
 	const editable = $derived(
 		!readonly && ["owner", "admin", "editor"].includes(member?.role ?? "")
 	);
-	const sites = $derived(
-		(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
+	// `team:<id>` shows every site of the team added up
+	const combined = $derived(domain.startsWith("team:"));
+	const team = $derived(currentTeam());
+	const sites = $derived([
+		...((team?.sites.length ?? 0) > 1 ? [{ key: "all", label: "all sites" }] : []),
+		...(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
 			key: site.domain,
 			label: site.domain,
 			glyph: icon("event:hostname", site.domain)
 		}))
-	);
+	]);
 	const metric = $derived((page.url.searchParams.get("metric") ?? "visitors") as Metric);
 	const filters = $derived(
 		page.url.searchParams
@@ -707,10 +711,11 @@
 			</Title>
 		{:else}
 			<Select
-				value={domain}
+				value={combined ? "all" : domain}
 				options={sites}
 				data
-				pick={(key) => goto(resolve("/[site]", { site: key }))}
+				pick={(key) =>
+					goto(key === "all" ? resolve("/all") : resolve("/[site]", { site: key }))}
 			/>
 		{/if}
 		{#if editable}
@@ -788,7 +793,7 @@
 						align="right"
 						items={[
 							{
-								label: "impactite, all events",
+								label: "impactite archive",
 								onclick: () => download("impactite")
 							},
 							{ label: "plausible csv", onclick: () => download("plausible") },
@@ -801,7 +806,7 @@
 		</div>
 	</div>
 
-	{#if empty}
+	{#if empty && !combined}
 		<section class="flex max-w-2xl flex-col gap-5">
 			<Snippet {domain} />
 			<Message
@@ -873,7 +878,7 @@
 		{#if arranging}
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="text-[14px] text-dim"
-					>Drag panels to move them, close the ones you do not need.</span
+					>Drag panels to reorder them. Close the ones you don't need.</span
 				>
 				{#each arranged.filter( (panel) => layout.hidden.includes(panel.id) ) as panel (panel.id)}
 					<Button

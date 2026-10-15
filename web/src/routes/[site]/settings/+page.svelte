@@ -2,7 +2,7 @@
 	import { untrack } from "svelte";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import { attempt } from "#lib/toast.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { goto } from "$app/navigation";
@@ -14,6 +14,7 @@
 	import Icon from "#lib/ui/Icon.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Code from "#lib/ui/Code.svelte";
+	import Danger from "#lib/ui/Danger.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
@@ -68,7 +69,7 @@
 	];
 	const IGNORE = 'localStorage.plausible_ignore = "true"';
 	type Link = { id: number; slug: string; name: string; locked: boolean };
-	type ReportKind = "daily" | "weekly" | "biweekly" | "monthly" | "spike" | "drop";
+	type ReportKind = "daily" | "weekly" | "biweekly" | "monthly" | "spike" | "drop" | "export";
 	type Report = { id: number; kind: ReportKind; email: string; threshold: number };
 	const REPORTS: { key: ReportKind; label: string; meta: (threshold: number) => string }[] = [
 		{ key: "daily", label: "daily", meta: () => "daily report" },
@@ -76,7 +77,8 @@
 		{ key: "biweekly", label: "biweekly", meta: () => "report every two weeks" },
 		{ key: "monthly", label: "monthly", meta: () => "monthly report" },
 		{ key: "spike", label: "spike", meta: (n) => `alert at ${n} current visitors` },
-		{ key: "drop", label: "drop", meta: (n) => `alert under ${n} visitors a day` }
+		{ key: "drop", label: "drop", meta: (n) => `alert under ${n} visitors a day` },
+		{ key: "export", label: "raw export", meta: () => "daily raw export" }
 	];
 	let reports = $state<Report[] | null>(null);
 	type Google = {
@@ -91,6 +93,12 @@
 	let reporting = $state(false);
 	let reportKind = $state<ReportKind>("weekly");
 	let reportEmail = $state(session.me?.email ?? "");
+	// an export goes to a bucket, everything else to a person
+	$effect(() => {
+		const bucket = reportEmail.startsWith("s3");
+		if (reportKind === "export" && !bucket) reportEmail = "";
+		if (reportKind !== "export" && bucket) reportEmail = session.me?.email ?? "";
+	});
 	let reportThreshold = $state("");
 	let links = $state<Link[] | null>(null);
 	let linking = $state(false);
@@ -108,7 +116,7 @@
 	let funnelName = $state("");
 	let steps = $state<number[]>([]);
 	let newName = $state("");
-	let source = $state<"impactite" | "plausible" | "goatcounter">("impactite");
+	let source = $state<"impactite" | "plausible" | "goatcounter" | "umami">("impactite");
 	let file = $state<File | null>(null);
 	let imported = $state("");
 	let confirm = $state("");
@@ -365,6 +373,43 @@
 			).goals;
 		});
 
+	type Analytics = {
+		available: boolean;
+		connected: boolean;
+		properties: { key: string; label: string }[];
+		importing: boolean;
+		error: string | null;
+	};
+	let analytics = $state<Analytics | null>(null);
+	let property = $state("");
+
+	async function loadAnalytics() {
+		const was = analytics?.importing;
+		analytics = await api<Analytics>(`/api/app/sites/${domain}/analytics`);
+		property ||= analytics.properties[0]?.key ?? "";
+		if (was && !analytics.importing && !analytics.error) {
+			toast("Google Analytics history imported.");
+			imports = (await api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`))
+				.imports;
+		}
+	}
+
+	$effect(() => {
+		loadAnalytics();
+	});
+
+	// an import runs on the server, so this checks back until it's done
+	$effect(() => {
+		if (!analytics?.importing) return;
+		const timer = setInterval(loadAnalytics, 4000);
+		return () => clearInterval(timer);
+	});
+
+	async function importAnalytics() {
+		await api(`/api/app/sites/${domain}/analytics`, { property });
+		await loadAnalytics();
+	}
+
 	async function runImport() {
 		if (!file) throw new Error("Choose an export file.");
 		imported = "";
@@ -620,7 +665,14 @@
 	<Form action="add report" submit={addReport}>
 		<Toggle label="kind" bind:value={reportKind} options={REPORTS} />
 		<div class="grid gap-4 sm:grid-cols-2">
-			<Field label="send to" type="email" bind:value={reportEmail} required />
+			<Field
+				label={reportKind === "export" ? "s3 bucket" : "send to"}
+				placeholder={reportKind === "export"
+					? "s3://KEY:SECRET@host/bucket/folder"
+					: "email or webhook url"}
+				bind:value={reportEmail}
+				required
+			/>
 			{#if reportKind === "spike" || reportKind === "drop"}
 				<Field
 					label={reportKind === "spike"
@@ -782,17 +834,58 @@
 					remove={removeImport}
 				/>
 				<Form action="import" submit={runImport} inline>
-					<Upload bind:file accept={source === "goatcounter" ? ".csv,.gz" : ".zip"} />
+					<Upload
+						bind:file
+						accept={source === "goatcounter"
+							? ".csv,.gz"
+							: source === "umami"
+								? ".csv"
+								: ".zip"}
+					/>
 					<Toggle
 						bind:value={source}
 						options={[
 							{ key: "impactite", label: "impactite" },
 							{ key: "plausible", label: "plausible" },
-							{ key: "goatcounter", label: "goatcounter" }
+							{ key: "goatcounter", label: "goatcounter" },
+							{ key: "umami", label: "umami" }
 						]}
 					/>
 				</Form>
 				<Message tone="cyan">{imported}</Message>
+				{#if analytics?.available}
+					<div class="flex flex-col gap-3 border-t border-line pt-4">
+						<span class="label">google analytics 4</span>
+						{#if analytics.importing}
+							<Message
+								>Importing from Google Analytics. This takes a few minutes. You can
+								leave this page.</Message
+							>
+						{:else if analytics.connected && analytics.properties.length}
+							<Form action="import" submit={importAnalytics} inline>
+								<Select
+									value={property}
+									options={analytics.properties}
+									pick={(key) => (property = key)}
+								/>
+							</Form>
+						{:else if analytics.connected}
+							<Message>This Google account has no Analytics properties.</Message>
+						{:else}
+							<div>
+								<Button
+									variant="quiet"
+									onclick={() =>
+										(location.href = `/api/app/sites/${domain}/analytics/connect`)}
+									>connect google analytics</Button
+								>
+							</div>
+						{/if}
+						{#if analytics.error}
+							<Message tone="bad">The last import stopped: {analytics.error}</Message>
+						{/if}
+					</div>
+				{/if}
 			</Section>
 
 			{#if google}
@@ -811,13 +904,13 @@
 					{/snippet}
 					{#if googleFailed && !google.connected}
 						<Message tone="bad"
-							>Google did not accept the sign in. Try to connect again.</Message
+							>Google didn't accept the sign-in. Connect again.</Message
 						>
 					{/if}
 					{#if !google.configured}
 						<span class="text-[14px] text-dim"
-							>To show Google search terms, the server admin creates a Google OAuth
-							client with this redirect URI and sets IMPACTITE_GOOGLE_CLIENT_ID and
+							>Search terms need a Google OAuth client with this redirect URI. Ask the
+							server admin to set IMPACTITE_GOOGLE_CLIENT_ID and
 							IMPACTITE_GOOGLE_CLIENT_SECRET.</span
 						>
 						<Code code={google.redirect} />
@@ -997,25 +1090,34 @@
 
 			{#if owner}
 				<Section id="danger" label="danger" danger>
-					<Form action="remove page" submit={purgePage} inline danger>
-						<Field
-							label="remove all stats of one page, imported days stay"
-							placeholder="/old-page"
-							bind:value={purgePath}
-						/>
-					</Form>
-					<Form action="reset stats" submit={resetStats} inline danger>
-						<Field
-							label="type reset to remove all stats but keep the site and its settings"
-							bind:value={resetConfirm}
-						/>
-					</Form>
-					<Form action="delete site" submit={destroy} inline danger>
-						<Field
-							label="type {domain} to delete it and all its data"
-							bind:value={confirm}
-						/>
-					</Form>
+					<Danger
+						title="Remove a page"
+						body="Deletes every stat for one page. Imported data isn't affected."
+					>
+						<Form action="remove page" submit={purgePage} inline danger>
+							<Field
+								label="page path"
+								placeholder="/old-page"
+								bind:value={purgePath}
+							/>
+						</Form>
+					</Danger>
+					<Danger
+						title="Reset stats"
+						body="Deletes all stats. The site and its settings stay."
+					>
+						<Form action="reset stats" submit={resetStats} inline danger>
+							<Field label="type reset to confirm" bind:value={resetConfirm} />
+						</Form>
+					</Danger>
+					<Danger
+						title="Delete site"
+						body="Deletes the site and all its data. You can't undo this."
+					>
+						<Form action="delete site" submit={destroy} inline danger>
+							<Field label="type {domain} to confirm" bind:value={confirm} />
+						</Form>
+					</Danger>
 				</Section>
 			{/if}
 		</Settings>

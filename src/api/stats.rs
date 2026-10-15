@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -12,7 +12,7 @@ use jiff::{Timestamp, ToSpan};
 use serde_json::{Map, Value, json};
 
 use crate::accounts::Web;
-use crate::stats::{error, keyed, run, unauthorized};
+use crate::stats::{error, key_reads, keyed, run, unauthorized};
 
 type Params = HashMap<String, String>;
 
@@ -135,13 +135,60 @@ fn respond(
 	params: &Params,
 	build: impl FnOnce(&Web, &Params) -> Result<Value, String>,
 ) -> Response {
-	if !keyed(&web.app, headers, site_id(params)) {
+	// a key in the url too, so spreadsheets that can't send headers can read
+	let allowed = keyed(&web.app, headers, site_id(params))
+		|| params
+			.get("key")
+			.is_some_and(|key| key_reads(&web.app, key, site_id(params)));
+	if !allowed {
 		return unauthorized();
 	}
 	match build(web, params) {
+		Ok(value) if params.get("format").is_some_and(|format| format == "csv") => {
+			match csv(value.get("results").unwrap_or(&value)) {
+				Ok(text) => {
+					([(header::CONTENT_TYPE, "text/csv; charset=utf-8")], text).into_response()
+				}
+				Err(err) => error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+			}
+		}
 		Ok(value) => Json(value).into_response(),
 		Err(message) => error(StatusCode::BAD_REQUEST, &message),
 	}
+}
+
+// results as a table: rows for lists, metric and value for totals
+fn csv(results: &Value) -> anyhow::Result<String> {
+	let text = |value: &Value| match value {
+		Value::String(text) => text.clone(),
+		Value::Null => String::new(),
+		value => value.to_string(),
+	};
+	let mut out = ::csv::Writer::from_writer(Vec::new());
+	match results {
+		Value::Array(rows) => {
+			let columns: Vec<String> = rows
+				.first()
+				.and_then(Value::as_object)
+				.map(|row| row.keys().cloned().collect())
+				.unwrap_or_default();
+			out.write_record(&columns)?;
+			for row in rows {
+				out.write_record(columns.iter().map(|column| text(&row[column])))?;
+			}
+		}
+		Value::Object(metrics) => {
+			out.write_record(["metric", "value", "change"])?;
+			for (name, entry) in metrics {
+				out.write_record([name.clone(), text(&entry["value"]), text(&entry["change"])])?;
+			}
+		}
+		value => {
+			out.write_record(["value"])?;
+			out.write_record([text(value)])?;
+		}
+	}
+	Ok(String::from_utf8(out.into_inner()?)?)
 }
 
 fn site_id(params: &Params) -> &str {

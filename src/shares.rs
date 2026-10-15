@@ -48,10 +48,17 @@ impl FromRequestParts<Arc<Web>> for Reader {
 
 impl Reader {
 	pub fn reads(&self, web: &Web, domain: &str) -> bool {
-		if let Some(user) = self.user
-			&& matches!(web.app.site_role(user, domain), Ok(Some(_)))
-		{
-			return true;
+		if let Some(user) = self.user {
+			// a whole team, its members read it
+			let role = match domain.strip_prefix("team:") {
+				Some(team) => team
+					.parse()
+					.map_or(Ok(None), |team| web.app.role(user, team)),
+				None => web.app.site_role(user, domain),
+			};
+			if matches!(role, Ok(Some(_))) {
+				return true;
+			}
 		}
 		let Some((slug, grant)) = self
 			.share

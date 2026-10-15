@@ -36,6 +36,10 @@ pub struct Web {
 	pub rp: Relying,
 	pub setup: Mutex<Option<String>>,
 	pub ceremonies: Mutex<std::collections::HashMap<String, (Purpose, i64)>>,
+	pub alias: Option<String>,
+	// a newer release, its version and page
+	pub latest: Mutex<Option<(String, String)>>,
+	pub sso: Option<crate::sso::Provider>,
 	pub google: Option<crate::google::Client>,
 }
 
@@ -125,7 +129,11 @@ async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 	let user = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let setup = web.app.users_exist().map(|exists| !exists).unwrap_or(false);
 	let me = user.and_then(|user| web.app.me(user).ok());
-	Json(json!({ "setup": setup, "signup": web.app.signup_open(), "me": me })).into_response()
+	Json(
+		json!({ "setup": setup, "signup": web.app.signup_open(), "me": me, "alias": web.alias,
+		"sso": web.sso.as_ref().map(|provider| &provider.name) }),
+	)
+	.into_response()
 }
 
 async fn setup(
