@@ -265,10 +265,20 @@ async fn invite(
 }
 
 pub async fn send_invite(web: &Web, user: i64, place: &str, email: &str, token: &str) -> Response {
-	let inviter = match web.app.user_name(user) {
-		Ok(inviter) => inviter,
-		Err(err) => return internal(err),
-	};
+	match mail_invite(web, user, place, email, token).await {
+		Ok((link, sent)) => Json(json!({ "link": link, "sent": sent })).into_response(),
+		Err(err) => internal(err),
+	}
+}
+
+pub async fn mail_invite(
+	web: &Web,
+	user: i64,
+	place: &str,
+	email: &str,
+	token: &str,
+) -> rusqlite::Result<(String, bool)> {
+	let inviter = web.app.user_name(user)?;
 	let link = format!("{}/invite/{token}", web.url.trim_end_matches('/'));
 	let text = format!(
 		"{inviter} invited you to {place} on Impactite.\n\n{link}\n\nThe link works for 7 days."
@@ -287,7 +297,7 @@ pub async fn send_invite(web: &Web, user: i64, place: &str, email: &str, token: 
 			false
 		}
 	};
-	Json(json!({ "link": link, "sent": sent })).into_response()
+	Ok((link, sent))
 }
 
 fn escape(text: &str) -> String {

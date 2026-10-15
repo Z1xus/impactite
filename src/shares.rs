@@ -228,7 +228,7 @@ impl App {
 			.optional()
 	}
 
-	fn shares(&self, site: u64) -> rusqlite::Result<Vec<Value>> {
+	pub(crate) fn shares(&self, site: u64) -> rusqlite::Result<Vec<Value>> {
 		let conn = self.conn();
 		let mut stmt = conn.prepare(
 			"select id, slug, name, password != '' from shares where site = ?1 order by id",
@@ -244,7 +244,13 @@ impl App {
 		.collect()
 	}
 
-	fn add_share(&self, site: u64, slug: &str, name: &str, password: &str) -> rusqlite::Result<()> {
+	pub(crate) fn add_share(
+		&self,
+		site: u64,
+		slug: &str,
+		name: &str,
+		password: &str,
+	) -> rusqlite::Result<()> {
 		self.conn().execute(
 			"insert into shares (site, slug, name, password, created_at) values (?1, ?2, ?3, ?4, unixepoch())
 			on conflict (slug) do nothing",

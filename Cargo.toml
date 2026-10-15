@@ -13,7 +13,7 @@ publish = false
 anyhow = "1.0.104"
 argon2 = "0.6.0"
 aws-lc-rs = "1.18.2"
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["multipart"] }
 axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 base64 = "0.23.1"
 blake3 = "1.8.7"
