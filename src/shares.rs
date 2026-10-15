@@ -47,6 +47,18 @@ impl FromRequestParts<Arc<Web>> for Reader {
 }
 
 impl Reader {
+	// someone signed in, or holding a working share link
+	pub fn anyone(&self, web: &Web) -> bool {
+		self.user.is_some()
+			|| self
+				.share
+				.as_deref()
+				.map(|share| share.rsplit_once('.').unwrap_or((share, "")))
+				.is_some_and(
+					|(slug, grant)| matches!(web.app.share(slug), Ok(Some(share)) if share.grant() == grant),
+				)
+	}
+
 	pub fn reads(&self, web: &Web, domain: &str) -> bool {
 		if let Some(user) = self.user {
 			// a whole team, its members read it

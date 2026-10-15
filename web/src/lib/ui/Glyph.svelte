@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { access } from "#lib/api.ts";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Icon from "./Icon.svelte";
 
@@ -38,7 +39,9 @@
 			</svg>
 		{:else if spec?.kind === "image"}
 			<img
-				src={spec.url}
+				src={access.share && spec.url.startsWith("/api/")
+					? `${spec.url}?share=${encodeURIComponent(access.share)}`
+					: spec.url}
 				alt=""
 				loading="lazy"
 				class={spec.flag ? "h-[9px] w-3 rounded-[1px] object-cover" : "h-3 w-3"}

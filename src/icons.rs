@@ -5,15 +5,19 @@ use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
-use crate::accounts::{Viewer, Web};
+use crate::accounts::Web;
+use crate::shares::Reader;
 
 const MAX_BYTES: usize = 256 * 1024;
 
 pub async fn icon(
 	State(web): State<Arc<Web>>,
-	_viewer: Viewer,
+	reader: Reader,
 	Path(host): Path<String>,
 ) -> Response {
+	if !reader.anyone(&web) {
+		return StatusCode::UNAUTHORIZED.into_response();
+	}
 	let host = host.to_ascii_lowercase();
 	let valid = host.len() <= 253
 		&& host.contains('.')
