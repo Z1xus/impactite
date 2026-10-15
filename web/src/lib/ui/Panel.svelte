@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
-	import grip from "pixelarticons/svg/drag-and-drop.svg?raw";
 	import close from "pixelarticons/svg/close.svg?raw";
 	import Icon from "./Icon.svelte";
 
@@ -17,7 +16,7 @@
 		tab: string;
 		actions?: Snippet;
 		footer?: Snippet;
-		// layout editing shows a grip and a close button, the whole panel drags
+		// layout editing shows a close button and the whole panel drags
 		arranging?: boolean;
 		hide?: () => void;
 		children: Snippet;
@@ -30,11 +29,6 @@
 		: 'border-line'}"
 >
 	<header class="flex h-11 items-center gap-4 border-b border-line px-4">
-		{#if arranging}
-			<span class="-mr-2 -ml-2 grid h-7 w-5 place-items-center text-dim" aria-hidden="true">
-				<Icon svg={grip} size={12} />
-			</span>
-		{/if}
 		{#each tabs as item (item.key)}
 			<button
 				type="button"
