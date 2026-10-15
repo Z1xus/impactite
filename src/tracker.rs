@@ -99,7 +99,7 @@ fn build(modules: Vec<&'static str>) -> Option<Built> {
 fn compress(js: Vec<u8>) -> Option<Built> {
 	let mut compressed = Vec::new();
 	{
-		let mut writer = brotli::CompressorWriter::new(&mut compressed, 4096, 11, 22);
+		let mut writer = brotli::CompressorWriter::new(&mut compressed, 4096, 11, 16);
 		writer.write_all(&js).ok()?;
 	}
 	Some(Arc::new((js, compressed)))
