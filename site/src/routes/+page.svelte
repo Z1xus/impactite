@@ -227,10 +227,7 @@
 	>
 		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Just change the host.</h2>
-			<p class="text-dim">
-				Keep your Plausible or GoatCounter script. Their APIs work too, and you can import
-				your existing stats.
-			</p>
+			<p class="text-dim">Works with your Plausible or GoatCounter script.</p>
 		</div>
 		<div class="flex flex-col gap-4">
 			<span class="label">plausible</span>
