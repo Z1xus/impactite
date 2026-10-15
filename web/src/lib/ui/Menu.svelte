@@ -4,7 +4,13 @@
 	import Icon from "./Icon.svelte";
 
 	type Item =
-		| { label: string; href?: string; onclick?: () => void; icon?: string; current?: boolean }
+		| {
+				label: string;
+				href?: string;
+				onclick?: () => void;
+				icon?: string;
+				current?: boolean;
+		  }
 		| "divider";
 
 	let {

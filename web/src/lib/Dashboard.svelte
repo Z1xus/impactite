@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { flip } from "svelte/animate";
 	import { clock } from "#lib/display.svelte.ts";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -163,6 +164,7 @@
 	type Layout = { order: string[]; hidden: string[]; table: boolean };
 	let layout = $state<Layout>({ order: [], hidden: [], table: false });
 	let arranging = $state(false);
+	let dragging = $state<string | null>(null);
 
 	$effect(() => {
 		if (readonly) return;
@@ -350,13 +352,35 @@
 	});
 	const shown = $derived(arranged.filter((panel) => !layout.hidden.includes(panel.id)));
 
-	function move(id: string, by: number) {
-		const ids = arranged.map((panel) => panel.id);
-		const i = ids.indexOf(id);
-		if (i + by < 0 || i + by >= ids.length) return;
-		[ids[i], ids[i + by]] = [ids[i + by], ids[i]];
-		saveLayout({ ...layout, order: ids });
+	// panels reorder live while dragged over, the order saves on drop
+	function dragOver(event: DragEvent, id: string) {
+		if (!dragging) return;
+		event.preventDefault();
+		if (dragging === id) return;
+		const ids = arranged.map((panel) => panel.id).filter((item) => item !== dragging);
+		ids.splice(
+			ids.indexOf(id) +
+				(shown.findIndex((panel) => panel.id === dragging) <
+				shown.findIndex((panel) => panel.id === id)
+					? 1
+					: 0),
+			0,
+			dragging
+		);
+		layout.order = ids;
 	}
+
+	function dragStart(event: DragEvent, id: string) {
+		dragging = id;
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+	}
+
+	function dragEnd() {
+		dragging = null;
+		saveLayout({ ...layout });
+	}
+
+	const hidePanel = (id: string) => saveLayout({ ...layout, hidden: [...layout.hidden, id] });
 
 	const dimOf = (id: string) => {
 		const tab = tabs[id];
@@ -585,6 +609,8 @@
 	});
 </script>
 
+<svelte:window onkeydown={(event) => event.key === "Escape" && (arranging = false)} />
+
 <Dialog
 	title={editing ? "edit filter" : "filter"}
 	bind:open={
@@ -750,8 +776,11 @@
 			<Live site={domain} />
 			{#if view && !empty}
 				{#if !readonly}
-					<Button variant="quiet" onclick={() => (arranging = !arranging)}>
-						{arranging ? "done" : "layout"}
+					<Button
+						variant={arranging ? "primary" : "quiet"}
+						onclick={() => (arranging = !arranging)}
+					>
+						{arranging ? "done" : "edit layout"}
 					</Button>
 					<Menu
 						label="export"
@@ -841,8 +870,11 @@
 			</div>
 		</section>
 
-		{#if arranging && layout.hidden.length}
+		{#if arranging}
 			<div class="flex flex-wrap items-center gap-2">
+				<span class="text-[14px] text-dim"
+					>Drag panels to move them, close the ones you do not need.</span
+				>
 				{#each arranged.filter( (panel) => layout.hidden.includes(panel.id) ) as panel (panel.id)}
 					<Button
 						variant="quiet"
@@ -852,15 +884,29 @@
 								hidden: layout.hidden.filter((id) => id !== panel.id)
 							})}
 					>
-						show {panel.tabs[0].label}
+						show {panel.tabs.map((tab) => tab.label).join(", ")}
 					</Button>
 				{/each}
 			</div>
 		{/if}
-		<div class="grid gap-6 md:grid-cols-2">
+		<div class="grid gap-6 md:grid-cols-2" role="list">
 			{#each shown as panel (panel.id)}
-				<div class={panel.id === "goals" ? "md:col-span-2" : ""}>
+				<div
+					role="listitem"
+					data-panel
+					animate:flip={{ duration: 200 }}
+					class="transition-opacity duration-150 {panel.id === 'goals'
+						? 'md:col-span-2'
+						: ''} {dragging === panel.id ? 'opacity-40' : ''}"
+					draggable={arranging}
+					ondragstart={(event) => dragStart(event, panel.id)}
+					ondragend={dragEnd}
+					ondragover={(event) => dragOver(event, panel.id)}
+					ondrop={(event) => event.preventDefault()}
+				>
 					<Panel
+						{arranging}
+						hide={() => hidePanel(panel.id)}
 						tabs={panel.tabs.map((tab) => ({
 							...tab,
 							label:
@@ -878,26 +924,7 @@
 									: undefined}
 					>
 						{#snippet footer()}
-							{#if arranging}
-								<div class="flex items-center gap-1">
-									<Button variant="plain" onclick={() => move(panel.id, -1)}
-										>earlier</Button
-									>
-									<Button variant="plain" onclick={() => move(panel.id, 1)}
-										>later</Button
-									>
-									<Button
-										variant="plain"
-										onclick={() =>
-											saveLayout({
-												...layout,
-												hidden: [...layout.hidden, panel.id]
-											})}
-									>
-										hide
-									</Button>
-								</div>
-							{:else if tabs[panel.id] !== "funnels"}
+							{#if tabs[panel.id] !== "funnels"}
 								<Button
 									variant="plain"
 									onclick={() =>
