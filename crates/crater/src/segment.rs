@@ -10,6 +10,9 @@ use crate::query::MISSING;
 
 const MAGIC: &[u8; 5] = b"CRSG\x01";
 
+// dims stored before revenue, later ones go after it
+const LEGACY_DIMS: usize = 19;
+
 #[derive(Clone)]
 pub(crate) struct Columns {
 	pub(crate) time: Vec<u32>,
@@ -223,11 +226,17 @@ impl Segment {
 			] {
 				put_packed(buf, column);
 			}
-			for column in cols.dims.iter().chain([&cols.keys, &cols.values]) {
+			for column in cols.dims[..LEGACY_DIMS]
+				.iter()
+				.chain([&cols.keys, &cols.values])
+			{
 				put_strings(buf, column);
 			}
 			put_packed(buf, &cols.revenue);
 			put_packed(buf, &cols.currency);
+			for column in &cols.dims[LEGACY_DIMS..] {
+				put_strings(buf, column);
+			}
 		});
 		frame::write_file(path, MAGIC, &buf)
 	}
@@ -276,7 +285,7 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 		scroll: r.packed()?,
 		engagement: r.packed()?,
 		props: r.packed()?,
-		dims: (0..Dim::COUNT)
+		dims: (0..LEGACY_DIMS)
 			.map(|_| strings(&mut r))
 			.collect::<Option<_>>()?,
 		keys: strings(&mut r)?,
@@ -294,6 +303,14 @@ fn decode(buf: &[u8], seq: u64) -> Option<Segment> {
 			cols.revenue = r.packed()?;
 			cols.currency = r.packed()?;
 		}
+	}
+	// dims added later follow, older segments lack them
+	for _ in LEGACY_DIMS..Dim::COUNT {
+		let column = match r.is_empty() {
+			true => vec![MISSING; cols.rows()],
+			false => strings(&mut r)?,
+		};
+		cols.dims.push(column);
 	}
 	r.is_empty().then_some(Segment {
 		seq,

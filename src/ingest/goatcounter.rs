@@ -102,6 +102,7 @@ pub async fn count(
 		ip: visitor.ip,
 		ua,
 		country: visitor.country,
+		language: super::language(&headers),
 	};
 
 	let _ = ingest.track(&site, hit, &client);

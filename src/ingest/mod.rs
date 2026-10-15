@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 
+use axum::http::{HeaderMap, header};
 use crater::{Db, Dim, Event};
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
@@ -46,6 +47,7 @@ pub struct Client<'a> {
 	pub ip: IpAddr,
 	pub ua: &'a str,
 	pub country: Option<String>,
+	pub language: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,6 +213,7 @@ impl Ingest {
 			(Dim::BrowserVersion, agent.browser_version.as_str()),
 			(Dim::Os, agent.os),
 			(Dim::OsVersion, agent.os_version.as_str()),
+			(Dim::Language, client.language.as_str()),
 		] {
 			event.dims[dim] = value.to_owned();
 		}
@@ -321,6 +324,19 @@ impl Ingest {
 		lock(shard(visitor)).insert((site, visitor), Session { id, last: ts });
 		Ok(id)
 	}
+}
+
+// the first language of accept-language, like "en" from "en-GB,en;q=0.9"
+pub fn language(headers: &HeaderMap) -> String {
+	headers
+		.get(header::ACCEPT_LANGUAGE)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.split([',', ';', '-', '_']).next())
+		.map(|tag| tag.trim().to_ascii_lowercase())
+		.filter(|tag| {
+			(2..=3).contains(&tag.len()) && tag.bytes().all(|byte| byte.is_ascii_lowercase())
+		})
+		.unwrap_or_default()
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

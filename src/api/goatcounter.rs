@@ -16,9 +16,9 @@ use serde_json::{Value, json};
 use super::{Call, Fail, broken, reply};
 use crate::accounts::Web;
 use crate::app::Site;
-use crate::countries;
 use crate::export;
 use crate::ingest::{Client, Hit};
+use crate::names;
 use crate::stats::{period, run};
 
 const LIMIT: usize = 100;
@@ -329,6 +329,7 @@ async fn count(State(web): State<Arc<Web>>, call: Call) -> Response {
 				ip,
 				ua,
 				country: (hit.location.len() >= 2).then(|| hit.location[..2].to_uppercase()),
+				language: String::new(),
 			};
 			let query = hit.query.trim_start_matches('?');
 			let tracked_hit = Hit {
@@ -545,12 +546,11 @@ async fn page(State(web): State<Arc<Web>>, Path(page): Path<String>, call: Call)
 			"sizes" => "visit:device",
 			"campaigns" => "visit:utm_campaign",
 			"toprefs" => "visit:source",
-			// languages are not collected
-			"languages" => return Ok(json!({ "stats": [], "more": false })),
+			"languages" => "visit:language",
 			_ => return Err((StatusCode::NOT_FOUND, format!("Unknown page {page}"))),
 		};
 		let mut rows = ask(&web, &site, (from, to), &[dimension], json!([]))?;
-		if page == "campaigns" {
+		if matches!(page.as_str(), "campaigns" | "languages") {
 			rows.retain(|(dimensions, _)| dimensions[0] != "(none)");
 		}
 		listed(&call, rows, |value| match page.as_str() {
@@ -558,7 +558,8 @@ async fn page(State(web): State<Arc<Web>>, Path(page): Path<String>, call: Call)
 				let (id, name) = size(value);
 				(id.to_owned(), name.to_owned())
 			}
-			"locations" => (value.to_owned(), countries::name(value).to_owned()),
+			"locations" => (value.to_owned(), names::country(value).to_owned()),
+			"languages" => (value.to_owned(), names::language(value).to_owned()),
 			_ => (value.to_owned(), value.to_owned()),
 		})
 	})())

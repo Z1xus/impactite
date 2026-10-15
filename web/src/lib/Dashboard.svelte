@@ -213,7 +213,8 @@
 			tabs: [
 				{ key: "visit:browser", label: "browsers" },
 				{ key: "visit:os", label: "systems" },
-				{ key: "visit:device", label: "devices" }
+				{ key: "visit:device", label: "devices" },
+				{ key: "visit:language", label: "languages" }
 			]
 		}
 	];

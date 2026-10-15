@@ -672,6 +672,7 @@ fn dimension(name: &str) -> Option<Field> {
 		"visit:browser_version" => Dim::BrowserVersion,
 		"visit:os" => Dim::Os,
 		"visit:os_version" => Dim::OsVersion,
+		"visit:language" => Dim::Language,
 		_ => return None,
 	}))
 }

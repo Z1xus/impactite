@@ -112,6 +112,7 @@ pub async fn event(
 		ip: visitor.ip,
 		ua,
 		country: visitor.country,
+		language: super::language(&headers),
 	};
 	let domains = payload.d.unwrap_or_else(|| hostname.clone());
 	let mut dropped = 0;

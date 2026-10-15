@@ -33,6 +33,7 @@ export const DIMENSIONS: { key: string; label: string }[] = [
 	{ key: "visit:browser_version", label: "browser version" },
 	{ key: "visit:os", label: "system" },
 	{ key: "visit:os_version", label: "system version" },
+	{ key: "visit:language", label: "language" },
 	{ key: "event:goal", label: "goal" }
 ];
 
@@ -111,8 +112,10 @@ export function delta(metric: Metric, current: number, previous: number) {
 }
 
 const countries = new Intl.DisplayNames(["en"], { type: "region" });
+const languages = new Intl.DisplayNames(["en"], { type: "language" });
 
 export function display(dim: string, value: string) {
 	if (dim === "visit:country" && /^[A-Z]{2}$/.test(value)) return countries.of(value) ?? value;
+	if (dim === "visit:language" && /^[a-z]{2,3}$/.test(value)) return languages.of(value) ?? value;
 	return value;
 }

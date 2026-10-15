@@ -21,10 +21,11 @@ pub enum Dim {
 	BrowserVersion,
 	Os,
 	OsVersion,
+	Language,
 }
 
 impl Dim {
-	pub const ALL: [Dim; 19] = [
+	pub const ALL: [Dim; 20] = [
 		Dim::Name,
 		Dim::Hostname,
 		Dim::Page,
@@ -44,10 +45,11 @@ impl Dim {
 		Dim::BrowserVersion,
 		Dim::Os,
 		Dim::OsVersion,
+		Dim::Language,
 	];
 	pub const COUNT: usize = Self::ALL.len();
 
-	pub const NAMES: [&str; 19] = [
+	pub const NAMES: [&str; 20] = [
 		"name",
 		"hostname",
 		"page",
@@ -67,6 +69,7 @@ impl Dim {
 		"browser_version",
 		"os",
 		"os_version",
+		"language",
 	];
 
 	pub fn name(self) -> &'static str {
