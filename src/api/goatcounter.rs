@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use super::{Call, Fail, broken, reply};
 use crate::accounts::Web;
 use crate::app::Site;
+use crate::countries;
 use crate::export;
 use crate::ingest::{Client, Hit};
 use crate::stats::{period, run};
@@ -548,6 +549,7 @@ async fn page(State(web): State<Arc<Web>>, Path(page): Path<String>, call: Call)
 				let (id, name) = size(value);
 				(id.to_owned(), name.to_owned())
 			}
+			"locations" => (value.to_owned(), countries::name(value).to_owned()),
 			_ => (value.to_owned(), value.to_owned()),
 		})
 	})())

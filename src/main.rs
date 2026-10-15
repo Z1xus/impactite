@@ -4,6 +4,7 @@ mod api;
 mod app;
 mod assets;
 mod cli;
+mod countries;
 mod demo;
 mod export;
 mod funnels;
