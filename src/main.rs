@@ -26,6 +26,7 @@ mod sites;
 mod stats;
 mod teams;
 mod tracker;
+mod v1;
 mod webauthn;
 
 use std::fs;

@@ -26,6 +26,7 @@ use crate::sites;
 use crate::stats::{self, Stats};
 use crate::teams;
 use crate::tracker;
+use crate::v1;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 	Router::new()
@@ -53,6 +54,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(shields::routes())
 				.merge(shares::routes())
 				.merge(reports::routes())
+				.merge(v1::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))

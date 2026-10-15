@@ -121,27 +121,34 @@ pub async fn query(
 	headers: HeaderMap,
 	body: Json<Value>,
 ) -> Response {
-	let owner = headers
-		.get(header::AUTHORIZATION)
-		.and_then(|value| value.to_str().ok())
-		.and_then(|value| value.strip_prefix("Bearer "))
-		.and_then(|key| stats.app.key_owner(key).ok().flatten());
 	let domain = body.0["site_id"].as_str().unwrap_or_default();
-	let allowed = match owner {
-		Some(Some(user)) => matches!(stats.app.site_role(user, domain), Ok(Some(_))),
-		Some(None) => true,
-		None => false,
-	};
-	if !allowed {
-		return error(
-			StatusCode::UNAUTHORIZED,
-			"Missing or invalid API key. Please use a valid Bearer token.",
-		);
+	if !keyed(&stats.app, &headers, domain) {
+		return unauthorized();
 	}
 	match run(&stats, body.0) {
 		Ok(value) => Json(value).into_response(),
 		Err(message) => error(StatusCode::BAD_REQUEST, &message),
 	}
+}
+
+pub(crate) fn keyed(app: &App, headers: &HeaderMap, domain: &str) -> bool {
+	let owner = headers
+		.get(header::AUTHORIZATION)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.strip_prefix("Bearer "))
+		.and_then(|key| app.key_owner(key).ok().flatten());
+	match owner {
+		Some(Some(user)) => matches!(app.site_role(user, domain), Ok(Some(_))),
+		Some(None) => true,
+		None => false,
+	}
+}
+
+pub(crate) fn unauthorized() -> Response {
+	error(
+		StatusCode::UNAUTHORIZED,
+		"Missing or invalid API key. Please use a valid Bearer token.",
+	)
 }
 
 pub async fn dashboard(State(web): State<Arc<Web>>, reader: Reader, body: Json<Value>) -> Response {
@@ -836,6 +843,6 @@ pub(crate) fn day_number(date: Date) -> i32 {
 		.map_or(0, |span| span.get_days())
 }
 
-fn error(status: StatusCode, message: &str) -> Response {
+pub(crate) fn error(status: StatusCode, message: &str) -> Response {
 	(status, Json(json!({ "error": message }))).into_response()
 }
