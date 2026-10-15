@@ -1,7 +1,20 @@
-export type Period =
-	"realtime" | "day" | "7d" | "28d" | "91d" | "month" | "year" | "12mo" | "all" | "custom";
-export type Compare = "off" | "previous" | "year" | "custom";
-export type Interval = "minute" | "hour" | "day" | "week" | "month";
+const PERIODS = [
+	"realtime",
+	"day",
+	"7d",
+	"28d",
+	"91d",
+	"month",
+	"year",
+	"12mo",
+	"all",
+	"custom"
+] as const;
+const COMPARES = ["off", "previous", "year", "custom"] as const;
+const INTERVALS = ["minute", "hour", "day", "week", "month"] as const;
+export type Period = (typeof PERIODS)[number];
+export type Compare = (typeof COMPARES)[number];
+export type Interval = (typeof INTERVALS)[number];
 export type Range = [string, string] | "all" | "30m";
 
 export const PRESETS: {
@@ -60,16 +73,19 @@ export const length = (from: string, to: string) =>
 
 export function parse(params: { get(name: string): string | null }, timezone: string): View {
 	const now = today(timezone);
+	// links can carry anything, unknown values fall back
+	const known = <T extends string>(list: readonly T[], value: string | null) =>
+		list.find((item) => item === value);
 	return {
-		period: (params.get("period") as Period) || "28d",
+		period: known(PERIODS, params.get("period")) ?? "28d",
 		date: params.get("date") || now,
 		from: params.get("from") || now,
 		to: params.get("to") || now,
-		compare: (params.get("compare") as Compare) || "off",
+		compare: known(COMPARES, params.get("compare")) ?? "off",
 		compareFrom: params.get("compare_from") || now,
 		compareTo: params.get("compare_to") || now,
 		weekday: params.get("match") === "weekday",
-		interval: params.get("interval") as Interval | null,
+		interval: known(INTERVALS, params.get("interval")) ?? null,
 		today: now
 	};
 }
