@@ -25,6 +25,7 @@ pub enum Purpose {
 	Invite(String),
 	Add(i64),
 	Login,
+	Google(u64),
 }
 
 #[derive(Deserialize)]
@@ -44,7 +45,7 @@ pub fn routes() -> Router<Arc<Web>> {
 }
 
 impl Web {
-	fn begin(&self, purpose: Purpose) -> Option<String> {
+	pub(crate) fn begin(&self, purpose: Purpose) -> Option<String> {
 		let challenge = webauthn::challenge()?;
 		let now = now();
 		let mut ceremonies = self
@@ -56,7 +57,7 @@ impl Web {
 		Some(challenge)
 	}
 
-	fn take(&self, challenge: &str) -> Option<Purpose> {
+	pub(crate) fn take(&self, challenge: &str) -> Option<Purpose> {
 		let mut ceremonies = self
 			.ceremonies
 			.lock()

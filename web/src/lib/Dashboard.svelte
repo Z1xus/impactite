@@ -219,6 +219,8 @@
 	];
 	let goals = $state<string[]>([]);
 	let titles = $state<Record<string, string>>({});
+	// search console terms replace referrers under the google source when connected
+	let terms = $state(false);
 	let funnels = $state<{ id: number; name: string }[]>([]);
 	let funnelId = $state(0);
 	let revenue = $state(false);
@@ -485,6 +487,7 @@
 		if (!dates) return;
 		const where = toQueryFilters(filters);
 		const cleanups: (() => void)[] = [];
+		terms = false;
 		for (const panel of panels) {
 			if (!panel.tabs.length) continue;
 			const dim = dimOf(panel.id);
@@ -510,37 +513,70 @@
 				cleanups.push(() => (stale = true));
 				continue;
 			}
-			ask({
-				metrics:
-					dim === "event:goal" || converting
-						? ["visitors", "conversion_rate"]
-						: ["visitors"],
-				date_range: dates.current,
-				dimensions: [dim],
-				filters: where,
-				pagination: { limit: tabs[panel.id] === "map" ? 300 : 9 }
-			}).then((result) => {
-				if (stale) return;
-				ranked[panel.id] = result.results.map((row) => {
-					const value = row.dimensions[0];
-					const label = display(dim, value);
-					return {
-						key: value,
-						label,
-						value: row.metrics[0],
-						...((dim === "event:goal" || converting) && {
-							extra: `${row.metrics[1]}%`
-						}),
-						...(PAGES.has(dim) &&
-							value.startsWith("/") && { href: `https://${domain}${value}` }),
-						...(ICONIC.has(dim) && {
-							icon: icon(dim, value),
-							fallback: LETTERED.has(dim) ? label : undefined
-						})
-					};
+			const regular = () =>
+				ask({
+					metrics:
+						dim === "event:goal" || converting
+							? ["visitors", "conversion_rate"]
+							: ["visitors"],
+					date_range: dates.current,
+					dimensions: [dim],
+					filters: where,
+					pagination: { limit: tabs[panel.id] === "map" ? 300 : 9 }
+				}).then((result) => {
+					if (stale) return;
+					ranked[panel.id] = result.results.map((row) => {
+						const value = row.dimensions[0];
+						const label = display(dim, value);
+						return {
+							key: value,
+							label,
+							value: row.metrics[0],
+							...((dim === "event:goal" || converting) && {
+								extra: `${row.metrics[1]}%`
+							}),
+							...(PAGES.has(dim) &&
+								value.startsWith("/") && { href: `https://${domain}${value}` }),
+							...(ICONIC.has(dim) && {
+								icon: icon(dim, value),
+								fallback: LETTERED.has(dim) ? label : undefined
+							})
+						};
+					});
+					loading[panel.id] = false;
 				});
-				loading[panel.id] = false;
-			});
+			const google = filters.find((item) => item.dim === "visit:source");
+			if (
+				tabs[panel.id] === "visit:source" &&
+				google?.op === "is" &&
+				google.values.length === 1 &&
+				google.values[0] === "Google"
+			) {
+				const page = filters.find(
+					(item) =>
+						item.dim === "event:page" && item.op === "is" && item.values.length === 1
+				)?.values[0];
+				api<{ keywords: { name: string; visitors: number; position: number }[] }>(
+					"/api/app/keywords",
+					{
+						site_id: domain,
+						date_range: dates.current === "30m" ? "day" : dates.current,
+						page
+					}
+				)
+					.then((result) => {
+						if (stale) return;
+						terms = true;
+						ranked[panel.id] = result.keywords.map((keyword) => ({
+							key: keyword.name,
+							label: keyword.name,
+							value: keyword.visitors,
+							extra: `#${Math.round(keyword.position)}`
+						}));
+						loading[panel.id] = false;
+					})
+					.catch(regular);
+			} else regular();
 			cleanups.push(() => (stale = true));
 		}
 		return () => cleanups.forEach((cleanup) => cleanup());
@@ -825,7 +861,10 @@
 					<Panel
 						tabs={panel.tabs.map((tab) => ({
 							...tab,
-							label: drilled(tab.key)?.label ?? tab.label
+							label:
+								terms && tab.key === "visit:source" && drilled(tab.key)
+									? "search terms"
+									: (drilled(tab.key)?.label ?? tab.label)
 						}))}
 						bind:tab={tabs[panel.id]}
 						actions={tabs[panel.id] === "props"
@@ -890,7 +929,10 @@
 									: (ranked[panel.id] ?? null)}
 								loading={loading[panel.id]}
 								format={(value) => format("visitors", value)}
-								pick={tabs[panel.id] === "funnels"
+								pick={tabs[panel.id] === "funnels" ||
+								(terms &&
+									tabs[panel.id] === "visit:source" &&
+									drilled("visit:source"))
 									? undefined
 									: (key) => addFilter(dimOf(panel.id), key)}
 							/>

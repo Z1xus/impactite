@@ -214,6 +214,13 @@ const MIGRATIONS: &[&str] = &[
 		primary key (site, path)
 	) without rowid;
 	",
+	"
+	create table google (
+		site integer primary key references sites (id) on delete cascade,
+		refresh text not null,
+		property text not null default ''
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

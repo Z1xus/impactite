@@ -75,6 +75,15 @@
 		{ key: "drop", label: "drop", meta: (n) => `alert under ${n} visitors a day` }
 	];
 	let reports = $state<Report[] | null>(null);
+	type Google = {
+		configured: boolean;
+		redirect: string;
+		connected: boolean;
+		property: string;
+		properties: string[];
+	};
+	let google = $state<Google | null>(null);
+	const googleFailed = new URLSearchParams(location.search).get("google") === "failed";
 	let reporting = $state(false);
 	let reportKind = $state<ReportKind>("weekly");
 	let reportEmail = $state(session.me?.email ?? "");
@@ -173,6 +182,9 @@
 		api<{ reports: Report[] }>(`/api/app/sites/${domain}/reports`).then(
 			(r) => (reports = r.reports)
 		);
+		api<Google>(`/api/app/sites/${domain}/google`)
+			.then((r) => (google = r))
+			.catch(() => (google = null));
 		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
 			(r) => (segments = r.segments)
 		);
@@ -269,6 +281,18 @@
 					"DELETE"
 				)
 			).shares;
+		});
+
+	const chooseProperty = (property: string) =>
+		attempt(async () => {
+			await api(`/api/app/sites/${domain}/google`, { property }, "PATCH");
+			if (google) google.property = property;
+		});
+
+	const disconnectGoogle = () =>
+		attempt(async () => {
+			await api(`/api/app/sites/${domain}/google`, undefined, "DELETE");
+			google = await api<Google>(`/api/app/sites/${domain}/google`);
 		});
 
 	async function addReport() {
@@ -440,6 +464,7 @@
 		{ id: "funnels", label: "funnels" },
 		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
 		{ id: "imports", label: "imports" },
+		...(google ? [{ id: "search-console", label: "search console" }] : []),
 		{ id: "shields", label: "shields" },
 		{ id: "sharing", label: "sharing" },
 		{ id: "reports", label: "reports" },
@@ -733,6 +758,57 @@
 				</Form>
 				<Message tone="cyan">{imported}</Message>
 			</Section>
+
+			{#if google}
+				<Section id="search-console" label="search console">
+					{#snippet actions()}
+						{#if google?.connected}
+							<Button variant="quiet" onclick={disconnectGoogle}>disconnect</Button>
+						{:else if google?.configured}
+							<Button
+								variant="quiet"
+								onclick={() =>
+									(location.href = `/api/app/sites/${domain}/google/connect`)}
+								>connect</Button
+							>
+						{/if}
+					{/snippet}
+					{#if googleFailed && !google.connected}
+						<Message tone="bad"
+							>Google did not accept the sign in. Try to connect again.</Message
+						>
+					{/if}
+					{#if !google.configured}
+						<span class="text-[14px] text-dim"
+							>To show Google search terms, the server admin creates a Google OAuth
+							client with this redirect URI and sets IMPACTITE_GOOGLE_CLIENT_ID and
+							IMPACTITE_GOOGLE_CLIENT_SECRET.</span
+						>
+						<Code code={google.redirect} />
+					{:else if !google.connected}
+						<span class="text-[14px] text-dim"
+							>Connect Google Search Console to see search terms when you filter by
+							the Google source.</span
+						>
+					{:else if google.properties.length}
+						<Select
+							label="property"
+							value={google.property}
+							options={google.properties.map((property) => ({
+								key: property,
+								label: property
+							}))}
+							pick={chooseProperty}
+							text={google.property || "choose a property"}
+							data
+						/>
+					{:else}
+						<span class="text-[14px] text-dim"
+							>This Google account has no Search Console properties.</span
+						>
+					{/if}
+				</Section>
+			{/if}
 
 			<Section id="shields" label="shields">
 				{#snippet actions()}

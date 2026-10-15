@@ -36,6 +36,7 @@ pub struct Web {
 	pub rp: Relying,
 	pub setup: Mutex<Option<String>>,
 	pub ceremonies: Mutex<std::collections::HashMap<String, (Purpose, i64)>>,
+	pub google: Option<crate::google::Client>,
 }
 
 pub struct Viewer {

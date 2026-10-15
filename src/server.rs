@@ -14,6 +14,7 @@ use crate::counter;
 use crate::export;
 use crate::funnels;
 use crate::goals;
+use crate::google;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::keys;
@@ -57,6 +58,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(shares::routes())
 				.merge(reports::routes())
 				.merge(titles::routes())
+				.merge(google::routes())
 				.merge(api::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))

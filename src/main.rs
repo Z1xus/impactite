@@ -11,6 +11,7 @@ mod export;
 mod funnels;
 mod geo;
 mod goals;
+mod google;
 mod icons;
 mod import;
 mod ingest;
@@ -163,6 +164,19 @@ struct Serve {
 	cert: Option<PathBuf>,
 	#[arg(long, env = "IMPACTITE_KEY", requires = "cert")]
 	key: Option<PathBuf>,
+	#[arg(
+		long,
+		env = "IMPACTITE_GOOGLE_CLIENT_ID",
+		requires = "google_client_secret"
+	)]
+	google_client_id: Option<String>,
+	#[arg(
+		long,
+		env = "IMPACTITE_GOOGLE_CLIENT_SECRET",
+		requires = "google_client_id",
+		hide_env_values = true
+	)]
+	google_client_secret: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -342,6 +356,11 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		url: url.clone(),
 		setup: Mutex::new(setup),
 		ceremonies: Mutex::default(),
+		google: args
+			.google_client_id
+			.clone()
+			.zip(args.google_client_secret.clone())
+			.map(|(id, secret)| google::Client { id, secret }),
 	});
 
 	let sweeper = tokio::spawn({
