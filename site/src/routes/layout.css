@@ -1,0 +1,6 @@
+@import "../../../web/src/routes/layout.css";
+@source "../../../web/src/lib";
+
+html {
+	scroll-behavior: smooth;
+}
