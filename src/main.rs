@@ -17,6 +17,7 @@ mod net;
 mod passkeys;
 mod prefs;
 mod profile;
+mod reports;
 mod segments;
 mod server;
 mod shares;
@@ -343,12 +344,14 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		let ingest = ingest.clone();
 		let app = web.app.clone();
 		let db = db.clone();
+		let web = web.clone();
 		async move {
 			let mut interval = tokio::time::interval(Duration::from_secs(60));
 			let mut minutes = 0u64;
 			loop {
 				interval.tick().await;
 				ingest.sweep();
+				reports::tick(&web).await;
 				if minutes.is_multiple_of(60) {
 					prune(&app, &db);
 				}

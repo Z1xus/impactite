@@ -194,6 +194,17 @@ const MIGRATIONS: &[&str] = &[
 		created_at integer not null
 	);
 	",
+	"
+	create table reports (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		kind text not null,
+		email text not null,
+		threshold integer not null,
+		last integer not null,
+		unique (site, kind, email)
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

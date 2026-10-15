@@ -66,6 +66,19 @@
 	];
 	const IGNORE = 'localStorage.plausible_ignore = "true"';
 	type Link = { id: number; slug: string; name: string; locked: boolean };
+	type ReportKind = "weekly" | "monthly" | "spike" | "drop";
+	type Report = { id: number; kind: ReportKind; email: string; threshold: number };
+	const REPORTS: { key: ReportKind; label: string; meta: (threshold: number) => string }[] = [
+		{ key: "weekly", label: "weekly", meta: () => "weekly report" },
+		{ key: "monthly", label: "monthly", meta: () => "monthly report" },
+		{ key: "spike", label: "spike", meta: (n) => `alert at ${n} current visitors` },
+		{ key: "drop", label: "drop", meta: (n) => `alert under ${n} visitors a day` }
+	];
+	let reports = $state<Report[] | null>(null);
+	let reporting = $state(false);
+	let reportKind = $state<ReportKind>("weekly");
+	let reportEmail = $state(session.me?.email ?? "");
+	let reportThreshold = $state("");
 	let links = $state<Link[] | null>(null);
 	let linking = $state(false);
 	let linkName = $state("");
@@ -157,6 +170,9 @@
 			(r) => (shields = r.shields)
 		);
 		api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`).then((r) => (links = r.shares));
+		api<{ reports: Report[] }>(`/api/app/sites/${domain}/reports`).then(
+			(r) => (reports = r.reports)
+		);
 		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
 			(r) => (segments = r.segments)
 		);
@@ -253,6 +269,28 @@
 					"DELETE"
 				)
 			).shares;
+		});
+
+	async function addReport() {
+		reports = (
+			await api<{ reports: Report[] }>(`/api/app/sites/${domain}/reports`, {
+				kind: reportKind,
+				email: reportEmail,
+				threshold: Number(reportThreshold) || 0
+			})
+		).reports;
+		reporting = false;
+	}
+
+	const removeReport = (id: string | number) =>
+		attempt(async () => {
+			reports = (
+				await api<{ reports: Report[] }>(
+					`/api/app/sites/${domain}/reports/${id}`,
+					undefined,
+					"DELETE"
+				)
+			).reports;
 		});
 
 	async function myIp() {
@@ -394,6 +432,7 @@
 		{ id: "imports", label: "imports" },
 		{ id: "shields", label: "shields" },
 		{ id: "sharing", label: "sharing" },
+		{ id: "reports", label: "reports" },
 		...(owner
 			? [
 					{ id: "guests", label: "guests" },
@@ -519,6 +558,26 @@
 	<Form action="add link" submit={addLink}>
 		<Field label="name" placeholder="Investors" bind:value={linkName} required />
 		<Field label="password" type="password" placeholder="optional" bind:value={linkPassword} />
+	</Form>
+</Dialog>
+
+<Dialog title="add report" bind:open={reporting}>
+	<Form action="add report" submit={addReport}>
+		<Toggle label="kind" bind:value={reportKind} options={REPORTS} />
+		<div class="grid gap-4 sm:grid-cols-2">
+			<Field label="send to" type="email" bind:value={reportEmail} required />
+			{#if reportKind === "spike" || reportKind === "drop"}
+				<Field
+					label={reportKind === "spike"
+						? "current visitors at least"
+						: "visitors a day under"}
+					type="number"
+					min="1"
+					bind:value={reportThreshold}
+					required
+				/>
+			{/if}
+		</div>
 	</Form>
 </Dialog>
 
@@ -732,6 +791,27 @@
 						code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
 					/>
 				{/if}
+			</Section>
+
+			<Section id="reports" label="reports">
+				{#snippet actions()}
+					<Button variant="quiet" onclick={() => (reporting = true)}>add report</Button>
+				{/snippet}
+				{#if reports?.length === 0}
+					<span class="text-[14px] text-dim">No reports or alerts yet.</span>
+				{/if}
+				<List
+					items={reports?.map((report) => ({
+						key: report.id,
+						title: report.email,
+						meta: [
+							REPORTS.find((kind) => kind.key === report.kind)?.meta(
+								report.threshold
+							) ?? report.kind
+						]
+					})) ?? null}
+					remove={removeReport}
+				/>
 			</Section>
 
 			{#if owner && people}

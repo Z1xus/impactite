@@ -18,6 +18,7 @@ use crate::keys;
 use crate::passkeys;
 use crate::prefs;
 use crate::profile;
+use crate::reports;
 use crate::segments;
 use crate::shares;
 use crate::shields;
@@ -51,6 +52,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(prefs::routes())
 				.merge(shields::routes())
 				.merge(shares::routes())
+				.merge(reports::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))

@@ -225,7 +225,7 @@ pub(crate) fn period(
 	})
 }
 
-fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
+pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let request: Request = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let realtime = request.date_range == json!("30m");
 	let day = json!("day");
