@@ -1,0 +1,137 @@
+<script lang="ts">
+	import Code from "#lib/ui/Code.svelte";
+	import Field from "#lib/ui/Field.svelte";
+	import Toggle from "#lib/ui/Toggle.svelte";
+
+	let { repo }: { repo: string } = $props();
+
+	// everything stays in the browser, secrets are placeholders to fill in later
+	let host = $state("");
+	let run = $state<"binary" | "docker" | "compose">("docker");
+	let https = $state<"built-in" | "proxy" | "tunnel">("built-in");
+	let mail = $state<"none" | "smtp" | "resend" | "cloudflare">("none");
+
+	const name = $derived(
+		host
+			.trim()
+			.replace(/^https?:\/\//, "")
+			.replace(/\/.*$/, "") || "stats.example.com"
+	);
+	const url = $derived(`https://${name}`);
+	const image = "ghcr.io/z1xus/impactite";
+	const mailUrl = $derived(
+		{
+			none: "",
+			smtp: "smtp://USER:PASSWORD@SMTP_HOST:587",
+			resend: "resend://RESEND_API_KEY",
+			cloudflare: "cloudflare://API_TOKEN@ACCOUNT_ID"
+		}[mail]
+	);
+	const acme = $derived(https === "built-in" ? " --acme" : "");
+
+	const command = $derived.by(() => {
+		if (run === "binary") {
+			const env = mailUrl ? `IMPACTITE_MAIL=${mailUrl} ` : "";
+			return [
+				`curl -L ${repo}/releases/latest/download/impactite-x86_64-unknown-linux-musl.tar.gz | tar xz --strip-components=1`,
+				...(https === "built-in"
+					? ["sudo setcap cap_net_bind_service=+ep ./impactite"]
+					: []),
+				`${env}./impactite serve --url ${url}${acme}`,
+				...(https === "tunnel"
+					? [
+							`# route the tunnel to http://localhost:8000 in cloudflare`,
+							`cloudflared tunnel run --token TUNNEL_TOKEN`
+						]
+					: [])
+			].join("\n");
+		}
+		if (run === "docker") {
+			const env = mailUrl ? ` -e IMPACTITE_MAIL=${mailUrl}` : "";
+			const ports = {
+				"built-in": " -p 443:8000 -p 80:80",
+				proxy: " -p 127.0.0.1:8000:8000",
+				tunnel: " --network impactite"
+			}[https];
+			return [
+				...(https === "tunnel" ? ["docker network create impactite"] : []),
+				`docker run -d --name impactite --restart unless-stopped${ports}${env} -v impactite:/data ${image} serve --url ${url}${acme}`,
+				...(https === "tunnel"
+					? [
+							`# route the tunnel to http://impactite:8000 in cloudflare`,
+							`docker run -d --restart unless-stopped --network impactite cloudflare/cloudflared tunnel run --token TUNNEL_TOKEN`
+						]
+					: [])
+			].join("\n");
+		}
+		const ports = {
+			"built-in": ['      - "443:8000"', '      - "80:80"'],
+			proxy: ['      - "127.0.0.1:8000:8000"'],
+			tunnel: []
+		}[https];
+		return [
+			"services:",
+			"  impactite:",
+			`    image: ${image}`,
+			`    command: serve --url ${url}${acme}`,
+			"    restart: unless-stopped",
+			...(mailUrl ? ["    environment:", `      IMPACTITE_MAIL: ${mailUrl}`] : []),
+			...(ports.length ? ["    ports:", ...ports] : []),
+			"    volumes:",
+			"      - impactite:/data",
+			...(https === "tunnel"
+				? [
+						"  # route the tunnel to http://impactite:8000 in cloudflare",
+						"  cloudflared:",
+						"    image: cloudflare/cloudflared",
+						"    command: tunnel run --token TUNNEL_TOKEN",
+						"    restart: unless-stopped"
+					]
+				: []),
+			"volumes:",
+			"  impactite:"
+		].join("\n");
+	});
+
+	const end = "</" + "script>";
+	const snippet = $derived(
+		`<script defer data-domain="example.com" src="${url}/js/script.js">${end}`
+	);
+</script>
+
+<div class="flex flex-col gap-6">
+	<Field label="your stats address" placeholder="stats.example.com" bind:value={host} />
+	<div class="flex flex-wrap gap-x-6 gap-y-4">
+		<Toggle
+			label="run as"
+			bind:value={run}
+			options={[
+				{ key: "docker", label: "docker" },
+				{ key: "compose", label: "compose" },
+				{ key: "binary", label: "binary" }
+			]}
+		/>
+		<Toggle
+			label="https"
+			bind:value={https}
+			options={[
+				{ key: "built-in", label: "built in" },
+				{ key: "proxy", label: "my proxy" },
+				{ key: "tunnel", label: "cloudflare tunnel" }
+			]}
+		/>
+		<Toggle
+			label="mail"
+			bind:value={mail}
+			options={[
+				{ key: "none", label: "none" },
+				{ key: "smtp", label: "smtp" },
+				{ key: "resend", label: "resend" },
+				{ key: "cloudflare", label: "cloudflare" }
+			]}
+		/>
+	</div>
+	<Code code={command} />
+	<span class="label">then on your site</span>
+	<Code code={snippet} />
+</div>

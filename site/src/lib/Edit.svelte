@@ -57,7 +57,8 @@
 </script>
 
 <div class="flex items-start gap-2 rounded-px border border-line bg-panel py-2.5 pr-2 pl-3">
-	<code class="min-w-0 flex-1 py-0.5 font-mono text-[12px] leading-5 break-all text-cyan"
+	<code
+		class="min-w-0 flex-1 py-0.5 font-mono text-[12px] leading-5 break-all whitespace-pre-wrap text-cyan"
 		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if (edits[i]?.typed ?? -1) < 0}<span
 					class={edits[i]?.selected ? "bg-edge text-fg" : ""}>{part.from}</span
 				>{:else}<span class="bg-cyan-night text-fg">{part.to.slice(0, edits[i].typed)}</span

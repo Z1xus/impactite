@@ -11,12 +11,16 @@
 	import shield from "pixelarticons/svg/shield.svg?raw";
 	import upload from "pixelarticons/svg/upload.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
+	import cloud from "pixelarticons/svg/cloud-server.svg?raw";
+	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
+	import lock from "pixelarticons/svg/lock.svg?raw";
+	import theme from "pixelarticons/svg/cloud-moon.svg?raw";
 	import Meteor from "#lib/art/Meteor.svelte";
 	import Chart from "#lib/dither/Chart.svelte";
-	import Code from "#lib/ui/Code.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
 	import Edit from "../lib/Edit.svelte";
+	import Install from "../lib/Install.svelte";
 	import Race from "../lib/Race.svelte";
 	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
@@ -51,24 +55,10 @@
 		{ label: "idle memory", unit: "MiB", better: "less", values: [18, 942, 37] },
 		{ label: "idle cpu", unit: "%", better: "less", digits: 2, values: [0, 2.69, 0.02] },
 		{ label: "memory after 1M", unit: "MiB", better: "less", values: [124, 2217, 482] },
-		{
-			label: "disk after 1M",
-			unit: "MiB",
-			better: "less",
-			values: [23.5, 1331.7, 11.6]
-		},
 		{ label: "image size", unit: "MiB", better: "less", values: [19, 987, 36] },
 		{ label: "tracker gzipped", unit: "B", better: "less", values: [930, 1324, 3259] }
 	];
 	const TOOLS = ["impactite", "plausible", "goatcounter"];
-	// the same goatcounter requests and queries sent to both
-	const DROPIN = [
-		["pageviews per second", "66,488", "9,738"],
-		["top pages query", "0.86 ms", "1.34 ms"],
-		["cpu for 1M pageviews", "43.9 s", "137.9 s"],
-		["memory after 1M", "100 MiB", "482 MiB"],
-		["visits counted", "869,192", "869,192"]
-	];
 
 	// 28 days of the demo site, with the day it hit the front page
 	const days = Array.from({ length: 28 }, (_, i) => {
@@ -107,13 +97,17 @@
 		{ icon: filter, label: "funnels and segments" },
 		{ icon: coins, label: "revenue goals" },
 		{ icon: link, label: "shared and embedded dashboards" },
-		{ icon: mail, label: "reports and traffic alerts" },
+		{ icon: mail, label: "reports to mail, slack or webhooks" },
 		{ icon: search, label: "search console terms" },
 		{ icon: shield, label: "shields and data controls" },
-		{ icon: upload, label: "imports from both" },
+		{ icon: upload, label: "ga4 and umami imports" },
 		{ icon: download, label: "exports to both" },
 		{ icon: globe, label: "no cookies, no fingerprints" },
-		{ icon: chartIcon, label: "visitor counter" }
+		{ icon: chartIcon, label: "visitor counter" },
+		{ icon: lock, label: "single sign-on" },
+		{ icon: cloud, label: "daily raw exports to s3" },
+		{ icon: grid, label: "all sites in one view" },
+		{ icon: theme, label: "dark and light" }
 	];
 
 	// split so the svelte parser does not end the script block
@@ -132,7 +126,6 @@
 		`/count.js">${end}`
 	];
 
-	let speed = $state(false);
 	let swap = $state(false);
 </script>
 
@@ -199,21 +192,16 @@
 		</div>
 	</section>
 
-	<section id="speed" class="flex flex-col gap-14 py-28" use:reveal={(on) => (speed = on)}>
+	<section id="speed" class="flex flex-col gap-14 py-28">
 		<div class="flex flex-col gap-4" use:appear>
-			<h2 class="font-mono text-[32px] tracking-tight">Measured, side by side.</h2>
-			<p class="max-w-2xl text-[17px] text-dim">
-				A million pageviews sent to each tool through its own tracker endpoint, then the
-				same queries through its own API. One machine, one tool at a time. The best of each
-				is solid.
-			</p>
+			<h2 class="font-mono text-[32px] tracking-tight">Benchmarks</h2>
+			<p class="max-w-2xl text-[17px] text-dim">1M pageviews each, one machine.</p>
 		</div>
 		<div class="grid gap-x-12 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
 			{#each STATS as stat, i (stat.label)}
 				<div class="flex flex-col gap-4" use:appear={{ delay: (i % 3) * 80 }}>
-					<span class="label">{stat.label}, {stat.better} is better</span>
+					<span class="label">{stat.label}</span>
 					<Race
-						on={speed}
 						unit={stat.unit}
 						digits={stat.digits ?? 0}
 						better={stat.better}
@@ -226,39 +214,9 @@
 				</div>
 			{/each}
 		</div>
-		<div class="flex flex-col gap-4">
-			<h3 class="label text-fg">as a goatcounter drop-in</h3>
-			<p class="max-w-2xl text-[15px] text-dim">
-				The same GoatCounter requests and queries, sent to impactite and to GoatCounter.
-				Both count every visit the same.
-			</p>
-			<div class="max-w-2xl overflow-x-auto rounded-px border border-line">
-				<table class="w-full min-w-[22rem] text-[14px]">
-					<thead>
-						<tr class="border-b border-line">
-							<th class="px-4 py-2 text-left label font-normal"></th>
-							<th class="px-4 py-2 text-right label font-normal text-fg">impactite</th
-							>
-							<th class="px-4 py-2 text-right label font-normal">goatcounter</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each DROPIN as [label, ours, theirs] (label)}
-							<tr class="border-b border-line last:border-0">
-								<td class="px-4 py-2 text-dim">{label}</td>
-								<td class="px-4 py-2 text-right font-mono">{ours}</td>
-								<td class="px-4 py-2 text-right font-mono text-dim">{theirs}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</div>
 		<p class="text-[14px] text-dim">
-			Ryzen 5 7600X, Podman, October 15, 2026. Plausible CE 3.2.1, GoatCounter 2.7.0. Disk
-			holds an open day, GoatCounter keeps only counts while impactite keeps every event, so
-			any filter works later.
-			<a href={BENCH} class="text-cyan hover:text-fg">See the benchmark sources</a> and run it yourself.
+			Plausible CE 3.2.1, GoatCounter 2.7.0, Ryzen 5 7600X.
+			<a href={BENCH} class="text-cyan hover:text-fg">Source</a>
 		</p>
 	</section>
 
@@ -296,25 +254,23 @@
 	<section id="install" class="grid gap-12 py-28 md:grid-cols-[1fr_1.4fr]">
 		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">One binary. Done.</h2>
-			<p class="text-dim">Static builds for Linux, or a scratch Docker image.</p>
+			<p class="text-dim">Pick how you run it and copy the result.</p>
 		</div>
-		<div class="flex flex-col gap-4">
-			<span class="label">binary</span>
-			<Code
-				code={`curl -L ${REPO}/releases/latest/download/impactite-x86_64-unknown-linux-musl.tar.xz | tar xJ\n./impactite serve --url https://stats.example.com --acme`}
-			/>
-			<span class="label">docker</span>
-			<Code
-				code="docker run -d -p 443:8000 -p 80:80 -v impactite:/data ghcr.io/z1xus/impactite serve --url https://stats.example.com --acme"
-			/>
-		</div>
+		<Install repo={REPO} />
 	</section>
 
-	<footer class="flex items-center justify-between border-t border-line py-8">
+	<footer
+		class="flex flex-col gap-4 border-t border-line py-8 sm:flex-row sm:items-center sm:justify-between"
+	>
 		<span class="flex items-center gap-2 font-mono text-[13px] text-dim">
 			<img src="/favicon.svg" alt="" width="16" height="16" />
 			impactite
 		</span>
-		<span class="label">agpl 3.0, tracker mit</span>
+		<span class="flex flex-wrap items-center gap-x-6 gap-y-2 whitespace-nowrap">
+			<a href="{REPO}/blob/main/LICENSE" class="label hover:text-fg">agpl 3.0, tracker mit</a>
+			<a href="{REPO}/blob/main/COMMERCIAL.md" class="label hover:text-fg"
+				>commercial license</a
+			>
+		</span>
 	</footer>
 </div>

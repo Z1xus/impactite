@@ -1,19 +1,20 @@
 <script lang="ts">
 	import Count from "./Count.svelte";
+	import { reveal } from "./reveal.ts";
 
 	let {
 		rows,
-		on,
 		unit,
 		digits = 0,
 		better
 	}: {
 		rows: { label: string; value: number; ours?: boolean }[];
-		on: boolean;
 		unit: string;
 		digits?: number;
 		better: "more" | "less";
 	} = $props();
+
+	let on = $state(false);
 
 	const max = $derived(Math.max(...rows.map((row) => row.value)));
 	const best = $derived(
@@ -23,7 +24,7 @@
 	);
 </script>
 
-<ul class="flex flex-col gap-3">
+<ul class="flex flex-col gap-3" use:reveal={(shown) => (on = shown)}>
 	{#each rows as row, i (row.label)}
 		<li class="grid grid-cols-[6.5rem_1fr_6.5rem] items-center gap-3">
 			<span class="label {row.ours ? 'text-fg' : ''}">{row.label}</span>
