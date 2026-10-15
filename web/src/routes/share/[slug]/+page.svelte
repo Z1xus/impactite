@@ -7,6 +7,7 @@
 	import Gate from "#lib/ui/Gate.svelte";
 	import Message from "#lib/ui/Message.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
+	import { query } from "#lib/stats.ts";
 
 	type Share = { domain: string; timezone: string; name: string; token: string };
 
@@ -25,17 +26,27 @@
 		share = opened;
 	}
 
-	$effect(() => {
-		const saved = sessionStorage.getItem(`share:${slug}`);
-		if (saved) {
-			share = JSON.parse(saved);
-			access.share = share?.token ?? "";
-			return;
-		}
+	function open() {
 		unlock("").catch((err) => {
 			if (err instanceof ApiError && err.status === 401) locked = true;
 			else missing = err instanceof Error ? err.message : "This link does not exist.";
 		});
+	}
+
+	$effect(() => {
+		const key = `share:${slug}`;
+		const saved: Share | null = JSON.parse(sessionStorage.getItem(key) ?? "null");
+		if (!saved) return open();
+		access.share = saved.token;
+		// a saved token stops working when the link is removed or its password changes
+		query(saved.domain, { metrics: ["visitors"], date_range: "day" }).then(
+			() => (share = saved),
+			() => {
+				sessionStorage.removeItem(key);
+				access.share = "";
+				open();
+			}
+		);
 	});
 
 	$effect(() => {

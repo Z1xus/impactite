@@ -116,7 +116,7 @@ async fn update(
 	}
 	if let Some(raw) = &body.domain {
 		let Some(domain) = accounts::clean_domain(raw) else {
-			return fail(StatusCode::BAD_REQUEST, "Use a valid domain.");
+			return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
 		};
 		if domain != site.domain {
 			match web.app.rename_site(site.id, &domain) {

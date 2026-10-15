@@ -248,7 +248,7 @@
 			{/snippet}
 			{#if recovery}
 				<span class="text-[14px] text-dim"
-					>Two factor is on. Save these recovery codes now, each one signs you in once
+					>Two factor is on. Save these recovery codes now. Each one lets you sign in once
 					without the app.</span
 				>
 				<Code code={recovery.join("\n")} />
@@ -269,7 +269,7 @@
 				<div class="flex flex-wrap items-start gap-6">
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -- svg built from our own otpauth uri -->
 					<div class="w-40 shrink-0 rounded-px bg-white p-2">{@html qr}</div>
-					<div class="flex min-w-0 flex-1 flex-col gap-3">
+					<div class="flex min-w-56 flex-1 flex-col gap-3">
 						<span class="text-[14px] text-dim"
 							>Scan this with your authenticator app, or enter the key by hand.</span
 						>

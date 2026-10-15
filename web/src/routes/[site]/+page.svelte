@@ -2,6 +2,7 @@
 	import { page } from "$app/state";
 	import Dashboard from "#lib/Dashboard.svelte";
 	import { session } from "#lib/session.svelte.ts";
+	import Missing from "#lib/ui/Missing.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
 	const domain = $derived(page.params.site ?? "");
@@ -15,5 +16,7 @@
 		{#key domain}
 			<Dashboard {domain} timezone={site.timezone} />
 		{/key}
+	{:else}
+		<Missing />
 	{/if}
 </Shell>

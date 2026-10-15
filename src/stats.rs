@@ -243,17 +243,9 @@ pub(crate) fn period(
 	};
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let today = Timestamp::now().to_zoned(tz.clone()).date();
-	let imported = stats
-		.app
-		.first_import(site.id)
-		.map_err(|err| err.to_string())?
-		.and_then(|day| day.parse::<Date>().ok());
-	let created = Timestamp::from_second(site.created_at)
-		.map_err(|err| err.to_string())?
-		.to_zoned(tz.clone())
-		.date();
-	let created = imported.map_or(created, |day| day.min(created));
+	let (created, imported) = created(&stats.app, &site, &tz)?;
 	let (from, to) = date_range(range, today, created, trim)?;
+	let (from, to) = bound(from, to, created, today);
 	Ok(Period {
 		site,
 		others,
@@ -897,6 +889,30 @@ fn imports_skip(grouping: &Grouping, filtered: bool) -> Option<&'static str> {
 		}
 		_ => None,
 	}
+}
+
+// the first day with data, counting imports from before the site was added, and the first import
+pub(crate) fn created(
+	app: &App,
+	site: &Site,
+	tz: &TimeZone,
+) -> Result<(Date, Option<Date>), String> {
+	let imported = app
+		.first_import(site.id)
+		.map_err(|err| err.to_string())?
+		.and_then(|day| day.parse::<Date>().ok());
+	let created = Timestamp::from_second(site.created_at)
+		.map_err(|err| err.to_string())?
+		.to_zoned(tz.clone())
+		.date();
+	Ok((imported.map_or(created, |day| day.min(created)), imported))
+}
+
+// queries walk every day in range, so a range stops where data can be
+pub(crate) fn bound(from: Date, to: Date, created: Date, today: Date) -> (Date, Date) {
+	let first = created.min(today).saturating_sub(5.years());
+	let last = today.last_of_year();
+	(from.clamp(first, last), to.clamp(first, last))
 }
 
 fn date_range(raw: &Value, today: Date, created: Date, trim: bool) -> Result<(Date, Date), String> {

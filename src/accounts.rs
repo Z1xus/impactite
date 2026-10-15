@@ -435,9 +435,11 @@ async fn add_site(
 	if !matches!(web.app.role(viewer.user, body.team), Ok(Some(role)) if role != "viewer") {
 		return fail(StatusCode::FORBIDDEN, "You can't add sites to this team.");
 	}
-	let domain = clean_domain(&body.domain).unwrap_or_default();
-	if domain.is_empty() || jiff::tz::TimeZone::get(&body.timezone).is_err() {
-		return fail(StatusCode::BAD_REQUEST, "Use a valid domain and timezone.");
+	let Some(domain) = clean_domain(&body.domain) else {
+		return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
+	};
+	if jiff::tz::TimeZone::get(&body.timezone).is_err() {
+		return fail(StatusCode::BAD_REQUEST, "Pick a timezone from the list.");
 	}
 	match web.app.add_site(&domain, &body.timezone, Some(body.team)) {
 		Ok(site) => Json(json!({ "id": site.id, "domain": site.domain })).into_response(),
@@ -547,7 +549,21 @@ pub fn clean_domain(raw: &str) -> Option<String> {
 		.trim_start_matches("www.")
 		.trim_end_matches('/')
 		.to_lowercase();
-	(!domain.is_empty() && !domain.contains('/') && !domain.contains(' ')).then_some(domain)
+	// unicode names become punycode, the form browsers report
+	let Ok(url::Host::Domain(domain)) = url::Host::parse(&domain) else {
+		return None;
+	};
+	// a dot keeps names like `settings` or `team:1` from shadowing app pages
+	let label = |label: &str| {
+		(1..=63).contains(&label.len())
+			&& !label.starts_with('-')
+			&& !label.ends_with('-')
+			&& label
+				.bytes()
+				.all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+	};
+	((domain.contains('.') || domain == "localhost") && domain.split('.').all(label))
+		.then_some(domain)
 }
 
 pub(crate) fn hash(password: &str) -> rusqlite::Result<String> {

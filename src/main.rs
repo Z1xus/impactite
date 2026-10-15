@@ -259,6 +259,9 @@ async fn main() -> anyhow::Result<()> {
 			if jiff::tz::TimeZone::get(&timezone).is_err() {
 				bail!("unknown timezone {timezone}");
 			}
+			let Some(domain) = accounts::clean_domain(&domain) else {
+				bail!("not a valid domain: {domain}");
+			};
 			let site = app.add_site(&domain, &timezone, default_team(&app)?)?;
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())

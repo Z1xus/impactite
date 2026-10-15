@@ -1,6 +1,7 @@
 <script lang="ts">
 	import check from "pixelarticons/svg/check.svg?raw";
 	import copy from "pixelarticons/svg/copy.svg?raw";
+	import { copy as copyText } from "#lib/toast.svelte.ts";
 	import Icon from "#lib/ui/Icon.svelte";
 
 	type Part = string | { from: string; to: string };
@@ -50,7 +51,7 @@
 	});
 
 	async function write() {
-		await navigator.clipboard.writeText(final);
+		if (!(await copyText(final))) return;
 		copied = true;
 		setTimeout(() => (copied = false), 1200);
 	}

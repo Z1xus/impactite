@@ -3,7 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { ask } from "#lib/ask.svelte.ts";
-	import { attempt, toast } from "#lib/toast.svelte.ts";
+	import { attempt, copy, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { goto } from "$app/navigation";
@@ -21,6 +21,7 @@
 	import Glyph from "#lib/ui/Glyph.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Message from "#lib/ui/Message.svelte";
+	import Missing from "#lib/ui/Missing.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
@@ -452,7 +453,8 @@
 	}
 
 	$effect(() => {
-		loadAnalytics();
+		if (!site) return;
+		untrack(loadAnalytics);
 	});
 
 	// an import runs on the server, so this checks back until it's done
@@ -1076,7 +1078,8 @@
 						{#if link}
 							<Button
 								variant="plain"
-								onclick={() => navigator.clipboard.writeText(url(link.slug))}
+								onclick={async () =>
+									(await copy(url(link.slug))) && toast("Link copied.")}
 								>copy</Button
 							>
 						{/if}
@@ -1203,5 +1206,7 @@
 				</Section>
 			{/if}
 		</Settings>
+	{:else}
+		<Missing />
 	{/if}
 </Shell>

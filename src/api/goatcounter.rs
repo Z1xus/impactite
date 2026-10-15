@@ -19,7 +19,7 @@ use crate::app::Site;
 use crate::export;
 use crate::ingest::{Client, Hit};
 use crate::names;
-use crate::stats::{answer, period};
+use crate::stats::{self, answer, period};
 
 const LIMIT: usize = 100;
 const VIEWS: &str = "pageview";
@@ -106,15 +106,18 @@ impl Call {
 				})
 				.transpose()
 		};
-		let to = date("end")?.unwrap_or_else(|| Timestamp::now().to_zoned(tz).date());
+		let today = Timestamp::now().to_zoned(tz.clone()).date();
+		let to = date("end")?.unwrap_or(today);
 		let from = match date("start")? {
 			Some(from) => from,
 			None => to.checked_sub(6.days()).map_err(broken)?,
 		};
-		match from <= to {
-			true => Ok((site, from, to)),
-			false => Err(bad("start: must be before end")),
+		if from > to {
+			return Err(bad("start: must be before end"));
 		}
+		let (created, _) = stats::created(&web.app, &site, &tz).map_err(broken)?;
+		let (from, to) = stats::bound(from, to, created, today);
+		Ok((site, from, to))
 	}
 
 	fn number(&self, name: &str, default: usize) -> Result<usize, Fail> {

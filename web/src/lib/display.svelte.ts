@@ -16,14 +16,25 @@ export const display = $state<Display>({
 	theme: "dark"
 });
 
+const choices: { [key in keyof Display]: Display[key][] } = {
+	week: ["monday", "sunday"],
+	clock: ["24", "12"],
+	numbers: ["en-US", "de-DE", "fr-FR"],
+	theme: ["dark", "light", "system"]
+};
+
+// follow the system while it's the choice
+globalThis.matchMedia?.("(prefers-color-scheme: light)").addEventListener("change", () => {
+	if (display.theme === "system") applyTheme("system");
+});
+
 export async function loadDisplay() {
 	const saved = await api<Partial<Display> | null>("/api/app/prefs/display").catch(() => null);
-	Object.assign(display, saved ?? {});
+	// a stored value from an older version or a bad write falls back to the default
+	for (const key of Object.keys(choices) as (keyof Display)[])
+		if ((choices[key] as unknown[]).includes(saved?.[key]))
+			Object.assign(display, { [key]: saved?.[key] });
 	applyTheme(display.theme);
-	// follow the system while it's the choice
-	matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
-		if (display.theme === "system") applyTheme("system");
-	});
 }
 
 export function saveDisplay(next: Partial<Display>) {

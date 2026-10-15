@@ -43,6 +43,10 @@ export async function api<T>(path: string, body?: unknown, method?: string): Pro
 	});
 	if (res.status === 204) return undefined as T;
 	const data = await res.json().catch(() => ({}));
-	if (!res.ok) throw new ApiError(res.status, data.error ?? "Something went wrong.", data);
+	if (!res.ok) {
+		// the plausible style query errors start with a json pointer like `#/filters: `
+		const message = String(data?.error ?? "Something went wrong.").replace(/^#\/\S*: /, "");
+		throw new ApiError(res.status, message, data ?? {});
+	}
 	return data as T;
 }

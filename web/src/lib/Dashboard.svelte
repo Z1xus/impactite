@@ -25,8 +25,7 @@
 		format,
 		query,
 		toQueryFilters,
-		type Filter,
-		type Metric
+		type Filter
 	} from "#lib/stats.ts";
 	import Period from "#lib/Period.svelte";
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
@@ -100,7 +99,9 @@
 			glyph: icon("event:hostname", site.domain)
 		}))
 	]);
-	const metric = $derived((page.url.searchParams.get("metric") ?? "visitors") as Metric);
+	const metric = $derived(
+		METRICS.find((item) => item.key === page.url.searchParams.get("metric"))?.key ?? "visitors"
+	);
 	const filters = $derived(
 		page.url.searchParams
 			.getAll("f")
@@ -180,10 +181,12 @@
 	$effect(() => {
 		if (readonly) return;
 		api<Partial<Layout> | null>(`/api/app/prefs/layout:${domain}`).then((saved) => {
+			const list = (value: unknown) =>
+				Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 			layout = {
-				order: saved?.order ?? [],
-				hidden: saved?.hidden ?? [],
-				table: saved?.table ?? false
+				order: list(saved?.order),
+				hidden: list(saved?.hidden),
+				table: saved?.table === true
 			};
 		});
 	});
@@ -263,6 +266,8 @@
 	});
 
 	$effect(() => {
+		// the all sites view has no goals, funnels, titles or segments of its own
+		if (combined) return;
 		api<Record<string, string>>(`/api/app/sites/${domain}/titles`)
 			.then((result) => (titles = result))
 			.catch(() => (titles = {}));
@@ -413,7 +418,7 @@
 	);
 
 	$effect(() => {
-		if (readonly) return;
+		if (readonly || combined) return;
 		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`)
 			.then((result) => (segments = result.segments))
 			.catch(() => (segments = []));

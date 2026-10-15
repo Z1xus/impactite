@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Dashboard from "#lib/Dashboard.svelte";
 	import { currentTeam } from "#lib/session.svelte.ts";
+	import Missing from "#lib/ui/Missing.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
 	const team = $derived(currentTeam());
@@ -11,9 +12,11 @@
 </script>
 
 <Shell>
-	{#if team}
+	{#if team?.sites.length}
 		{#key team.id}
 			<Dashboard domain="team:{team.id}" {timezone} />
 		{/key}
+	{:else if team}
+		<Missing text="This team has no sites yet." />
 	{/if}
 </Shell>

@@ -76,14 +76,20 @@ export function parse(params: { get(name: string): string | null }, timezone: st
 	// links can carry anything, unknown values fall back
 	const known = <T extends string>(list: readonly T[], value: string | null) =>
 		list.find((item) => item === value);
+	const day = (name: string) => {
+		const value = params.get(name) ?? "";
+		return /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(Date.parse(value)) ? value : now;
+	};
+	const [from, to] = [day("from"), day("to")].sort();
+	const [compareFrom, compareTo] = [day("compare_from"), day("compare_to")].sort();
 	return {
 		period: known(PERIODS, params.get("period")) ?? "28d",
-		date: params.get("date") || now,
-		from: params.get("from") || now,
-		to: params.get("to") || now,
+		date: day("date"),
+		from,
+		to,
 		compare: known(COMPARES, params.get("compare")) ?? "off",
-		compareFrom: params.get("compare_from") || now,
-		compareTo: params.get("compare_to") || now,
+		compareFrom,
+		compareTo,
 		weekday: params.get("match") === "weekday",
 		interval: known(INTERVALS, params.get("interval")) ?? null,
 		today: now
