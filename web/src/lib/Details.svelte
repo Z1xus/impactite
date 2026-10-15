@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { number } from "#lib/display.svelte.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import type { Range } from "#lib/period.ts";
 	import { display, format, query } from "#lib/stats.ts";
@@ -32,10 +33,7 @@
 	const percent = (value: number | null) => (value === null ? "-" : `${value}%`);
 	const seconds = (value: number | null) =>
 		value === null ? "-" : format("visit_duration", value);
-	const money = (value: number | null) =>
-		value === null
-			? "-"
-			: value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	const money = (value: number | null) => (value === null ? "-" : number(value, 2));
 	const count = (value: number | null) => (value === null ? "-" : format("visitors", value));
 
 	const columns = $derived.by(() => {

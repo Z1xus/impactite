@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { number } from "#lib/display.svelte.ts";
 	import { Tween } from "svelte/motion";
 	import { cubicOut } from "svelte/easing";
 
 	let {
 		value,
-		format = (value: number) => Math.round(value).toLocaleString("en-US"),
+		format = (value: number) => number(Math.round(value)),
 		class: className = ""
 	}: { value: number; format?: (value: number) => string; class?: string } = $props();
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { clock } from "#lib/display.svelte.ts";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -431,7 +432,7 @@
 
 	function label(raw: string, grain: string) {
 		const date = new Date(raw.replace(" ", "T") + (raw.length === 10 ? "T00:00:00" : ""));
-		if (grain === "time:hour" || grain === "time:minute") return raw.slice(11, 16);
+		if (grain === "time:hour" || grain === "time:minute") return clock(raw.slice(11, 16));
 		const options: Intl.DateTimeFormatOptions =
 			grain === "time:month"
 				? { month: "short", year: "2-digit" }

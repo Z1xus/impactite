@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { display } from "#lib/display.svelte.ts";
 	import { untrack } from "svelte";
 	import left from "pixelarticons/svg/chevron-left.svg?raw";
 	import right from "pixelarticons/svg/chevron-right.svg?raw";
@@ -12,7 +13,11 @@
 	}: { from: string; to: string; max: string; pick: (from: string, to: string) => void } =
 		$props();
 
-	const DAYS = ["mo", "tu", "we", "th", "fr", "sa", "su"];
+	const DAYS = $derived(
+		display.week === "sunday"
+			? ["su", "mo", "tu", "we", "th", "fr", "sa"]
+			: ["mo", "tu", "we", "th", "fr", "sa", "su"]
+	);
 
 	let month = $state(untrack(() => to.slice(0, 7)));
 	let start = $state<string | null>(null);
@@ -20,7 +25,7 @@
 
 	const days = $derived.by(() => {
 		const first = new Date(`${month}-01T00:00:00Z`);
-		const blanks = (first.getUTCDay() + 6) % 7;
+		const blanks = (first.getUTCDay() + (display.week === "sunday" ? 0 : 6)) % 7;
 		const count = new Date(
 			Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)
 		).getUTCDate();

@@ -2,6 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import qrcode from "qrcode-generator";
+	import { display, saveDisplay } from "#lib/display.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
 	import { adopt, refresh, session } from "#lib/session.svelte.ts";
@@ -15,6 +16,7 @@
 	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 	import Title from "#lib/ui/Title.svelte";
+	import Toggle from "#lib/ui/Toggle.svelte";
 
 	type Passkey = { id: string; name: string; created_at: number; used_at: number | null };
 	type Key = { id: number; name: string; prefix: string; created: number };
@@ -24,6 +26,7 @@
 		{ id: "profile", label: "profile" },
 		{ id: "password", label: "password" },
 		{ id: "two-factor", label: "two factor" },
+		{ id: "display", label: "display" },
 		{ id: "passkeys", label: "passkeys" },
 		{ id: "sessions", label: "sessions" },
 		{ id: "keys", label: "api keys" },
@@ -273,6 +276,36 @@
 					>Ask for a code from an authenticator app when you sign in with a password.</span
 				>
 			{/if}
+		</Section>
+
+		<Section id="display" label="display">
+			<div class="flex flex-wrap gap-6">
+				<Toggle
+					label="week starts on"
+					bind:value={() => display.week, (week) => saveDisplay({ week })}
+					options={[
+						{ key: "monday", label: "monday" },
+						{ key: "sunday", label: "sunday" }
+					]}
+				/>
+				<Toggle
+					label="clock"
+					bind:value={() => display.clock, (clock) => saveDisplay({ clock })}
+					options={[
+						{ key: "24", label: "24 hour" },
+						{ key: "12", label: "12 hour" }
+					]}
+				/>
+				<Toggle
+					label="numbers"
+					bind:value={() => display.numbers, (numbers) => saveDisplay({ numbers })}
+					options={[
+						{ key: "en-US", label: "1,234.5" },
+						{ key: "de-DE", label: "1.234,5" },
+						{ key: "fr-FR", label: "1 234,5" }
+					]}
+				/>
+			</div>
 		</Section>
 
 		<Section id="passkeys" label="passkeys">

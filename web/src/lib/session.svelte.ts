@@ -1,4 +1,5 @@
 import { api, type Me } from "./api";
+import { loadDisplay } from "./display.svelte.ts";
 
 export const session = $state<{
 	ready: boolean;
@@ -18,6 +19,7 @@ export async function refresh() {
 
 export function adopt(me: Me | null) {
 	session.me = me;
+	if (me) loadDisplay();
 	const saved = Number(localStorage.getItem("team"));
 	const teams = me?.teams ?? [];
 	session.team = teams.find((team) => team.id === saved)?.id ?? teams[0]?.id ?? null;

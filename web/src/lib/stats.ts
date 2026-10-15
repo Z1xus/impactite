@@ -1,3 +1,4 @@
+import { number } from "./display.svelte.ts";
 import { api } from "./api";
 
 export type Metric =
@@ -78,9 +79,9 @@ export function toQueryFilters(filters: Filter[]) {
 }
 
 export function compact(value: number) {
-	if (value < 10_000) return Math.round(value).toLocaleString("en-US");
-	if (value < 1_000_000) return `${(value / 1000).toFixed(value < 100_000 ? 1 : 0)}k`;
-	return `${(value / 1_000_000).toFixed(1)}m`;
+	if (value < 10_000) return number(Math.round(value));
+	if (value < 1_000_000) return `${number(value / 1000, value < 100_000 ? 1 : 0)}k`;
+	return `${number(value / 1_000_000, 1)}m`;
 }
 
 export function format(metric: Metric, value: number) {
@@ -95,7 +96,7 @@ export function format(metric: Metric, value: number) {
 				: `${seconds}s`;
 		}
 		case "views_per_visit":
-			return value.toFixed(2);
+			return number(value, 2);
 		default:
 			return compact(value);
 	}
