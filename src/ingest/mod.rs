@@ -120,7 +120,7 @@ impl Ingest {
 
 	pub fn only_site(&self) -> Option<Arc<Tracked>> {
 		match self.app.sites().ok()?.as_slice() {
-			[site] => Some(self.remember(site.clone())),
+			[site] => self.site(&site.domain),
 			_ => None,
 		}
 	}

@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -651,13 +652,23 @@ fn hash(value: &impl Hash) -> u64 {
 	hasher.finish()
 }
 
+// sorts small keys and then gathers, metrics are too big to move around while sorting
 fn sort_rows(rows: &mut [(u32, Metrics)]) {
-	rows.sort_unstable_by(|a, b| {
-		b.1.visitors
-			.cmp(&a.1.visitors)
-			.then(b.1.pageviews.cmp(&a.1.pageviews))
-			.then(a.0.cmp(&b.0))
-	});
+	let mut order: Vec<_> = rows
+		.iter()
+		.enumerate()
+		.map(|(at, (id, metrics))| {
+			(
+				Reverse(metrics.visitors),
+				Reverse(metrics.pageviews),
+				*id,
+				at,
+			)
+		})
+		.collect();
+	order.sort_unstable();
+	let sorted: Vec<_> = order.iter().map(|&(.., at)| rows[at]).collect();
+	rows.copy_from_slice(&sorted);
 }
 
 fn missing_as_empty(counts: io::Result<Counts>) -> io::Result<Counts> {
