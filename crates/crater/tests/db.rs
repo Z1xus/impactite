@@ -217,6 +217,16 @@ fn filters() {
 	assert_eq!((paid("EUR").visitors, paid("EUR").revenue), (1, 4999));
 	assert_eq!(paid("USD").visitors, 0);
 
+	let visit = |page: &str| {
+		vec![
+			filter(Dim::Name, Op::Is, "pageview"),
+			filter(Dim::Page, Op::Is, page),
+		]
+	};
+	let funnel = |steps: Vec<Vec<Filter>>| db.funnel(SITE, DAY - 1..=DAY + 1, &[], &steps).unwrap();
+	assert_eq!(funnel(vec![visit("/a"), visit("/b")]), vec![2, 1]);
+	assert_eq!(funnel(vec![visit("/b"), visit("/a")]), vec![2, 0]);
+
 	let page_a = vec![filter(Dim::Page, Op::Is, "/a")];
 	let report = query(&db, page_a, Some(Field::Dim(Dim::Source))).unwrap();
 	assert_eq!(core(report.total), metrics(2, 3, 3, 4, 1, 200));

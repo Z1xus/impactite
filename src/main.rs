@@ -5,6 +5,7 @@ mod assets;
 mod cli;
 mod demo;
 mod export;
+mod funnels;
 mod geo;
 mod goals;
 mod icons;

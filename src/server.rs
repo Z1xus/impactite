@@ -10,6 +10,7 @@ use crate::accounts::{self, Web};
 use crate::admin;
 use crate::assets;
 use crate::export;
+use crate::funnels;
 use crate::goals;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
@@ -38,6 +39,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 			accounts::routes()
 				.merge(passkeys::routes())
 				.merge(goals::routes())
+				.merge(funnels::routes())
 				.merge(keys::routes())
 				.merge(sites::routes())
 				.merge(teams::routes())

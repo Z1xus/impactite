@@ -163,6 +163,15 @@ const MIGRATIONS: &[&str] = &[
 	drop table goals;
 	alter table goals_next rename to goals;
 	",
+	"
+	create table funnels (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		name text not null,
+		steps text not null,
+		created_at integer not null
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

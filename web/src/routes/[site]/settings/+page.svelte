@@ -6,7 +6,9 @@
 	import { goto } from "$app/navigation";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import Snippet from "#lib/Snippet.svelte";
+	import close from "pixelarticons/svg/close.svg?raw";
 	import Button from "#lib/ui/Button.svelte";
+	import Icon from "#lib/ui/Icon.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
@@ -51,6 +53,11 @@
 	let currency = $state("EUR");
 	let adding = $state(false);
 	let renaming = $state<Goal | null>(null);
+	type Funnel = { id: number; name: string; steps: number[] };
+	let funnels = $state<Funnel[] | null>(null);
+	let building = $state(false);
+	let funnelName = $state("");
+	let steps = $state<number[]>([]);
 	let newName = $state("");
 	let source = $state<"impactite" | "plausible" | "goatcounter">("impactite");
 	let file = $state<File | null>(null);
@@ -120,6 +127,9 @@
 
 	$effect(() => {
 		if (!site) return;
+		api<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`).then(
+			(r) => (funnels = r.funnels)
+		);
 		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
 			(r) => (segments = r.segments)
 		);
@@ -157,6 +167,33 @@
 		value = goalName = scroll = "";
 		adding = false;
 	}
+
+	function startFunnel() {
+		funnelName = "";
+		steps = (goals ?? []).slice(0, 2).map((goal) => goal.id);
+		building = true;
+	}
+
+	async function addFunnel() {
+		funnels = (
+			await api<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`, {
+				name: funnelName,
+				steps
+			})
+		).funnels;
+		building = false;
+	}
+
+	const removeFunnel = (id: string | number) =>
+		attempt(async () => {
+			funnels = (
+				await api<{ funnels: Funnel[] }>(
+					`/api/app/sites/${domain}/funnels/${id}`,
+					undefined,
+					"DELETE"
+				)
+			).funnels;
+		});
 
 	async function renameGoal() {
 		if (!renaming) return;
@@ -225,6 +262,7 @@
 		{ id: "general", label: "general" },
 		{ id: "tracking", label: "tracking" },
 		{ id: "goals", label: "goals" },
+		{ id: "funnels", label: "funnels" },
 		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
 		{ id: "imports", label: "imports" },
 		...(owner
@@ -288,6 +326,44 @@
 >
 	<Form action="rename" submit={renameGoal}>
 		<Field label="name" bind:value={newName} required />
+	</Form>
+</Dialog>
+
+<Dialog title="add funnel" bind:open={building}>
+	<Form action="add funnel" submit={addFunnel}>
+		<Field label="name" placeholder="Checkout" bind:value={funnelName} required />
+		{#each steps as step, i (i)}
+			<div class="flex items-end gap-2">
+				<div class="flex-1">
+					<Select
+						label="step {i + 1}"
+						value={step}
+						options={(goals ?? []).map((goal) => ({ key: goal.id, label: goal.name }))}
+						data
+						pick={(id) => (steps[i] = id)}
+					/>
+				</div>
+				{#if steps.length > 2}
+					<Button
+						type="button"
+						variant="icon"
+						aria-label="remove step"
+						title="remove step"
+						onclick={() => (steps = steps.filter((_, j) => j !== i))}
+						><Icon svg={close} size={14} /></Button
+					>
+				{/if}
+			</div>
+		{/each}
+		{#if steps.length < 8}
+			<div>
+				<Button
+					type="button"
+					variant="quiet"
+					onclick={() => (steps = [...steps, goals?.[0]?.id ?? 0])}>add step</Button
+				>
+			</div>
+		{/if}
 	</Form>
 </Dialog>
 
@@ -357,6 +433,30 @@
 						{/if}
 					{/snippet}
 				</List>
+			</Section>
+
+			<Section id="funnels" label="funnels">
+				{#snippet actions()}
+					{#if (goals?.length ?? 0) >= 2}
+						<Button variant="quiet" onclick={startFunnel}>add funnel</Button>
+					{/if}
+				{/snippet}
+				{#if (goals?.length ?? 0) < 2}
+					<span class="text-[14px] text-dim"
+						>Add two goals to build a funnel from them.</span
+					>
+				{/if}
+				<List
+					items={funnels?.map((funnel) => ({
+						key: funnel.id,
+						title: funnel.name,
+						meta: funnel.steps.map(
+							(id, i) =>
+								`${i + 1}. ${goals?.find((goal) => goal.id === id)?.name ?? "?"}`
+						)
+					})) ?? null}
+					remove={removeFunnel}
+				/>
 			</Section>
 
 			{#if segments?.length}

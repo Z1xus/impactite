@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::cache::Cache;
 use crate::dict::Dict;
 use crate::event::{Dim, Event};
-use crate::query::{Field, MISSING, Matcher, Query, Report, Slot};
+use crate::query::{Field, Filter, MISSING, Matcher, Query, Report, Slot};
 use crate::rollup::{Counts, Metrics, Names};
 use crate::segment::{Columns, Dense, Segment};
 use crate::wal::Wal;
@@ -272,6 +272,50 @@ impl Db {
 		lock(&self.shared.imports).insert(key, Some(Arc::new(counts)));
 		*lock(&self.shared.ranges) = Cache::new(CACHE);
 		Ok(())
+	}
+
+	// visitors per funnel step, steps are filter sets matched in order within a session
+	pub fn funnel(
+		&self,
+		site: u64,
+		days: RangeInclusive<i32>,
+		filters: &[Filter],
+		steps: &[Vec<Filter>],
+	) -> io::Result<Vec<u64>> {
+		let dict = self.shared.dict(site)?;
+		let mut totals = vec![0; steps.len()];
+		for day in days {
+			let live = self
+				.shared
+				.live
+				.read()
+				.unwrap_or_else(PoisonError::into_inner)
+				.get(&(site, day))
+				.map(|live| live.parts.clone());
+			let parts = match live {
+				Some(parts) => parts,
+				None => match Segment::read(&self.shared.path((site, day), "seg")) {
+					Ok(seg) => vec![Arc::new(seg.cols)],
+					Err(err) if err.kind() == ErrorKind::NotFound => continue,
+					Err(err) => return Err(err),
+				},
+			};
+			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
+			let matchers = |filters: &[Filter]| -> Vec<Matcher> {
+				filters
+					.iter()
+					.map(|filter| Matcher::new(filter, &dict))
+					.collect()
+			};
+			let steps: Vec<Vec<Matcher>> = steps.iter().map(|step| matchers(step)).collect();
+			let parts: Vec<&Columns> = parts.iter().map(|part| &**part).collect();
+			let counts =
+				crate::rollup::funnel(&parts, &Names::new(&dict), &matchers(filters), &steps);
+			for (total, count) in totals.iter_mut().zip(counts) {
+				*total += count;
+			}
+		}
+		Ok(totals)
 	}
 
 	// streams stored events with `ts` as local wall time and ids unique per site

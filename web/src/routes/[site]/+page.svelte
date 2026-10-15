@@ -209,6 +209,8 @@
 		}
 	];
 	let goals = $state<string[]>([]);
+	let funnels = $state<{ id: number; name: string }[]>([]);
+	let funnelId = $state(0);
 	let revenue = $state(false);
 	let propKeys = $state<string[]>([]);
 	let propKey = $state("");
@@ -218,7 +220,8 @@
 			id: "goals",
 			tabs: [
 				...(goals.length ? [{ key: "event:goal", label: "goals" }] : []),
-				...(propKeys.length ? [{ key: "props", label: "props" }] : [])
+				...(propKeys.length ? [{ key: "props", label: "props" }] : []),
+				...(funnels.length ? [{ key: "funnels", label: "funnels" }] : [])
 			]
 		}
 	]);
@@ -239,6 +242,13 @@
 				revenue = result.goals.some((goal) => goal.currency);
 			})
 			.catch(() => (goals = []));
+		api<{ funnels: { id: number; name: string }[] }>(`/api/app/sites/${domain}/funnels`)
+			.then((result) => {
+				funnels = result.funnels;
+				if (!funnels.some((funnel) => funnel.id === funnelId))
+					funnelId = funnels[0]?.id ?? 0;
+			})
+			.catch(() => (funnels = []));
 	});
 
 	$effect(() => {
@@ -464,6 +474,26 @@
 			const dim = dimOf(panel.id);
 			let stale = false;
 			loading[panel.id] = true;
+			if (tabs[panel.id] === "funnels") {
+				api<{ steps: { name: string; visitors: number }[] }>("/api/app/funnel", {
+					site_id: domain,
+					funnel: funnelId,
+					date_range: dates.current === "30m" ? "day" : dates.current,
+					filters: where
+				}).then((result) => {
+					if (stale) return;
+					const first = result.steps[0]?.visitors || 1;
+					ranked[panel.id] = result.steps.map((step, i) => ({
+						key: String(i),
+						label: `${i + 1}. ${step.name}`,
+						value: step.visitors,
+						extra: `${Math.round((step.visitors / first) * 1000) / 10}%`
+					}));
+					loading[panel.id] = false;
+				});
+				cleanups.push(() => (stale = true));
+				continue;
+			}
 			ask({
 				metrics:
 					dim === "event:goal" || converting
@@ -563,6 +593,16 @@
 		/>
 	{/if}
 </Dialog>
+
+{#snippet funnelPicker()}
+	<Select
+		align="right"
+		value={funnelId}
+		options={funnels.map((funnel) => ({ key: funnel.id, label: funnel.name }))}
+		data
+		pick={(id) => (funnelId = id)}
+	/>
+{/snippet}
 
 {#snippet utmPicker()}
 	<Select align="right" value={utmKey} options={UTM} pick={(key) => (utmKey = key)} />
@@ -773,7 +813,9 @@
 								? picker
 								: tabs[panel.id] === "utm"
 									? utmPicker
-									: undefined}
+									: tabs[panel.id] === "funnels"
+										? funnelPicker
+										: undefined}
 						>
 							{#snippet footer()}
 								{#if arranging}
@@ -795,7 +837,7 @@
 											hide
 										</Button>
 									</div>
-								{:else}
+								{:else if tabs[panel.id] !== "funnels"}
 									<Button
 										variant="plain"
 										onclick={() =>
@@ -825,7 +867,9 @@
 									rows={ranked[panel.id] ?? null}
 									loading={loading[panel.id]}
 									format={(value) => format("visitors", value)}
-									pick={(key) => addFilter(dimOf(panel.id), key)}
+									pick={tabs[panel.id] === "funnels"
+										? undefined
+										: (key) => addFilter(dimOf(panel.id), key)}
 								/>
 							{/if}
 						</Panel>

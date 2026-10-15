@@ -169,7 +169,29 @@ struct Scan<'a> {
 	since: u32,
 }
 
-impl Scan<'_> {
+impl<'a> Scan<'a> {
+	fn new(parts: &'a [&'a Columns], names: &'a Names, since: u32) -> Self {
+		let offsets = parts
+			.iter()
+			.map(|part| {
+				part.props
+					.iter()
+					.scan(0, |sum, &n| {
+						let at = *sum;
+						*sum += n;
+						Some(at)
+					})
+					.collect()
+			})
+			.collect();
+		Self {
+			parts,
+			offsets,
+			names,
+			since,
+		}
+	}
+
 	fn rows(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
 		self.parts.iter().enumerate().flat_map(move |(p, part)| {
 			(0..part.rows())
@@ -261,24 +283,7 @@ impl Counts {
 		slots: &[Slot],
 		since: Option<u32>,
 	) -> Self {
-		let scan = Scan {
-			parts,
-			offsets: parts
-				.iter()
-				.map(|part| {
-					part.props
-						.iter()
-						.scan(0, |sum, &n| {
-							let at = *sum;
-							*sum += n;
-							Some(at)
-						})
-						.collect()
-				})
-				.collect(),
-			names,
-			since: since.unwrap_or(0),
-		};
+		let scan = Scan::new(parts, names, since.unwrap_or(0));
 		let (event_filters, visit_filters): (Vec<&Matcher>, Vec<&Matcher>) =
 			filters.iter().partition(|m| m.slot.is_event());
 
@@ -603,4 +608,58 @@ fn decode(buf: &[u8], width: usize) -> Option<Counts> {
 		fields,
 		minutes: Vec::new(),
 	})
+}
+
+// visitors reaching each step in order within a session, filtered by visit level matchers
+pub(crate) fn funnel(
+	parts: &[&Columns],
+	names: &Names,
+	filters: &[Matcher],
+	steps: &[Vec<Matcher>],
+) -> Vec<u64> {
+	let scan = Scan::new(parts, names, 0);
+	let mut rows: Vec<(u32, u32, usize, usize)> = scan
+		.rows()
+		.map(|(p, row)| (parts[p].session[row], parts[p].time[row], p, row))
+		.collect();
+	rows.sort_unstable();
+	let matches = |matchers: &[Matcher], p: usize, row: usize| {
+		let scrolling = matchers.iter().any(|m| m.slot == Slot::Scroll);
+		scan.is_engagement(p, row) == scrolling
+			&& matchers
+				.iter()
+				.all(|m| m.matches(scan.event_value(m.slot, p, row)))
+	};
+	let mut reached: Vec<Vec<u32>> = vec![Vec::new(); steps.len()];
+	for session in rows.chunk_by(|a, b| a.0 == b.0) {
+		let first = session
+			.iter()
+			.find(|&&(_, _, p, row)| !scan.is_engagement(p, row));
+		let Some(&(_, _, p, row)) = first else {
+			continue;
+		};
+		if !filters
+			.iter()
+			.all(|m| m.matches(scan.event_value(m.slot, p, row)))
+		{
+			continue;
+		}
+		let mut progress = 0;
+		for &(_, _, p, row) in session {
+			if progress < steps.len() && matches(&steps[progress], p, row) {
+				progress += 1;
+			}
+		}
+		for step in &mut reached[..progress] {
+			step.push(parts[p].visitor[row]);
+		}
+	}
+	reached
+		.into_iter()
+		.map(|mut visitors| {
+			visitors.sort_unstable();
+			visitors.dedup();
+			visitors.len() as u64
+		})
+		.collect()
 }
