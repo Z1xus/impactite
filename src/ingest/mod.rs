@@ -3,7 +3,7 @@ pub mod plausible;
 pub(crate) mod referrer;
 pub(crate) mod ua;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 
@@ -19,12 +19,24 @@ use crate::shields::Shields;
 
 const SESSION_SECS: i64 = 30 * 60;
 const SHARDS: usize = 64;
+const SKIPPED: &[(&str, &[Dim])] = &[
+	(
+		"agent",
+		&[Dim::Browser, Dim::BrowserVersion, Dim::Os, Dim::OsVersion],
+	),
+	("device", &[Dim::Device]),
+	("location", &[Dim::Country, Dim::Region, Dim::City]),
+	("region", &[Dim::Region, Dim::City]),
+	("language", &[Dim::Language]),
+];
 const CLICK_IDS: &[&str] = &["gclid", "gbraid", "wbraid", "msclkid", "fbclid", "twclid"];
 
 pub struct Tracked {
 	pub site: Site,
 	tz: TimeZone,
 	shields: Shields,
+	// data the site chose not to collect: referrer, agent, device, location, region, language, session
+	skip: HashSet<String>,
 }
 
 pub struct Hit {
@@ -123,7 +135,19 @@ impl Ingest {
 	fn remember(&self, site: Site) -> Arc<Tracked> {
 		let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 		let shields = Shields::load(&self.app, site.id);
-		let tracked = Arc::new(Tracked { site, tz, shields });
+		let skip = self
+			.app
+			.skip(site.id)
+			.unwrap_or_default()
+			.split(',')
+			.map(str::to_owned)
+			.collect();
+		let tracked = Arc::new(Tracked {
+			site,
+			tz,
+			shields,
+			skip,
+		});
 		self.sites
 			.write()
 			.unwrap_or_else(PoisonError::into_inner)
@@ -139,9 +163,23 @@ impl Ingest {
 		let ts = now.as_second();
 		let offset = site.tz.to_offset(now).seconds();
 		let day = (ts + i64::from(offset)).div_euclid(86_400) as i32;
-		let visitor = self.visitor(site, day, client)?;
-		let previous = self.visitor(site, day - 1, client)?;
-		let session = self.session(site.site.id, visitor, previous, ts, &hit.name)?;
+		let (visitor, session) = match site.skip.contains("session") {
+			// without sessions every hit stands alone
+			true => {
+				let mut id = [0; 8];
+				getrandom::fill(&mut id).map_err(|_| Rejected::Failed)?;
+				let id = u64::from_le_bytes(id);
+				(id, id)
+			}
+			false => {
+				let visitor = self.visitor(site, day, client)?;
+				let previous = self.visitor(site, day - 1, client)?;
+				(
+					visitor,
+					self.session(site.site.id, visitor, previous, ts, &hit.name)?,
+				)
+			}
+		};
 
 		let param = |key: &str| {
 			hit.params
@@ -153,7 +191,10 @@ impl Ingest {
 			.into_iter()
 			.find(|value| !value.is_empty())
 			.unwrap_or_default();
-		let (referrer_host, referrer) = referrer_parts(&hit.referrer, &hit.hostname);
+		let (referrer_host, referrer) = match site.skip.contains("referrer") {
+			true => Default::default(),
+			false => referrer_parts(&hit.referrer, &hit.hostname),
+		};
 		let click_id = CLICK_IDS.iter().find(|&&id| !param(id).is_empty());
 		let source = referrer::source(&referrer_host, tagged);
 		let medium = match (param("utm_medium"), click_id, source.as_str()) {
@@ -216,6 +257,13 @@ impl Ingest {
 			(Dim::Language, client.language.as_str()),
 		] {
 			event.dims[dim] = value.to_owned();
+		}
+		for (name, dims) in SKIPPED {
+			if site.skip.contains(*name) {
+				for &dim in *dims {
+					event.dims[dim].clear();
+				}
+			}
 		}
 		event.props = hit
 			.props

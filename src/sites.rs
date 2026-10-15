@@ -54,6 +54,7 @@ struct Update {
 	domain: Option<String>,
 	retention: Option<u32>,
 	counter: Option<bool>,
+	skip: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -94,6 +95,19 @@ async fn update(
 		&& web.app.set_retention(site.id, days).is_err()
 	{
 		return broken();
+	}
+	if let Some(skip) = &body.skip {
+		const KNOWN: [&str; 7] = [
+			"referrer", "agent", "device", "location", "region", "language", "session",
+		];
+		let skip: Vec<&str> = KNOWN
+			.into_iter()
+			.filter(|name| skip.iter().any(|item| item == name))
+			.collect();
+		if web.app.set_skip(site.id, &skip.join(",")).is_err() {
+			return broken();
+		}
+		web.ingest.forget(&site.domain);
 	}
 	if let Some(counter) = body.counter
 		&& web.app.set_counter(site.id, counter).is_err()
@@ -417,6 +431,22 @@ impl App {
 			params![site as i64, counter],
 		)?;
 		Ok(())
+	}
+
+	pub fn set_skip(&self, site: u64, skip: &str) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"update sites set skip = ?2 where id = ?1",
+			params![site as i64, skip],
+		)?;
+		Ok(())
+	}
+
+	pub fn skip(&self, site: u64) -> rusqlite::Result<String> {
+		self.conn().query_row(
+			"select skip from sites where id = ?1",
+			[site as i64],
+			|row| row.get(0),
+		)
 	}
 
 	pub fn counter(&self, site: u64) -> rusqlite::Result<bool> {

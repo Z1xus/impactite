@@ -9,6 +9,7 @@
 	import Snippet from "#lib/Snippet.svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
 	import Button from "#lib/ui/Button.svelte";
+	import Checks from "#lib/ui/Checks.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Code from "#lib/ui/Code.svelte";
@@ -413,6 +414,24 @@
 	const scriptEnd = "</" + "script>";
 	const counterSnippet = `<script>window.goatcounter = { no_onload: true }${scriptEnd}\n<script async src="${location.origin}/count.js" onload="goatcounter.visit_count({ append: 'body' })">${scriptEnd}`;
 
+	const COLLECTED = [
+		{ key: "referrer", label: "referrers" },
+		{ key: "agent", label: "browsers and systems" },
+		{ key: "device", label: "devices" },
+		{ key: "location", label: "countries" },
+		{ key: "region", label: "regions and cities" },
+		{ key: "language", label: "languages" },
+		{ key: "session", label: "sessions" }
+	];
+	const setCollected = (collected: string[]) =>
+		attempt(async () => {
+			const skip = COLLECTED.map((item) => item.key).filter(
+				(key) => !collected.includes(key)
+			);
+			await api(`/api/app/sites/${domain}`, { skip }, "PATCH");
+			await refresh();
+		});
+
 	const setCounter = (counter: boolean) =>
 		attempt(async () => {
 			await api(`/api/app/sites/${domain}`, { counter }, "PATCH");
@@ -469,6 +488,7 @@
 	const sections = $derived([
 		{ id: "general", label: "general" },
 		{ id: "tracking", label: "tracking" },
+		{ id: "collection", label: "collection" },
 		{ id: "goals", label: "goals" },
 		{ id: "funnels", label: "funnels" },
 		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
@@ -667,6 +687,23 @@
 
 			<Section id="tracking" label="tracking">
 				<Snippet {domain} />
+			</Section>
+
+			<Section id="collection" label="collection">
+				<span class="text-[14px] text-dim"
+					>Unchecked data is never stored for new visits. Without sessions every pageview
+					counts as a new visitor.</span
+				>
+				<Checks
+					bind:value={
+						() =>
+							COLLECTED.map((item) => item.key).filter(
+								(key) => !site?.skip.includes(key)
+							),
+						setCollected
+					}
+					options={COLLECTED}
+				/>
 			</Section>
 
 			<Section id="goals" label="goals">
@@ -970,7 +1007,7 @@
 
 			{#if owner}
 				<Section id="danger" label="danger" danger>
-					<Form action="purge page" submit={purgePage} inline danger>
+					<Form action="remove page" submit={purgePage} inline danger>
 						<Field
 							label="remove all stats of one page, imported days stay"
 							placeholder="/old-page"

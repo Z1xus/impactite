@@ -765,7 +765,7 @@ impl App {
 			where m.user = ?1 order by t.personal desc, t.name",
 		)?;
 		let mut sites_stmt = conn.prepare(
-			"select id, domain, timezone, retention, counter from sites where team = ?1 order by domain",
+			"select id, domain, timezone, retention, counter, skip from sites where team = ?1 order by domain",
 		)?;
 		let site = |row: &rusqlite::Row, role: String| {
 			Ok(json!({
@@ -774,6 +774,7 @@ impl App {
 				"timezone": row.get::<_, String>(2)?,
 				"retention": row.get::<_, i64>(3)?,
 				"counter": row.get::<_, bool>(4)?,
+				"skip": row.get::<_, String>(5)?.split(',').filter(|item| !item.is_empty()).collect::<Vec<_>>(),
 				"role": role,
 			}))
 		};
@@ -796,11 +797,11 @@ impl App {
 		}
 		let shared = conn
 			.prepare(
-				"select s.id, s.domain, s.timezone, s.retention, s.counter, g.role from guests g join sites s on s.id = g.site
+				"select s.id, s.domain, s.timezone, s.retention, s.counter, s.skip, g.role from guests g join sites s on s.id = g.site
 				where g.user = ?1 and s.team is not null
 				and s.team not in (select team from members where user = ?1) order by s.domain",
 			)?
-			.query_map([user], |row| site(row, row.get(5)?))?
+			.query_map([user], |row| site(row, row.get(6)?))?
 			.collect::<rusqlite::Result<Vec<_>>>()?;
 		if !shared.is_empty() {
 			teams.push(json!({ "id": 0, "name": "Shared with me", "personal": false, "role": "guest", "sites": shared }));

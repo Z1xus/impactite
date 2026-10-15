@@ -221,6 +221,7 @@ const MIGRATIONS: &[&str] = &[
 		property text not null default ''
 	);
 	",
+	"alter table sites add column skip text not null default '';",
 ];
 
 #[derive(Debug, Clone)]

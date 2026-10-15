@@ -4,6 +4,7 @@ export type Site = {
 	timezone: string;
 	retention: number;
 	counter: boolean;
+	skip: string[];
 	role: string;
 };
 export type Team = { id: number; name: string; personal: boolean; role: string; sites: Site[] };
