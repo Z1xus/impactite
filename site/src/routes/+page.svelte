@@ -16,7 +16,9 @@
 	import Code from "#lib/ui/Code.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
+	import Edit from "../lib/Edit.svelte";
 	import Race from "../lib/Race.svelte";
+	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
 
 	const REPO = "https://github.com/z1xus/impactite";
@@ -116,10 +118,22 @@
 
 	// split so the svelte parser does not end the script block
 	const end = "</" + "script>";
-	const PLAUSIBLE = `<script defer data-domain="example.com" src="https://stats.example.com/js/script.js">${end}`;
-	const GOATCOUNTER = `<script data-goatcounter="https://stats.example.com/count" async src="https://stats.example.com/count.js">${end}`;
+	const HOST = "stats.example.com";
+	const PLAUSIBLE = [
+		`<script defer data-domain="example.com" src="https://`,
+		{ from: "plausible.io", to: HOST },
+		`/js/script.js">${end}`
+	];
+	const GOATCOUNTER = [
+		`<script data-goatcounter="https://`,
+		{ from: "example.goatcounter.com", to: HOST },
+		`/count" async src="`,
+		{ from: "//gc.zgo.at", to: `https://${HOST}` },
+		`/count.js">${end}`
+	];
 
 	let speed = $state(false);
+	let swap = $state(false);
 </script>
 
 <div id="top" class="mx-auto flex max-w-6xl flex-col px-6">
@@ -137,7 +151,7 @@
 	</header>
 
 	<section class="grid items-center gap-12 py-20 md:grid-cols-[1fr_auto]">
-		<div class="flex flex-col gap-6">
+		<div class="flex flex-col gap-6" use:appear>
 			<h1 class="font-mono text-[44px] leading-[1.05] tracking-tight md:text-[64px]">
 				Analytics<br />that land.
 			</h1>
@@ -157,10 +171,12 @@
 				>
 			</div>
 		</div>
-		<div class="justify-self-center"><Meteor size={340} pixel={4} /></div>
+		<div class="justify-self-center" use:appear={{ kind: "wipe", delay: 150 }}>
+			<Meteor size={340} pixel={4} />
+		</div>
 	</section>
 
-	<section class="rounded-px border border-line bg-panel">
+	<section class="rounded-px border border-line bg-panel" use:appear={{ kind: "wipe" }}>
 		<div class="grid grid-cols-2 border-b border-line md:grid-cols-4">
 			{#each [["visitors", "9,148", "+38%"], ["pageviews", "21.4k", "+37%"], ["bounce", "54%", "+0pt"], ["duration", "2m 07s", "-2%"]] as [name, value, change], i (name)}
 				<div class="flex flex-col gap-2 p-4 {i ? 'border-l border-line' : ''}">
@@ -184,7 +200,7 @@
 	</section>
 
 	<section id="speed" class="flex flex-col gap-14 py-28" use:reveal={(on) => (speed = on)}>
-		<div class="flex flex-col gap-4">
+		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Measured, side by side.</h2>
 			<p class="max-w-2xl text-[17px] text-dim">
 				A million pageviews sent to each tool through its own tracker endpoint, then the
@@ -193,8 +209,8 @@
 			</p>
 		</div>
 		<div class="grid gap-x-12 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
-			{#each STATS as stat (stat.label)}
-				<div class="flex flex-col gap-4">
+			{#each STATS as stat, i (stat.label)}
+				<div class="flex flex-col gap-4" use:appear={{ delay: (i % 3) * 80 }}>
 					<span class="label">{stat.label}, {stat.better} is better</span>
 					<Race
 						on={speed}
@@ -246,26 +262,31 @@
 		</p>
 	</section>
 
-	<section id="compatible" class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]">
-		<div class="flex flex-col gap-4">
-			<h2 class="font-mono text-[32px] tracking-tight">Change one host.</h2>
+	<section
+		id="compatible"
+		class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]"
+		use:reveal={(on) => (swap = on)}
+	>
+		<div class="flex flex-col gap-4" use:appear>
+			<h2 class="font-mono text-[32px] tracking-tight">Just change the host.</h2>
 			<p class="text-dim">
-				Their scripts, APIs and exports work as they are. Bring your history along.
+				Fully compatible with the Plausible and GoatCounter trackers. Their APIs and exports
+				work as they are, and your history comes along.
 			</p>
 		</div>
 		<div class="flex flex-col gap-4">
 			<span class="label">plausible</span>
-			<Code code={PLAUSIBLE} />
+			<Edit parts={PLAUSIBLE} on={swap} delay={300} />
 			<span class="label">goatcounter</span>
-			<Code code={GOATCOUNTER} />
+			<Edit parts={GOATCOUNTER} on={swap} delay={1900} />
 		</div>
 	</section>
 
 	<section
 		class="grid grid-cols-2 gap-px overflow-hidden rounded-px border border-line bg-line md:grid-cols-4"
 	>
-		{#each FEATURES as feature (feature.label)}
-			<div class="flex items-center gap-3 bg-panel px-4 py-5">
+		{#each FEATURES as feature, i (feature.label)}
+			<div class="flex items-center gap-3 bg-panel px-4 py-5" use:appear={{ delay: i * 40 }}>
 				<Icon svg={feature.icon} size={14} class="text-cyan" />
 				<span class="text-[14px]">{feature.label}</span>
 			</div>
@@ -273,7 +294,7 @@
 	</section>
 
 	<section id="install" class="grid gap-12 py-28 md:grid-cols-[1fr_1.4fr]">
-		<div class="flex flex-col gap-4">
+		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">One binary. Done.</h2>
 			<p class="text-dim">Static builds for Linux, or a scratch Docker image.</p>
 		</div>
