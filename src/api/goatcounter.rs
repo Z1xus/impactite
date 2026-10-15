@@ -19,7 +19,7 @@ use crate::app::Site;
 use crate::export;
 use crate::ingest::{Client, Hit};
 use crate::names;
-use crate::stats::{period, run};
+use crate::stats::{answer, period};
 
 const LIMIT: usize = 100;
 const VIEWS: &str = "pageview";
@@ -146,7 +146,7 @@ fn ask(
 	dimensions: &[&str],
 	filters: Value,
 ) -> Result<Vec<(Vec<String>, u64)>, Fail> {
-	let result = run(
+	let answer = answer(
 		&web.stats,
 		json!({
 			"site_id": site.domain,
@@ -157,18 +157,19 @@ fn ask(
 		}),
 	)
 	.map_err(bad)?;
-	Ok(result["results"]
-		.as_array()
+	Ok(answer
+		.results
 		.into_iter()
-		.flatten()
-		.map(|row| {
-			let dimensions = row["dimensions"]
-				.as_array()
+		.map(|line| {
+			let dimensions = line
+				.dimensions
 				.into_iter()
-				.flatten()
-				.map(|value| value.as_str().unwrap_or_default().to_owned())
+				.map(|value| match value {
+					Value::String(text) => text,
+					_ => String::new(),
+				})
 				.collect();
-			(dimensions, row["metrics"][0].as_u64().unwrap_or_default())
+			(dimensions, line.metrics[0].as_u64().unwrap_or_default())
 		})
 		.collect())
 }
@@ -389,27 +390,45 @@ async fn paths(State(web): State<Arc<Web>>, call: Call) -> Response {
 async fn total(State(web): State<Arc<Web>>, call: Call) -> Response {
 	reply((|| {
 		let (site, from, to) = call.range(&web)?;
-		let range = (from, to);
+		// goatcounter counts a visitor once per page or event a day, then adds those up
 		let sum = |rows: Vec<(Vec<String>, u64)>| rows.iter().map(|(_, count)| count).sum::<u64>();
-		let total = sum(ask(&web, &site, range, &[], json!([]))?);
-		let events = sum(ask(
-			&web,
-			&site,
-			range,
-			&[],
-			json!([["is_not", "event:name", [VIEWS, "engagement"]]]),
-		)?);
-		let stats = days(from, to)
+		let mut pages = HashMap::new();
+		let mut events = HashMap::new();
+		for day in days(from, to) {
+			let range = (day, day);
+			let views = json!([["is", "event:name", [VIEWS]]]);
+			let others = json!([["is_not", "event:name", [VIEWS, "engagement"]]]);
+			pages.insert(
+				day.to_string(),
+				sum(ask(&web, &site, range, &["event:page"], views)?),
+			);
+			events.insert(
+				day.to_string(),
+				sum(ask(&web, &site, range, &["event:name"], others)?),
+			);
+		}
+		let mut hourly: HashMap<&str, [u64; 24]> = HashMap::new();
+		let hours = ask(&web, &site, (from, to), &["time:hour"], json!([]))?;
+		for (dimensions, count) in &hours {
+			if let Some((day, hour)) = dimensions.first().and_then(|label| label.split_once(' ')) {
+				let hour: usize = hour
+					.get(..2)
+					.and_then(|hour| hour.parse().ok())
+					.unwrap_or(0);
+				hourly.entry(day).or_default()[hour.min(23)] = *count;
+			}
+		}
+		let stats: Vec<Value> = days(from, to)
 			.map(|day| {
-				let hourly: Vec<u64> = ask(&web, &site, (day, day), &["time:hour"], json!([]))?
-					.into_iter()
-					.map(|(_, count)| count)
-					.collect();
-				let daily = sum(ask(&web, &site, (day, day), &[], json!([]))?);
-				Ok(json!({ "day": day.to_string(), "hourly": hourly, "daily": daily }))
+				let day = day.to_string();
+				let daily = pages.get(&day).copied().unwrap_or(0) + events.get(&day).copied().unwrap_or(0);
+				json!({ "day": day, "hourly": hourly.get(day.as_str()).copied().unwrap_or_default(), "daily": daily })
 			})
-			.collect::<Result<Vec<_>, Fail>>()?;
-		Ok(json!({ "total": total, "total_events": events, "total_utc": total, "stats": stats }))
+			.collect();
+		let total = pages.values().chain(events.values()).sum::<u64>();
+		Ok(
+			json!({ "total": total, "total_events": events.values().sum::<u64>(), "total_utc": total, "stats": stats }),
+		)
 	})())
 }
 
@@ -427,15 +446,23 @@ async fn hits(State(web): State<Arc<Web>>, call: Call) -> Response {
 		entries.truncate(limit);
 
 		// one query per kind gives every listed path its days
+		let listed = |event: bool| -> Vec<&str> {
+			entries
+				.iter()
+				.filter(|entry| entry.event == event)
+				.map(|entry| entry.path.as_str())
+				.collect()
+		};
 		let mut daily: HashMap<(bool, String), BTreeMap<String, u64>> = HashMap::new();
-		for (event, dimension, filter) in [
-			(false, "event:page", json!([["is", "event:name", [VIEWS]]])),
-			(
-				true,
-				"event:name",
-				json!([["is_not", "event:name", [VIEWS, "engagement"]]]),
-			),
-		] {
+		for (event, dimension) in [(false, "event:page"), (true, "event:name")] {
+			let names = listed(event);
+			if names.is_empty() {
+				continue;
+			}
+			let filter = match event {
+				false => json!([["is", "event:name", [VIEWS]], ["is", "event:page", names]]),
+				true => json!([["is", "event:name", names]]),
+			};
 			for (dimensions, count) in
 				ask(&web, &site, (from, to), &["time:day", dimension], filter)?
 			{

@@ -42,12 +42,12 @@ impl FromRequest<Arc<Web>> for Call {
 			.and_then(|key| web.app.key_owner(key).ok().flatten());
 		let user = match owner {
 			Some(Some(user)) => user,
+			// an instance key acts as the first user, or as nobody on a server without accounts yet
 			Some(None) => web
 				.app
 				.first_user()
-				.ok()
-				.flatten()
-				.ok_or_else(unauthorized)?,
+				.map_err(|_| unauthorized())?
+				.unwrap_or(0),
 			None => return Err(unauthorized()),
 		};
 		let host = request

@@ -9,7 +9,7 @@ use crater::{Db, Dim, Field, Filter, Metrics, Op, Query, Report};
 use jiff::civil::{Date, DateTime};
 use jiff::tz::TimeZone;
 use jiff::{Span, Timestamp, ToSpan};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::accounts::{Web, fail};
@@ -116,6 +116,19 @@ struct Row {
 	metrics: Metrics,
 }
 
+#[derive(Serialize)]
+pub(crate) struct Answer {
+	pub results: Vec<Line>,
+	meta: Value,
+	query: Value,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Line {
+	pub metrics: Vec<Value>,
+	pub dimensions: Vec<Value>,
+}
+
 pub async fn query(
 	State(stats): State<Arc<Stats>>,
 	headers: HeaderMap,
@@ -125,8 +138,8 @@ pub async fn query(
 	if !keyed(&stats.app, &headers, domain) {
 		return unauthorized();
 	}
-	match run(&stats, body.0) {
-		Ok(value) => Json(value).into_response(),
+	match answer(&stats, body.0) {
+		Ok(answer) => Json(answer).into_response(),
 		Err(message) => error(StatusCode::BAD_REQUEST, &message),
 	}
 }
@@ -233,6 +246,10 @@ pub(crate) fn period(
 }
 
 pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
+	serde_json::to_value(answer(stats, raw)?).map_err(|err| err.to_string())
+}
+
+pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 	let request: Request = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let realtime = request.date_range == json!("30m");
 	let day = json!("day");
@@ -280,12 +297,17 @@ pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 		return Err("#/metrics: Expected a minimum of 1 items".into());
 	}
 	let grouping = grouping(&request.dimensions)?;
+	if matches!(grouping, Grouping::TimeField(Time::Hour, _)) && from != to {
+		return Err(
+			"#/dimensions: time:hour with another dimension needs a single day date_range".into(),
+		);
+	}
 	if matches!(
 		grouping,
 		Grouping::Time(Time::Hour) | Grouping::TimeField(Time::Hour, _)
-	) && (from != to || realtime)
+	) && realtime
 	{
-		return Err("#/dimensions: time:hour needs a single day date_range".into());
+		return Err("#/dimensions: time:hour does not go with the 30m date_range".into());
 	}
 	if matches!(grouping, Grouping::Time(Time::Minute)) != realtime
 		&& matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..))
@@ -371,7 +393,33 @@ pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 				true => report.total.visitors,
 				false => run(base_filters.clone(), None, false)?.total.visitors,
 			};
-			(rows(&report, grouping, from, start), base)
+			let rows = match grouping {
+				// reports keep hours for one day, so longer ranges ask day by day
+				Grouping::Time(Time::Hour) if from != to => (day_number(from)..=day_number(to))
+					.zip(from.series(1.day()))
+					.map(|(number, day)| {
+						let report = stats
+							.db
+							.query(&Query {
+								site: site.id,
+								days: number..=number,
+								filters: filtered(),
+								breakdown: None,
+								limit: usize::MAX,
+								daily: false,
+								imports,
+								since: None,
+							})
+							.map_err(|err| err.to_string())?;
+						Ok(rows(&report, grouping, day, start))
+					})
+					.collect::<Result<Vec<_>, String>>()?
+					.into_iter()
+					.flatten()
+					.collect(),
+				_ => rows(&report, grouping, from, start),
+			};
+			(rows, base)
 		}
 	};
 
@@ -420,15 +468,13 @@ pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 		_ => Vec::new(),
 	};
 	time_labels.dedup();
-	let results: Vec<Value> = rows
+	let results: Vec<Line> = rows
 		.into_iter()
 		.skip(request.pagination.offset)
 		.take(request.pagination.limit)
-		.map(|row| {
-			json!({
-				"metrics": metrics.iter().map(|&m| compute(m, &row.metrics)).collect::<Vec<_>>(),
-				"dimensions": row.dimensions,
-			})
+		.map(|row| Line {
+			metrics: metrics.iter().map(|&m| compute(m, &row.metrics)).collect(),
+			dimensions: row.dimensions,
 		})
 		.collect();
 
@@ -445,10 +491,10 @@ pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 			meta["imports_skip_reason"] = json!(skip);
 		}
 	}
-	Ok(json!({
-		"results": results,
-		"meta": meta,
-		"query": {
+	Ok(Answer {
+		results,
+		meta,
+		query: json!({
 			"site_id": site.domain,
 			"metrics": request.metrics,
 			"date_range": [
@@ -460,8 +506,8 @@ pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 			],
 			"dimensions": request.dimensions,
 			"filters": request.filters,
-		},
-	}))
+		}),
+	})
 }
 
 fn combine(mut report: Report, next: Report) -> Report {
@@ -536,13 +582,9 @@ fn rows(report: &Report, grouping: &Grouping, from: Date, start: Option<DateTime
 		Grouping::TimeField(unit, field) => {
 			let mut buckets: BTreeMap<(String, String), Metrics> = BTreeMap::new();
 			for (offset, day) in report.daily.iter().enumerate() {
+				let time = bucket(*unit, from, offset);
 				for (value, metrics) in ranked(field, day) {
-					merge(
-						buckets
-							.entry((bucket(*unit, from, offset), value))
-							.or_default(),
-						&metrics,
-					);
+					merge(buckets.entry((time.clone(), value)).or_default(), &metrics);
 				}
 			}
 			buckets

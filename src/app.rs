@@ -318,7 +318,7 @@ impl App {
 	pub fn sites(&self) -> rusqlite::Result<Vec<Site>> {
 		let conn = self.conn();
 		let mut stmt = conn.prepare(
-			"select id, domain, timezone, created_at from sites where team is not null order by id",
+			"select id, domain, timezone, created_at from sites where domain not like '~%' order by id",
 		)?;
 		stmt.query_map([], site)?.collect()
 	}

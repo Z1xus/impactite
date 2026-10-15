@@ -675,8 +675,10 @@ impl App {
 	}
 
 	pub fn adopt_sites(&self, team: i64) -> rusqlite::Result<()> {
-		self.conn()
-			.execute("update sites set team = ?1 where team is null", [team])?;
+		self.conn().execute(
+			"update sites set team = ?1 where team is null and domain not like '~%'",
+			[team],
+		)?;
 		Ok(())
 	}
 

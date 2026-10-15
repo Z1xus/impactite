@@ -394,7 +394,7 @@ impl App {
 		let conn = self.conn();
 		let mut stmt = conn.prepare(
 			"select id, domain, timezone, created_at from sites
-			where team in (select team from members where user = ?1)
+			where (?1 = 0 and domain not like '~%') or team in (select team from members where user = ?1)
 			or id in (select site from guests where user = ?1)
 			order by domain",
 		)?;
