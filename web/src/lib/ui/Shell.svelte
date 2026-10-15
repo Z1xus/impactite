@@ -75,8 +75,8 @@
 				href={resolve("/")}
 				class="mr-1 flex items-center gap-2 font-mono text-[15px] text-fg"
 			>
-				<img src="/favicon.svg" alt="" width="22" height="22" class="pixelated" />
-				impactite
+				<img src="/favicon.svg" alt="impactite" width="22" height="22" class="pixelated" />
+				<span class="hidden sm:inline">impactite</span>
 			</a>
 			{#if team}
 				<Menu

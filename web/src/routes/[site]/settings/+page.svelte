@@ -872,7 +872,7 @@
 					<Button variant="quiet" onclick={() => (linking = true)}>add link</Button>
 				{/snippet}
 				<div class="flex items-center justify-between gap-4">
-					<span class="text-[14px] text-dim"
+					<span class="min-w-0 text-[14px] [overflow-wrap:anywhere] text-dim"
 						>Anyone can view the dashboard at {url(domain)}</span
 					>
 					<Toggle

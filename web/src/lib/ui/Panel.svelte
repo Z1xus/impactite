@@ -29,19 +29,21 @@
 		: 'border-line'}"
 >
 	<header class="flex h-11 items-center gap-4 border-b border-line px-4">
-		{#each tabs as item (item.key)}
-			<button
-				type="button"
-				class="h-full cursor-pointer border-b label transition-colors duration-100 {tab ===
-				item.key
-					? 'border-cyan text-fg'
-					: 'border-transparent hover:text-fg'}"
-				onclick={() => (tab = item.key)}
-			>
-				{item.label}
-			</button>
-		{/each}
-		<div class="ml-auto flex items-center gap-2">
+		<div class="flex h-full min-w-0 [scrollbar-width:none] items-center gap-4 overflow-x-auto">
+			{#each tabs as item (item.key)}
+				<button
+					type="button"
+					class="h-full shrink-0 cursor-pointer border-b label transition-colors duration-100 {tab ===
+					item.key
+						? 'border-cyan text-fg'
+						: 'border-transparent hover:text-fg'}"
+					onclick={() => (tab = item.key)}
+				>
+					{item.label}
+				</button>
+			{/each}
+		</div>
+		<div class="ml-auto flex shrink-0 items-center gap-2">
 			{#if actions}
 				{@render actions()}
 			{/if}

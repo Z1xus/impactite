@@ -129,8 +129,8 @@
 			impactite
 		</a>
 		<nav class="flex items-center gap-6">
-			<a href="#speed" class="label hover:text-fg">speed</a>
-			<a href="#compatible" class="label hover:text-fg">compatible</a>
+			<a href="#speed" class="hidden label hover:text-fg sm:block">speed</a>
+			<a href="#compatible" class="hidden label hover:text-fg sm:block">compatible</a>
 			<a href="#install" class="label hover:text-fg">install</a>
 			<a href={REPO} class="label hover:text-fg">source</a>
 		</nav>

@@ -61,7 +61,7 @@
 
 <svelte:window onkeydown={keydown} onpointerdown={outside} />
 
-<div class="relative flex items-center gap-2" bind:this={root}>
+<div class="relative flex flex-wrap items-center gap-2" bind:this={root}>
 	{#if back || forward}
 		<div class="flex">
 			<button

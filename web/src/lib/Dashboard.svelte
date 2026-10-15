@@ -889,13 +889,13 @@
 				{/each}
 			</div>
 		{/if}
-		<div class="grid gap-6 md:grid-cols-2" role="list">
+		<div class="grid grid-cols-1 gap-6 md:grid-cols-2" role="list">
 			{#each shown as panel (panel.id)}
 				<div
 					role="listitem"
 					data-panel
 					animate:flip={{ duration: 200 }}
-					class="transition-opacity duration-150 {panel.id === 'goals'
+					class="min-w-0 transition-opacity duration-150 {panel.id === 'goals'
 						? 'md:col-span-2'
 						: ''} {dragging === panel.id ? 'opacity-40' : ''}"
 					draggable={arranging}

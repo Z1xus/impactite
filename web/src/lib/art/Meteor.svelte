@@ -147,6 +147,7 @@
 	bind:this={canvas}
 	class="pixelated"
 	style:width="{size}px"
-	style:height="{size}px"
+	style:max-width="100%"
+	style:aspect-ratio="1"
 	aria-hidden="true"
 ></canvas>

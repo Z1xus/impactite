@@ -38,7 +38,9 @@
 
 <form {onsubmit} class="flex flex-col {inline ? 'gap-2' : 'gap-4'}">
 	{#if inline}
-		<div class="flex items-end gap-2 [&>*:first-child]:flex-1">
+		<div
+			class="flex flex-wrap items-end gap-2 [&>*:first-child]:min-w-48 [&>*:first-child]:flex-1"
+		>
 			{@render children?.()}
 			<Button type="submit" variant={danger ? "danger" : "quiet"} {busy}>{action}</Button>
 		</div>

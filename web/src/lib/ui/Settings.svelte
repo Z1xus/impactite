@@ -29,8 +29,10 @@
 	<div class="flex min-h-9 items-center gap-3">
 		{@render title()}
 	</div>
-	<div class="grid items-start gap-8 lg:grid-cols-[11rem_minmax(0,1fr)]">
-		<nav class="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col">
+	<div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-[11rem_minmax(0,1fr)]">
+		<nav
+			class="flex min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col"
+		>
 			{#each sections as section (section.id)}
 				<a
 					href="#{section.id}"
