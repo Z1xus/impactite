@@ -886,7 +886,7 @@
 				pick={(i) => navigate((params) => params.set("metric", METRICS[i].key))}
 			/>
 			<div class="px-4 pt-3 pb-5">
-				<div class="mb-2 flex items-center justify-end gap-2">
+				<div class="flex items-center justify-end gap-2 {layout.table ? '' : 'mb-2'}">
 					{#if dates && dates.choices.length > 1}
 						<Select
 							align="right"
@@ -910,7 +910,7 @@
 					/>
 				</div>
 				{#if layout.table}
-					<div class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto pr-2">
+					<div class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto">
 						<Table
 							columns={tableMetrics.map((item) => ({
 								key: item.key,
