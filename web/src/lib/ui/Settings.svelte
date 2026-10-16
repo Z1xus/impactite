@@ -13,8 +13,31 @@
 	} = $props();
 
 	let active = $state("");
-	// a clicked section stays marked until the reader scrolls on their own
+	// a section picked by link or click stays in view and marked until the reader scrolls on their own
 	let pinned = false;
+	let content = $state<HTMLElement>();
+
+	function hold() {
+		if (pinned) document.getElementById(active)?.scrollIntoView({ block: "start" });
+	}
+
+	let arrived = false;
+	$effect(() => {
+		const id = decodeURIComponent(location.hash.slice(1));
+		if (arrived || !sections.some((section) => section.id === id)) return;
+		arrived = true;
+		active = id;
+		pinned = true;
+		hold();
+	});
+
+	// sections above the picked one grow as their data loads
+	$effect(() => {
+		if (!content) return;
+		const observer = new ResizeObserver(hold);
+		observer.observe(content);
+		return () => observer.disconnect();
+	});
 
 	function track() {
 		if (pinned) return;
@@ -83,7 +106,7 @@
 				</a>
 			{/each}
 		</nav>
-		<div class="flex max-w-3xl flex-col gap-6">
+		<div class="flex max-w-3xl flex-col gap-6" bind:this={content}>
 			{@render children()}
 		</div>
 	</div>

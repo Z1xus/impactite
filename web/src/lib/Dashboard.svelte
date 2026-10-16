@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 	import { flip } from "svelte/animate";
 	import { clock } from "#lib/display.svelte.ts";
@@ -31,6 +32,7 @@
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
 	import Details from "#lib/Details.svelte";
 	import FilterDialog from "#lib/FilterDialog.svelte";
+	import NewEvents from "#lib/NewEvents.svelte";
 	import Waiting from "#lib/Waiting.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
@@ -85,12 +87,13 @@
 	const editable = $derived(
 		!readonly && ["owner", "admin", "editor"].includes(member?.role ?? "")
 	);
-	let newEvents = $state(0);
+	let newEvents = $state<{ name: string; count: number; revenue: boolean }[]>([]);
+	let reviewing = $state(false);
 	$effect(() => {
 		if (!editable || domain.startsWith("team:")) return;
-		api<{ events: unknown[] }>(`/api/app/sites/${domain}/goals/suggestions`)
-			.then((r) => (newEvents = r.events.length))
-			.catch(() => (newEvents = 0));
+		api<{ events: typeof newEvents }>(`/api/app/sites/${domain}/goals/suggestions`)
+			.then((r) => (newEvents = r.events))
+			.catch(() => (newEvents = []));
 	});
 	// `team:<id>` shows every site of the team added up
 	const combined = $derived(domain.startsWith("team:"));
@@ -259,18 +262,22 @@
 		if (goal.length && !goal.some((item) => item.key === tabs.goals)) tabs.goals = goal[0].key;
 	});
 
-	$effect(() => {
-		// the all sites view has no goals, funnels, titles or segments of its own
-		if (combined) return;
-		api<Record<string, string>>(`/api/app/sites/${domain}/titles`)
-			.then((result) => (titles = result))
-			.catch(() => (titles = {}));
+	function loadGoals() {
 		api<{ goals: { name: string; currency: string }[] }>(`/api/app/sites/${domain}/goals`)
 			.then((result) => {
 				goals = result.goals.map((goal) => goal.name);
 				revenue = result.goals.some((goal) => goal.currency);
 			})
 			.catch(() => (goals = []));
+	}
+
+	$effect(() => {
+		// the all sites view has no goals, funnels, titles or segments of its own
+		if (combined) return;
+		api<Record<string, string>>(`/api/app/sites/${domain}/titles`)
+			.then((result) => (titles = result))
+			.catch(() => (titles = {}));
+		untrack(loadGoals);
 		api<{ funnels: { id: number; name: string }[] }>(`/api/app/sites/${domain}/funnels`)
 			.then((result) => {
 				funnels = result.funnels;
@@ -655,6 +662,17 @@
 	</Form>
 </Dialog>
 
+<Dialog title="new events" bind:open={reviewing}>
+	<NewEvents
+		{domain}
+		bind:events={newEvents}
+		changed={() => {
+			loadGoals();
+			if (newEvents.length === 0) reviewing = false;
+		}}
+	/>
+</Dialog>
+
 <Dialog
 	wide
 	title={details?.title ?? ""}
@@ -726,22 +744,12 @@
 		{/if}
 		{#if editable}
 			<a
-				href="{resolve('/[site]/settings', { site: domain })}{newEvents ? '#goals' : ''}"
-				class="relative grid h-9 w-9 place-items-center rounded-px border border-edge text-dim transition-colors duration-100 hover:border-dim hover:text-fg"
-				aria-label={newEvents
-					? `site settings, ${newEvents} new ${newEvents === 1 ? "event" : "events"}`
-					: "site settings"}
-				title={newEvents
-					? `${newEvents} new ${newEvents === 1 ? "event" : "events"} to review`
-					: "site settings"}
+				href={resolve("/[site]/settings", { site: domain })}
+				class="grid h-9 w-9 place-items-center rounded-px border border-edge text-dim transition-colors duration-100 hover:border-dim hover:text-fg"
+				aria-label="site settings"
+				title="site settings"
 			>
 				<Icon svg={sliders} size={14} />
-				{#if newEvents}
-					<span
-						class="absolute -top-1.5 -right-1.5 grid h-4 min-w-4 place-items-center rounded-px bg-cyan px-1 font-mono text-[10px] text-ink"
-						>{newEvents}</span
-					>
-				{/if}
 			</a>
 		{/if}
 		{#each filters as filter (encodeFilter(filter))}
@@ -821,6 +829,19 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if editable && !combined && !empty && newEvents.length}
+		<div
+			class="flex flex-wrap items-center justify-between gap-4 rounded-px border border-line bg-panel py-2 pr-2 pl-4"
+		>
+			<span class="text-[14px] text-dim">
+				{newEvents.length === 1
+					? `Your site sends ${newEvents[0].name} events, but there's no goal for them yet.`
+					: `Your site sends ${newEvents.length} kinds of events that have no goal yet.`}
+			</span>
+			<Button variant="quiet" onclick={() => (reviewing = true)}>review</Button>
+		</div>
+	{/if}
 
 	{#if empty && !combined}
 		<Waiting
