@@ -105,29 +105,36 @@
 		const typed = search.trim();
 		const keys = columns.map((column) => column.key);
 		const limit = pages * PAGE;
+		// goals have no text filter, and country and language names only exist here
+		const local = ["event:goal", "visit:country", "visit:language"].includes(dim);
 		const body = {
 			metrics: keys,
 			date_range: range,
 			dimensions: [dim],
-			filters: typed ? [...filters, ["contains", dim, [typed]]] : filters,
+			filters: typed && !local ? [...filters, ["contains", dim, [typed]]] : filters,
 			order_by: [sort],
-			pagination: { limit: limit + 1 }
+			pagination: { limit: local ? 1000 : limit + 1 }
 		};
 		let stale = false;
 		const timer = setTimeout(
 			() => {
 				query(domain, body, imports).then((result) => {
 					if (stale) return;
-					more = result.results.length > limit;
-					rows = result.results.slice(0, limit).map((row) => {
-						const value = row.dimensions[0];
-						return {
-							key: value,
-							label: display(dim, value),
-							...(iconic && { icon: icon(dim, value) }),
-							values: row.metrics as (number | null)[]
-						};
-					});
+					const all = result.results
+						.map((row) => {
+							const value = row.dimensions[0];
+							return {
+								key: value,
+								label: display(dim, value),
+								...(iconic && { icon: icon(dim, value) }),
+								values: row.metrics as (number | null)[]
+							};
+						})
+						.filter(
+							(row) => !local || row.label.toLowerCase().includes(typed.toLowerCase())
+						);
+					more = all.length > limit;
+					rows = all.slice(0, limit);
 				});
 			},
 			typed ? 150 : 0
