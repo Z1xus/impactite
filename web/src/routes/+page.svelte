@@ -1,5 +1,4 @@
 <script lang="ts">
-	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
@@ -76,12 +75,27 @@
 	</Form>
 </Dialog>
 
+{#snippet total(values: number[] | undefined)}
+	<span class="flex h-[22px] items-baseline gap-2">
+		{#if values}
+			<Num
+				value={values.reduce((sum, value) => sum + value, 0)}
+				format={compact}
+				class="text-num text-fg"
+			/>
+			<span class="label">visitors in 28 days</span>
+		{:else}
+			<span class="h-[22px] w-16 rounded-px bg-line"></span>
+		{/if}
+	</span>
+{/snippet}
+
 <Shell>
 	<div class="flex flex-col gap-6">
 		<div class="flex min-h-9 items-center justify-between gap-4">
 			<Title>{team?.personal ? "Personal" : (team?.name ?? "")}</Title>
 			{#if editable}
-				<Button onclick={() => (adding = true)}>add site</Button>
+				<Button onclick={() => (adding = true)}>Add site</Button>
 			{/if}
 		</div>
 		{#if team && team.sites.length}
@@ -91,21 +105,10 @@
 					<li>
 						<a
 							href={resolve("/all")}
-							class="flex flex-col gap-5 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
+							class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
 						>
-							<div class="flex items-center justify-between gap-4">
-								<span class="flex items-center gap-2.5 text-fg">
-									<Glyph spec={{ kind: "pixel", svg: grid }} />
-									all sites
-								</span>
-								{#if values}
-									<Num
-										value={values.reduce((sum, value) => sum + value, 0)}
-										format={compact}
-										class="text-label text-dim"
-									/>
-								{/if}
-							</div>
+							<span class="flex h-5 items-center text-fg">All sites</span>
+							{@render total(values)}
 							<Chart
 								values={values ?? []}
 								axes={false}
@@ -120,24 +123,16 @@
 					<li>
 						<a
 							href={resolve("/[site]", { site: site.domain })}
-							class="flex flex-col gap-5 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
+							class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
 						>
-							<div class="flex items-center justify-between gap-4">
-								<span class="flex min-w-0 items-center gap-2.5">
-									<Glyph
-										spec={icon("event:hostname", site.domain)}
-										fallback={site.domain}
-									/>
-									<span class="truncate text-fg">{site.domain}</span>
-								</span>
-								{#if values}
-									<Num
-										value={values.reduce((sum, value) => sum + value, 0)}
-										format={compact}
-										class="text-label text-dim"
-									/>
-								{/if}
-							</div>
+							<span class="flex h-5 min-w-0 items-center gap-2.5">
+								<Glyph
+									spec={icon("event:hostname", site.domain)}
+									fallback={site.domain}
+								/>
+								<span class="truncate text-fg">{site.domain}</span>
+							</span>
+							{@render total(values)}
 							<Chart
 								values={values ?? []}
 								axes={false}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import calendar from "pixelarticons/svg/calendar.svg?raw";
 	import left from "pixelarticons/svg/chevron-left.svg?raw";
 	import right from "pixelarticons/svg/chevron-right.svg?raw";
@@ -13,18 +14,19 @@
 		$props();
 
 	const COMPARE = [
-		{ key: "off", label: "no comparison" },
-		{ key: "previous", label: "previous period" },
-		{ key: "year", label: "year over year" },
-		{ key: "custom", label: "custom comparison" }
+		{ key: "off", label: "No comparison" },
+		{ key: "previous", label: "Previous period" },
+		{ key: "year", label: "Year over year" },
+		{ key: "custom", label: "Custom comparison" }
 	];
 	const CLEAR = { period: null, date: null, from: null, to: null, interval: null };
 
-	let picking = $state<"range" | "compare" | null>(null);
+	let picking = $state<"menu" | "range" | "compare" | null>(null);
 	let root: HTMLDivElement;
 
 	const back = $derived(step(view, -1));
 	const forward = $derived(step(view, 1));
+	const rangeLabel = $derived(label(view));
 	const selected = $derived(
 		PRESETS.find((item) => {
 			const params = preset(item.key, view);
@@ -34,7 +36,10 @@
 
 	function choose(key: string) {
 		if (key === "custom") picking = "range";
-		else go({ ...CLEAR, ...preset(key, view) });
+		else {
+			picking = null;
+			go({ ...CLEAR, ...preset(key, view) });
+		}
 	}
 
 	function compare(key: string) {
@@ -87,35 +92,64 @@
 			</button>
 		</div>
 	{/if}
-	<Select
-		align="right"
-		value={selected}
-		text={label(view)}
-		icon={calendar}
-		options={[
-			...PRESETS.map(({ key, label }) => ({ key, label })),
-			{ key: "custom", label: "custom range" }
-		]}
-		pick={choose}
-	/>
-	{#if view.period !== "all" && view.period !== "realtime"}
-		<Select align="right" value={view.compare} options={COMPARE} pick={compare} />
-		{#if view.compare === "previous" || view.compare === "year"}
-			<Checks
-				bind:value={
-					() => (view.weekday ? ["weekday"] : []),
-					(value) => go({ match: value.length ? "weekday" : null })
-				}
-				options={[{ key: "weekday", label: "match weekday" }]}
-			/>
-		{/if}
+	<button
+		type="button"
+		aria-expanded={picking !== null}
+		aria-label="Date range"
+		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-2 font-sans text-[14px] text-fg hover:bg-raised"
+		onclick={() => (picking = picking ? null : "menu")}
+	>
+		<Icon svg={calendar} size={14} class="text-dim" />
+		{rangeLabel.charAt(0).toUpperCase() + rangeLabel.slice(1)}
+		<Icon svg={chevron} size={12} class="text-dim" />
+	</button>
+	{#if view.compare !== "off" && view.period !== "all" && view.period !== "realtime"}
+		<span class="hidden text-[12px] text-dim xl:inline"
+			>vs {COMPARE.find((item) => item.key === view.compare)?.label}</span
+		>
 	{/if}
 	{#if picking}
 		<div
 			{@attach fit}
 			class="absolute top-full right-0 z-30 mt-1 rounded-px border border-edge bg-raised p-3"
 		>
-			{#if picking === "range"}
+			{#if picking === "menu"}
+				<div class="flex min-w-60 flex-col">
+					{#each [...PRESETS, { key: "custom", label: "Custom range", hotkey: "c" }] as item (item.key)}
+						{#if ["7d", "month", "all"].includes(item.key)}
+							<span class="my-1 border-t border-line"></span>
+						{/if}
+						<button
+							type="button"
+							class="flex h-8 cursor-pointer items-center justify-between gap-6 rounded-px px-3 text-left text-[14px] hover:bg-line {selected ===
+							item.key
+								? 'text-cyan'
+								: 'text-fg'}"
+							onclick={() => choose(item.key)}
+						>
+							{item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+							{#if item.hotkey}
+								<kbd class="label text-faint">{item.hotkey}</kbd>
+							{/if}
+						</button>
+					{/each}
+				</div>
+				{#if view.period !== "all" && view.period !== "realtime"}
+					<div class="mt-3 flex flex-col gap-3 border-t border-line pt-3">
+						<span class="text-[13px] text-dim">Compare with</span>
+						<Select value={view.compare} options={COMPARE} pick={compare} data />
+						{#if view.compare === "previous" || view.compare === "year"}
+							<Checks
+								bind:value={
+									() => (view.weekday ? ["weekday"] : []),
+									(value) => go({ match: value.length ? "weekday" : null })
+								}
+								options={[{ key: "weekday", label: "match weekday" }]}
+							/>
+						{/if}
+					</div>
+				{/if}
+			{:else if picking === "range"}
 				<Calendar
 					from={view.period === "custom" ? view.from : view.today}
 					to={view.period === "custom" ? view.to : view.today}

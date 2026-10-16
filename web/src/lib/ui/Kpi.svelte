@@ -8,6 +8,7 @@
 		format,
 		active = false,
 		unit = "%",
+		before,
 		pick
 	}: {
 		label: string;
@@ -16,6 +17,7 @@
 		format: (value: number) => string;
 		active?: boolean;
 		unit?: string;
+		before?: string;
 		pick: () => void;
 	} = $props();
 </script>
@@ -25,6 +27,7 @@
 	class="flex cursor-pointer flex-col gap-3 border-b px-4 py-4 text-left transition-colors duration-100 {active
 		? 'border-cyan'
 		: 'border-transparent hover:border-edge'}"
+	title={before && `Previous period: ${before}`}
 	onclick={pick}
 >
 	<span class="label {active ? 'text-cyan' : ''}">{label}</span>
@@ -33,9 +36,15 @@
 	{:else}
 		<Num {value} {format} class="text-num text-fg" />
 	{/if}
-	<span class="min-h-[11px] label {change ? (change.good ? 'text-cyan' : 'text-bad') : ''}">
+	<span
+		class="min-h-[11px] label {!change || change.change === 0
+			? 'text-faint'
+			: change.good
+				? 'text-cyan'
+				: 'text-bad'}"
+	>
 		{#if change}
-			{change.change >= 0 ? "+" : ""}{change.change}{unit}
+			{change.change > 0 ? "+" : ""}{change.change}{unit}
 		{/if}
 	</span>
 </button>

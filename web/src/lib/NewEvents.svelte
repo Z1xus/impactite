@@ -80,8 +80,8 @@
 								class="h-9 w-16 rounded-px border border-edge bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
 							/>
 						{/if}
-						<Button variant="quiet" onclick={() => add(event)}>add goal</Button>
-						<Button variant="plain" onclick={() => ignore(event.name)}>ignore</Button>
+						<Button variant="quiet" onclick={() => add(event)}>Add goal</Button>
+						<Button variant="plain" onclick={() => ignore(event.name)}>Ignore</Button>
 					</div>
 				{/if}
 			{/snippet}

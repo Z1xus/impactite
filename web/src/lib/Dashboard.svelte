@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { untrack } from "svelte";
-	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 	import { flip } from "svelte/animate";
 	import { clock } from "#lib/display.svelte.ts";
 	import { goto } from "$app/navigation";
@@ -9,9 +8,11 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import WorldMap from "#lib/dither/Map.svelte";
 	import { api } from "#lib/api.ts";
+	import { save } from "#lib/download.ts";
+	import { attempt } from "#lib/toast.svelte.ts";
 	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
-	import downloadIcon from "pixelarticons/svg/download.svg?raw";
+	import more from "pixelarticons/svg/more-vertical.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import { currentTeam, session } from "#lib/session.svelte.ts";
@@ -34,10 +35,11 @@
 	import NewEvents from "#lib/NewEvents.svelte";
 	import Waiting from "#lib/Waiting.svelte";
 	import Button from "#lib/ui/Button.svelte";
+	import AddPanel from "#lib/ui/AddPanel.svelte";
+	import Toggle from "#lib/ui/Toggle.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";
 	import Table from "#lib/ui/Table.svelte";
-	import Toggle from "#lib/ui/Toggle.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
@@ -79,9 +81,7 @@
 	const combined = $derived(domain.startsWith("team:"));
 	const team = $derived(currentTeam());
 	const sites = $derived([
-		...((team?.sites.length ?? 0) > 1
-			? [{ key: "all", label: "all sites", glyph: { kind: "pixel" as const, svg: grid } }]
-			: []),
+		...((team?.sites.length ?? 0) > 1 ? [{ key: "all", label: "All sites" }] : []),
 		...(session.me?.teams.flatMap((team) => team.sites) ?? []).map((site) => ({
 			key: site.domain,
 			label: site.domain,
@@ -123,15 +123,19 @@
 	});
 
 	let hasImports = $state(false);
-	let quiet = $state(false);
-	let empty = $state(false);
+	let empty = $state<boolean | null>(null);
 	let version = $state(0);
 
 	$effect(() => {
-		if (!quiet) return;
+		if (readonly || combined) {
+			empty = false;
+			return;
+		}
+		let stale = false;
 		query(domain, { metrics: ["events"], date_range: "all" }).then((result) => {
-			empty = !result.results[0]?.metrics[0];
+			if (!stale) empty = !result.results[0]?.metrics[0];
 		});
+		return () => (stale = true);
 	});
 
 	let totals = $state<number[] | null>(null);
@@ -154,6 +158,7 @@
 	let layout = $state<Layout>({ order: [], hidden: [], table: false });
 	let arranging = $state(false);
 	let dragging = $state<string | null>(null);
+	let dropTarget = $state<string | null>(null);
 
 	$effect(() => {
 		if (readonly) return;
@@ -269,7 +274,7 @@
 
 	$effect(() => {
 		void version;
-		if (!dates) return;
+		if (!dates || empty !== false) return;
 		const range = dates.current === "30m" ? "day" : dates.current;
 		api<string[]>("/api/app/props", { site_id: domain, date_range: range }).then((keys) => {
 			propKeys = keys;
@@ -279,28 +284,43 @@
 	let ranked = $state<Record<string, Ranked>>({});
 	let loading = $state<Record<string, boolean>>({});
 
-	async function download(format: string) {
-		if (!dates) return;
-		const range = dates.current === "30m" ? "day" : dates.current;
-		const res = await fetch("/api/app/export", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
-				site_id: domain,
-				date_range: range,
-				filters: toQueryFilters(filters),
-				format
-			})
+	const downloadReport = () =>
+		attempt(async () => {
+			if (!dates) return;
+			const site = domain;
+			const range = dates.current;
+			const grain = dates.grain;
+			const result = await query(
+				site,
+				{
+					metrics: METRICS.map((item) => item.key),
+					date_range: range,
+					dimensions: [grain],
+					filters: toQueryFilters(filters)
+				},
+				withImports
+			);
+			const rows = [
+				[
+					grain.slice(5),
+					"visitors",
+					"visits",
+					"pageviews",
+					"bounce_rate_percent",
+					"visit_duration_seconds",
+					"views_per_visit"
+				],
+				...result.results.map((row) => [...row.dimensions, ...row.metrics])
+			];
+			const csv =
+				rows
+					.map((row) =>
+						row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")
+					)
+					.join("\r\n") + "\r\n";
+			const period = Array.isArray(range) ? range.join("_") : range;
+			save(`${site}_${period}.csv`, new Blob([csv], { type: "text/csv;charset=utf-8" }));
 		});
-		if (!res.ok) return;
-		const name =
-			res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "export.zip";
-		const link = document.createElement("a");
-		link.href = URL.createObjectURL(await res.blob());
-		link.download = name;
-		link.click();
-		URL.revokeObjectURL(link.href);
-	}
 
 	function go(change: Record<string, string | null>) {
 		navigate((params) => {
@@ -349,32 +369,56 @@
 	});
 	const shown = $derived(arranged.filter((panel) => !layout.hidden.includes(panel.id)));
 
-	// panels reorder live while dragged over, the order saves on drop
-	function dragOver(event: DragEvent, id: string) {
+	function dragOver(event: DragEvent) {
 		if (!dragging) return;
 		event.preventDefault();
-		if (dragging === id) return;
+		if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+		const grid = event.currentTarget as HTMLElement;
+		let closest: string | null = null;
+		let distance = Infinity;
+		for (const panel of grid.querySelectorAll<HTMLElement>(":scope > [data-panel]")) {
+			const box = panel.getBoundingClientRect();
+			const dx = Math.max(box.left - event.clientX, 0, event.clientX - box.right);
+			const dy = Math.max(box.top - event.clientY, 0, event.clientY - box.bottom);
+			const next = dx * dx + dy * dy;
+			if (next < distance) {
+				distance = next;
+				closest = panel.dataset.panel ?? null;
+			}
+		}
+		dropTarget = closest === dragging ? null : closest;
+	}
+
+	function drop(event: DragEvent) {
+		if (!dragging) return;
+		dragOver(event);
+		if (!dropTarget) return dragEnd();
 		const ids = arranged.map((panel) => panel.id).filter((item) => item !== dragging);
 		ids.splice(
-			ids.indexOf(id) +
-				(shown.findIndex((panel) => panel.id === dragging) <
-				shown.findIndex((panel) => panel.id === id)
+			ids.indexOf(dropTarget) +
+				(arranged.findIndex((panel) => panel.id === dragging) <
+				arranged.findIndex((panel) => panel.id === dropTarget)
 					? 1
 					: 0),
 			0,
 			dragging
 		);
-		layout.order = ids;
+		saveLayout({ ...layout, order: ids });
+		dragEnd();
 	}
 
 	function dragStart(event: DragEvent, id: string) {
 		dragging = id;
-		if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+		dropTarget = null;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = "move";
+			event.dataTransfer.setData("text/plain", id);
+		}
 	}
 
 	function dragEnd() {
 		dragging = null;
-		saveLayout({ ...layout });
+		dropTarget = null;
 	}
 
 	const hidePanel = (id: string) => saveLayout({ ...layout, hidden: [...layout.hidden, id] });
@@ -406,6 +450,7 @@
 	});
 
 	function pickSegment(key: string) {
+		if (readonly || combined) return;
 		if (key === "save") {
 			saving = true;
 			return;
@@ -418,6 +463,7 @@
 	}
 
 	async function saveSegment() {
+		if (readonly || combined) return;
 		segments = (
 			await api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`, {
 				name: segmentName,
@@ -463,7 +509,7 @@
 
 	$effect(() => {
 		void version;
-		if (!dates) return;
+		if (!dates || empty !== false) return;
 		const where = toQueryFilters(filters);
 		const keys = METRICS.map((item) => item.key);
 		let stale = false;
@@ -487,7 +533,6 @@
 				})
 		]).then(([now, before, line, previousLine]) => {
 			if (stale) return;
-			quiet = !now.results[0]?.metrics[0];
 			hasImports =
 				!withImports || (now.meta?.imports_skip_reason ?? "") !== "no_imported_data";
 			totals = now.results[0]?.metrics ?? null;
@@ -507,7 +552,7 @@
 
 	$effect(() => {
 		void version;
-		if (!dates) return;
+		if (!dates || empty !== false) return;
 		const where = toQueryFilters(filters);
 		const cleanups: (() => void)[] = [];
 		terms = false;
@@ -558,7 +603,8 @@
 							...((dim === "event:goal" || converting) && {
 								extra: `${row.metrics[1]}%`
 							}),
-							...(PAGES.has(dim) &&
+							...(!combined &&
+								PAGES.has(dim) &&
 								value.startsWith("/") && { href: `https://${domain}${value}` }),
 							...(ICONIC.has(dim) && {
 								icon: icon(dim, value),
@@ -570,6 +616,7 @@
 				});
 			const google = filters.find((item) => item.dim === "visit:source");
 			if (
+				!combined &&
 				tabs[panel.id] === "visit:source" &&
 				google?.op === "is" &&
 				google.values.length === 1 &&
@@ -718,99 +765,98 @@
 				value={combined ? "all" : domain}
 				options={sites}
 				data
+				plain
 				pick={(key) =>
 					goto(key === "all" ? resolve("/all") : resolve("/[site]", { site: key }))}
-			/>
-		{/if}
-		{#if editable}
-			<a
-				href={resolve("/[site]/settings", { site: domain })}
-				class="grid h-9 w-9 place-items-center rounded-px border border-edge text-dim transition-colors duration-100 hover:border-dim hover:text-fg"
-				aria-label="site settings"
-				title="site settings"
 			>
-				<Icon svg={sliders} size={14} />
-			</a>
+				{#snippet footer()}
+					{#if editable}
+						<a
+							href={resolve("/[site]/settings/[[section]]", { site: domain })}
+							class="flex h-9 items-center gap-2 px-3 text-[14px] text-dim hover:bg-line hover:text-fg"
+							><Icon svg={sliders} size={14} />Site settings</a
+						>
+					{/if}
+				{/snippet}
+			</Select>
 		{/if}
-		{#each filters as filter (encodeFilter(filter))}
-			<Chip
-				label={filter.op === "is"
-					? dimLabel(filter.dim)
-					: `${dimLabel(filter.dim)} ${OPS.find((op) => op.key === filter.op)?.label}`}
-				value={filter.values.map((value) => display(filter.dim, value)).join(" or ")}
-				icon={ICONIC.has(filter.dim) && filter.values.length === 1
-					? icon(filter.dim, filter.values[0])
-					: undefined}
-				edit={() => (editing = filter)}
-				remove={() => removeFilter(filter.dim)}
-			/>
-		{/each}
-		{#if !readonly && !empty && (segments.length || filters.length)}
-			<Select
-				value={active ? String(active.id) : ""}
-				text={active?.name ?? "segments"}
-				icon={bookmark}
-				data
-				options={[
-					...segments.map((segment) => ({
-						key: String(segment.id),
-						label: segment.name
-					})),
-					...(filters.length && !active
-						? [{ key: "save", label: "save as segment" }]
-						: [])
-				]}
-				pick={pickSegment}
-			/>
-		{/if}
-		{#if !empty}
-			<Button variant="quiet" onclick={() => (editing = null)}>
-				<Icon svg={funnel} size={12} />
-				filter
-			</Button>
-		{/if}
-		<div class="ml-auto flex flex-wrap items-center gap-3">
-			{#if hasImports}
-				<Checks
-					bind:value={
-						() => (withImports ? ["imports"] : []),
-						(value) =>
-							navigate((params) =>
-								value.length ? params.delete("imports") : params.set("imports", "0")
-							)
-					}
-					options={[{ key: "imports", label: "imported data" }]}
-				/>
+		{#if empty === false}<Live site={domain} />{/if}
+		<div class="ml-auto flex items-center gap-2">
+			{#if empty === false}
+				<Button variant="text" onclick={() => (editing = null)}
+					><Icon svg={funnel} size={14} />Filter</Button
+				>
 			{/if}
-			<Live site={domain} />
-			{#if view && !empty}
+			{#if view && empty === false}
+				<Period {view} {go} />
 				{#if !readonly}
-					<Button
-						variant={arranging ? "primary" : "quiet"}
-						onclick={() => (arranging = !arranging)}
-					>
-						{arranging ? "done" : "edit layout"}
-					</Button>
+					{#if arranging}<Button variant="quiet" onclick={() => (arranging = false)}
+							>Done</Button
+						>{/if}
 					<Menu
-						label="export"
-						icon={downloadIcon}
+						label="Dashboard options"
+						icon={more}
+						plain
+						iconOnly
 						align="right"
 						items={[
-							{
-								label: "impactite archive",
-								onclick: () => download("impactite")
-							},
-							{ label: "plausible csv", onclick: () => download("plausible") },
-							{ label: "goatcounter csv", onclick: () => download("goatcounter") }
+							{ label: "Edit layout", onclick: () => (arranging = true) },
+							...(hasImports
+								? [
+										{
+											label: "Include imported data",
+											current: withImports,
+											onclick: () => go({ imports: withImports ? "0" : null })
+										}
+									]
+								: []),
+							"divider",
+							{ label: "Download CSV", onclick: downloadReport }
 						]}
 					/>
 				{/if}
-				<Period {view} {go} />
 			{/if}
 		</div>
 	</div>
 
-	{#if editable && !combined && !empty && newEvents.length}
+	{#if filters.length || (!readonly && !combined && empty === false && segments.length)}
+		<div class="flex flex-wrap items-center gap-2">
+			{#each filters as filter (encodeFilter(filter))}
+				<Chip
+					label={filter.op === "is"
+						? dimLabel(filter.dim)
+						: `${dimLabel(filter.dim)} ${OPS.find((op) => op.key === filter.op)?.label}`}
+					value={filter.values.map((value) => display(filter.dim, value)).join(" or ")}
+					icon={ICONIC.has(filter.dim) && filter.values.length === 1
+						? icon(filter.dim, filter.values[0])
+						: undefined}
+					edit={() => (editing = filter)}
+					remove={() => removeFilter(filter.dim)}
+				/>
+			{/each}
+			{#if !readonly && !combined && empty === false && (segments.length || filters.length)}
+				<Select
+					value={active ? String(active.id) : ""}
+					text={active?.name ?? "Segments"}
+					plain
+					icon={bookmark}
+					data
+					options={[
+						...segments.map((segment) => ({
+							key: String(segment.id),
+							label: segment.name
+						})),
+						...(filters.length && !active
+							? [{ key: "save", label: "Save as segment" }]
+							: [])
+					]}
+					pick={pickSegment}
+				/>
+			{/if}
+		</div>
+	{/if}
+
+	{#if editable && !combined && empty === false && newEvents.length}
 		<div
 			class="flex flex-wrap items-center justify-between gap-4 rounded-px border border-line bg-panel py-2 pr-2 pl-4"
 		>
@@ -819,7 +865,7 @@
 					? `Your site sends ${newEvents[0].name} events, but there's no goal for them yet.`
 					: `Your site sends ${newEvents.length} kinds of events that have no goal yet.`}
 			</span>
-			<Button variant="quiet" onclick={() => (reviewing = true)}>review</Button>
+			<Button variant="quiet" onclick={() => (reviewing = true)}>Review</Button>
 		</div>
 	{/if}
 
@@ -827,11 +873,11 @@
 		<Waiting
 			{domain}
 			landed={() => {
-				empty = quiet = false;
+				empty = false;
 				version++;
 			}}
 		/>
-	{:else}
+	{:else if empty === false}
 		<section class="rounded-px border border-line bg-panel">
 			<Kpis
 				{totals}
@@ -844,20 +890,22 @@
 					{#if dates && dates.choices.length > 1}
 						<Select
 							align="right"
+							plain
 							value={dates.interval}
 							options={dates.choices.map((key) => ({ key, label: key }))}
 							pick={(key) => go({ interval: key })}
 						/>
 					{/if}
 					<Toggle
+						plain
 						bind:value={
 							() => (layout.table ? "table" : "chart"),
 							(view: "chart" | "table") =>
 								saveLayout({ ...layout, table: view === "table" })
 						}
 						options={[
-							{ key: "chart", label: "chart" },
-							{ key: "table", label: "table" }
+							{ key: "chart", label: "Chart" },
+							{ key: "table", label: "Table" }
 						]}
 					/>
 				</div>
@@ -890,105 +938,117 @@
 			</div>
 		</section>
 
-		{#if arranging}
-			<div class="flex flex-wrap items-center gap-2">
-				<span class="text-[14px] text-dim"
-					>Drag panels to reorder them. Close the ones you don't need.</span
-				>
-				{#each arranged.filter( (panel) => layout.hidden.includes(panel.id) ) as panel (panel.id)}
-					<Button
-						variant="quiet"
-						onclick={() =>
-							saveLayout({
-								...layout,
-								hidden: layout.hidden.filter((id) => id !== panel.id)
-							})}
-					>
-						show {panel.tabs.map((tab) => tab.label).join(", ")}
-					</Button>
-				{/each}
-			</div>
-		{/if}
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-2" role="list">
-			{#each shown as panel (panel.id)}
+		<div
+			class="grid grid-cols-1 gap-6 md:grid-cols-2"
+			role="list"
+			ondragover={dragOver}
+			ondrop={drop}
+			ondragleave={(event) => {
+				if (
+					!(event.currentTarget as HTMLElement).contains(
+						event.relatedTarget as Node | null
+					)
+				)
+					dropTarget = null;
+			}}
+		>
+			{#each arranging ? arranged : shown as panel (panel.id)}
 				<div
 					role="listitem"
-					data-panel
+					data-panel={panel.id}
 					animate:flip={{ duration: 200 }}
-					class="min-w-0 transition-opacity duration-150 {panel.id === 'goals'
+					class="min-w-0 transition-opacity duration-150 {panel.id === 'goals' &&
+					!layout.hidden.includes(panel.id)
 						? 'md:col-span-2'
-						: ''} {dragging === panel.id ? 'opacity-40' : ''}"
-					draggable={arranging}
+						: ''} {dragging === panel.id ? 'opacity-40' : ''} {arranging
+						? 'select-none'
+						: ''} {dropTarget === panel.id
+						? 'outline -outline-offset-1 outline-cyan'
+						: ''}"
+					draggable={arranging && !layout.hidden.includes(panel.id)}
 					ondragstart={(event) => dragStart(event, panel.id)}
 					ondragend={dragEnd}
-					ondragover={(event) => dragOver(event, panel.id)}
-					ondrop={(event) => event.preventDefault()}
 				>
-					<Panel
-						{arranging}
-						hide={() => hidePanel(panel.id)}
-						tabs={panel.tabs.map((tab) => ({
-							...tab,
-							label:
-								terms && tab.key === "visit:source" && drilled(tab.key)
-									? "search terms"
-									: (drilled(tab.key)?.label ?? tab.label)
-						}))}
-						bind:tab={tabs[panel.id]}
-						actions={tabs[panel.id] === "props"
-							? picker
-							: tabs[panel.id] === "utm"
-								? utmPicker
-								: tabs[panel.id] === "funnels"
-									? funnelPicker
-									: undefined}
-					>
-						{#snippet footer()}
-							{#if tabs[panel.id] !== "funnels"}
-								<Button
-									variant="plain"
-									onclick={() =>
+					{#if layout.hidden.includes(panel.id)}
+						<AddPanel
+							label={panel.tabs[0].label}
+							onclick={() =>
+								saveLayout({
+									...layout,
+									hidden: layout.hidden.filter((id) => id !== panel.id)
+								})}
+						/>
+					{:else}
+						<Panel
+							{arranging}
+							fit={panel.id === "goals"}
+							hide={() => hidePanel(panel.id)}
+							tabs={panel.tabs.map((tab) => ({
+								...tab,
+								label:
+									terms && tab.key === "visit:source" && drilled(tab.key)
+										? "search terms"
+										: (drilled(tab.key)?.label ?? tab.label)
+							}))}
+							bind:tab={tabs[panel.id]}
+							expand={tabs[panel.id] === "funnels"
+								? undefined
+								: () =>
 										(details = {
 											dim: dimOf(panel.id),
 											title:
 												panel.tabs.find((tab) => tab.key === tabs[panel.id])
 													?.label ?? ""
 										})}
-								>
-									details
-								</Button>
-							{/if}
-						{/snippet}
-						{#if tabs[panel.id] === "map"}
-							<div class="px-2 py-1">
-								<WorldMap
-									values={Object.fromEntries(
-										(ranked[panel.id] ?? []).map((row) => [row.key, row.value])
-									)}
-									label={(code) => display("visit:country", code)}
+							actions={tabs[panel.id] === "props"
+								? picker
+								: tabs[panel.id] === "utm"
+									? utmPicker
+									: tabs[panel.id] === "funnels"
+										? funnelPicker
+										: undefined}
+						>
+							{#if tabs[panel.id] === "map"}
+								<div class="px-2 py-1">
+									<WorldMap
+										values={Object.fromEntries(
+											(ranked[panel.id] ?? []).map((row) => [
+												row.key,
+												row.value
+											])
+										)}
+										label={(code) => display("visit:country", code)}
+										format={(value) => format("visitors", value)}
+										pick={(code) => addFilter("visit:country", code)}
+									/>
+								</div>
+							{:else}
+								<Rows
+									rows={PAGES.has(dimOf(panel.id))
+										? (ranked[panel.id]?.map((row) => ({
+												...row,
+												note: titles[row.key]
+											})) ?? null)
+										: (ranked[panel.id] ?? null)}
+									loading={loading[panel.id]}
 									format={(value) => format("visitors", value)}
-									pick={(code) => addFilter("visit:country", code)}
+									columns={tabs[panel.id] === "funnels"
+										? ["rate", "visitors"]
+										: terms && tabs[panel.id] === "visit:source"
+											? ["rank", "visitors"]
+											: dimOf(panel.id) === "event:goal" || converting
+												? ["CR", "visitors"]
+												: ["visitors"]}
+									pick={tabs[panel.id] === "funnels" ||
+									(terms &&
+										tabs[panel.id] === "visit:source" &&
+										drilled("visit:source"))
+										? undefined
+										: (key) => addFilter(dimOf(panel.id), key)}
 								/>
-							</div>
-						{:else}
-							<Rows
-								rows={PAGES.has(dimOf(panel.id))
-									? (ranked[panel.id]?.map((row) => ({
-											...row,
-											note: titles[row.key]
-										})) ?? null)
-									: (ranked[panel.id] ?? null)}
-								loading={loading[panel.id]}
-								format={(value) => format("visitors", value)}
-								pick={tabs[panel.id] === "funnels" ||
-								(terms &&
-									tabs[panel.id] === "visit:source" &&
-									drilled("visit:source"))
-									? undefined
-									: (key) => addFilter(dimOf(panel.id), key)}
-							/>
-						{/if}
-					</Panel>
+							{/if}
+						</Panel>
+					{/if}
 				</div>
 			{/each}
 		</div>

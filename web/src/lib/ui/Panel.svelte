@@ -1,24 +1,27 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
+	import expand from "pixelarticons/svg/scale.svg?raw";
 	import Icon from "./Icon.svelte";
 
 	let {
 		tabs,
 		tab = $bindable(),
 		actions,
-		footer,
+		expand: open,
 		arranging = false,
 		hide,
+		fit = false,
 		children
 	}: {
 		tabs: { key: string; label: string }[];
 		tab: string;
 		actions?: Snippet;
-		footer?: Snippet;
+		expand?: () => void;
 		// layout editing shows a close button and the whole panel drags
 		arranging?: boolean;
 		hide?: () => void;
+		fit?: boolean;
 		children: Snippet;
 	} = $props();
 </script>
@@ -33,19 +36,32 @@
 			{#each tabs as item (item.key)}
 				<button
 					type="button"
-					class="h-full shrink-0 cursor-pointer border-b label transition-colors duration-100 {tab ===
+					class="h-full shrink-0 cursor-pointer border-b font-sans text-[13px] transition-colors duration-100 {tab ===
 					item.key
 						? 'border-cyan text-fg'
 						: 'border-transparent hover:text-fg'}"
 					onclick={() => (tab = item.key)}
 				>
-					{item.label}
+					{item.key === "utm"
+						? "UTM"
+						: item.label.charAt(0).toUpperCase() + item.label.slice(1)}
 				</button>
 			{/each}
 		</div>
 		<div class="ml-auto flex shrink-0 items-center gap-2">
 			{#if actions}
 				{@render actions()}
+			{/if}
+			{#if open && !arranging}
+				<button
+					type="button"
+					aria-label="expand report"
+					title="expand report"
+					class="grid h-7 w-7 cursor-pointer place-items-center text-dim hover:text-fg"
+					onclick={open}
+				>
+					<Icon svg={expand} size={14} />
+				</button>
 			{/if}
 			{#if arranging && hide}
 				<button
@@ -60,12 +76,11 @@
 			{/if}
 		</div>
 	</header>
-	<div class="flex-1 p-2 {arranging ? 'pointer-events-none opacity-50 select-none' : ''}">
+	<div
+		class="flex-1 p-3 {fit ? '' : 'min-h-64'} {arranging
+			? 'pointer-events-none opacity-50 select-none'
+			: ''}"
+	>
 		{@render children()}
 	</div>
-	{#if footer && !arranging}
-		<footer class="flex justify-end border-t border-line px-3 py-1">
-			{@render footer()}
-		</footer>
-	{/if}
 </section>

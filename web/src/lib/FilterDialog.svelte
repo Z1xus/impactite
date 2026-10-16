@@ -114,10 +114,10 @@
 	/>
 	<div class="flex items-center justify-between">
 		{#if initial}
-			<Button variant="plain" onclick={() => remove(initial.dim)}>remove filter</Button>
+			<Button variant="plain" onclick={() => remove(initial.dim)}>Remove filter</Button>
 		{:else}
 			<span></span>
 		{/if}
-		<Button onclick={submit} disabled={!chosen.length}>apply</Button>
+		<Button onclick={submit} disabled={!chosen.length}>Apply</Button>
 	</div>
 </div>

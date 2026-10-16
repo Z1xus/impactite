@@ -8,17 +8,26 @@
 
 	let { domain, landed }: { domain: string; landed: () => void } = $props();
 
-	const [WIDTH, HEIGHT] = [160, 24];
+	const [WIDTH, HEIGHT] = [160, 48];
 	let canvas = $state<HTMLCanvasElement>();
 	let hit = $state<number | null>(null);
+	let arrived = $state(false);
 	let first = $state("");
 	let strays = $state<string[]>([]);
 
 	$effect(() => {
 		const site = domain;
+		let stopped = false;
+		let pending = false;
 		const timer = setInterval(async () => {
-			const result = await query(site, { metrics: ["events"], date_range: "all" }, false);
-			if (!result.results[0]?.metrics[0] || hit !== null) return;
+			if (pending) return;
+			pending = true;
+			const result = await query(
+				site,
+				{ metrics: ["events"], date_range: "all" },
+				false
+			).finally(() => (pending = false));
+			if (stopped || !result.results[0]?.metrics[0]) return;
 			clearInterval(timer);
 			const [page, country] = await Promise.all(
 				["event:page", "visit:country"].map((dim) =>
@@ -29,14 +38,39 @@
 					)
 				)
 			);
+			if (stopped) return;
 			const path = page.results[0]?.dimensions[0] ?? "";
 			const code = country.results[0]?.dimensions[0] ?? "";
 			const place = /^[A-Z]{2}$/.test(code) ? ` from ${display("visit:country", code)}` : "";
 			first = path ? `Someone opened ${path}${place}.` : "";
-			hit = performance.now();
-			setTimeout(landed, 2600);
+			arrived = true;
 		}, 2000);
-		return () => clearInterval(timer);
+		return () => {
+			stopped = true;
+			clearInterval(timer);
+		};
+	});
+
+	$effect(() => {
+		if (!arrived) return;
+		let elapsed = 0;
+		let started: number | null = null;
+		let timer: ReturnType<typeof setTimeout>;
+		const visibility = () => {
+			clearTimeout(timer);
+			if (started !== null) elapsed += performance.now() - started;
+			started = null;
+			if (document.hidden) return;
+			started = performance.now();
+			hit = started - elapsed;
+			timer = setTimeout(landed, Math.max(0, 2600 - elapsed));
+		};
+		document.addEventListener("visibilitychange", visibility);
+		visibility();
+		return () => {
+			clearTimeout(timer);
+			document.removeEventListener("visibilitychange", visibility);
+		};
 	});
 
 	$effect(() => {
@@ -52,6 +86,7 @@
 
 	$effect(() => {
 		void theme.shown;
+		const impact = hit;
 		const g = canvas?.getContext("2d");
 		if (!g) return;
 		const [panel, night, deep, cyan, fg] = [
@@ -63,12 +98,12 @@
 		].map(css);
 		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 		const rays = Array.from({ length: 7 }, random(domain.length + 7));
-		const [cx, cy] = [WIDTH / 2, HEIGHT / 2 + 2];
+		const [cx, cy] = [WIDTH / 2, HEIGHT / 2 + 4];
 		let frame = 0;
 		const draw = (now: number) => {
 			g.fillStyle = panel;
 			g.fillRect(0, 0, WIDTH, HEIGHT);
-			const since = hit === null ? -1 : still ? 9 : (now - hit) / 1000;
+			const since = impact === null ? -1 : still ? 9 : (now - impact) / 1000;
 			if (since < 0) {
 				// a slow scan line while nothing has arrived
 				const at = (((now / 1000) * 24) % (WIDTH + 28)) - 14;
@@ -113,8 +148,10 @@
 	});
 </script>
 
-<section class="flex max-w-2xl flex-col gap-4">
-	<div class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5">
+<section class="mx-auto flex w-full max-w-2xl flex-col gap-4 py-8 sm:py-12">
+	<div
+		class="flex flex-col items-center gap-4 rounded-px border border-line bg-panel p-6 text-center"
+	>
 		<canvas
 			bind:this={canvas}
 			width={WIDTH}
@@ -139,7 +176,7 @@
 			<Snippet {domain} />
 		</div>
 		<span class="text-[14px] text-dim"
-			>Then open your site. Visits from localhost don't count, so use the live address.</span
+			>Then open your site. Visits from localhost don't count.</span
 		>
 		{#each strays as stray (stray)}
 			<span class="text-[14px] text-warn"

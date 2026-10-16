@@ -131,7 +131,7 @@
 			const y = top(at(x, columns));
 			for (let yy = y + 1; yy < rows; yy++) {
 				const depth = (yy - y) / Math.max(1, rows - y);
-				const density = 0.62 * (1 - depth) ** 1.6;
+				const density = 0.3 * (1 - depth) ** 1.6;
 				if (threshold(x, yy) < density)
 					put(x, yy, depth < 0.18 ? colors.deep : colors.night);
 			}

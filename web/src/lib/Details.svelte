@@ -148,7 +148,7 @@
 	</div>
 	{#if more}
 		<div class="flex justify-center">
-			<Button variant="quiet" onclick={() => pages++}>load more</Button>
+			<Button variant="quiet" onclick={() => pages++}>Load more</Button>
 		</div>
 	{/if}
 </div>

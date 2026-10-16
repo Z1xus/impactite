@@ -11,6 +11,7 @@
 		loading = false,
 		limit = 8,
 		format,
+		columns,
 		pick
 	}: {
 		rows:
@@ -28,6 +29,7 @@
 		loading?: boolean;
 		limit?: number;
 		format?: (value: number) => string;
+		columns?: string[];
 		pick?: (key: string) => void;
 	} = $props();
 
@@ -35,6 +37,15 @@
 </script>
 
 <ul class="flex flex-col transition-opacity duration-150 {loading ? 'opacity-60' : ''}">
+	{#if columns && rows?.length}
+		<li class="flex h-6 items-start justify-end gap-4 px-4 label text-[10px] text-faint">
+			{#each columns as column, i (column)}
+				<span class={i === columns.length - 1 ? "min-w-12 text-right" : "w-14 text-right"}
+					>{column}</span
+				>
+			{/each}
+		</li>
+	{/if}
 	{#if rows === null}
 		{#each { length: limit }, i (i)}
 			<li class="flex h-8 items-center px-2">
@@ -51,13 +62,13 @@
 			>
 				<button
 					type="button"
-					class="absolute inset-0 rounded-px enabled:cursor-pointer"
+					class="absolute inset-0 rounded-px transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-raised"
 					aria-label={row.label}
 					onclick={() => pick?.(row.key)}
 					disabled={!pick}
 				></button>
-				{#if row.icon !== undefined}
-					<Glyph spec={row.icon} fallback={row.fallback} />
+				{#if row.icon || row.fallback}
+					<Glyph spec={row.icon ?? null} fallback={row.fallback} />
 				{/if}
 				<span
 					class="pointer-events-none relative flex h-full min-w-0 flex-1 items-center justify-between gap-4"
@@ -89,12 +100,12 @@
 					</span>
 					<span class="relative flex items-center gap-4 pr-2">
 						{#if row.extra}
-							<span class="text-label text-dim">{row.extra}</span>
+							<span class="w-14 text-right text-label text-dim">{row.extra}</span>
 						{/if}
 						<Num
 							value={row.value}
 							{format}
-							class="text-label text-dim group-hover:text-fg"
+							class="min-w-12 text-right text-label text-dim group-hover:text-fg"
 						/>
 					</span>
 				</span>
