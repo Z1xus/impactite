@@ -13,13 +13,18 @@
 	} = $props();
 
 	let active = $state("");
+	// a clicked section stays marked until the reader scrolls on their own
+	let pinned = false;
 
 	function track() {
+		if (pinned) return;
 		const passed = sections.filter(
 			(section) =>
 				(document.getElementById(section.id)?.getBoundingClientRect().top ?? 1e9) < 120
 		);
-		active = passed.at(-1)?.id ?? sections[0]?.id ?? "";
+		// short sections at the end never reach the top, so the bottom of the page picks the last
+		const bottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 2;
+		active = (bottom ? sections.at(-1) : passed.at(-1))?.id ?? sections[0]?.id ?? "";
 	}
 
 	$effect(() => {
@@ -28,7 +33,12 @@
 	});
 </script>
 
-<svelte:window onscroll={track} />
+<svelte:window
+	onscroll={track}
+	onwheel={() => (pinned = false)}
+	ontouchmove={() => (pinned = false)}
+	onkeydown={() => (pinned = false)}
+/>
 
 <div class="flex flex-col gap-8">
 	<div class="flex min-h-9 items-center gap-3">
@@ -48,6 +58,10 @@
 				{/if}
 				<a
 					href="#{section.id}"
+					onclick={() => {
+						active = section.id;
+						pinned = true;
+					}}
 					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 label transition-colors duration-100 hover:bg-raised hover:text-fg {active ===
 					section.id
 						? 'bg-raised text-fg'
