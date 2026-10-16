@@ -1,6 +1,7 @@
 <script lang="ts">
 	import "./layout.css";
 	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
+	import og from "../lib/og.png?no-inline";
 
 	const SITE = "https://impactite.dev";
 	const DESCRIPTION = "Self-hosted web analytics in one binary.";
@@ -17,7 +18,7 @@
 	<meta property="og:url" content="{SITE}/" />
 	<meta property="og:title" content="impactite" />
 	<meta property="og:description" content={DESCRIPTION} />
-	<meta property="og:image" content="{SITE}/og.png" />
+	<meta property="og:image" content="{SITE}{og}" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
