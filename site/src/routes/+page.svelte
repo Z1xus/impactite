@@ -1,5 +1,7 @@
 <script lang="ts">
 	import bell from "pixelarticons/svg/bell.svg?raw";
+	import github from "pixelarticons/svg/github.svg?raw";
+	import star from "pixelarticons/svg/star.svg?raw";
 	import coins from "pixelarticons/svg/coins.svg?raw";
 	import download from "pixelarticons/svg/download.svg?raw";
 	import filter from "pixelarticons/svg/filter.svg?raw";
@@ -27,6 +29,8 @@
 	import { reveal } from "../lib/reveal.ts";
 	import { impact } from "../lib/impact.ts";
 	import Count from "../lib/Count.svelte";
+
+	let { data } = $props();
 
 	const REPO = "https://github.com/z1xus/impactite";
 	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
@@ -166,7 +170,17 @@
 			<a href="#compatible" class="hidden label hover:text-fg sm:block">compatible</a>
 			<a href={DEMO} class="label hover:text-fg">demo</a>
 			<a href="#install" class="hidden label hover:text-fg sm:block">install</a>
-			<a href={REPO} class="label hover:text-fg">source</a>
+			<a
+				href={REPO}
+				class="flex items-center gap-1.5 label hover:text-fg"
+				aria-label="source on github{data.stars === null ? '' : `, ${data.stars} stars`}"
+			>
+				<Icon svg={github} size={14} />
+				{#if data.stars !== null}
+					<Icon svg={star} size={12} />
+					<span class="num">{compact(data.stars)}</span>
+				{/if}
+			</a>
 		</nav>
 	</header>
 
@@ -276,8 +290,13 @@
 		use:reveal={(on) => (swap = on)}
 	>
 		<div class="flex flex-col gap-4" use:appear>
-			<h2 class="font-mono text-[32px] tracking-tight">Just change the host.</h2>
-			<p class="text-dim">Works with your Plausible or GoatCounter script.</p>
+			<h2 class="font-mono text-[32px] tracking-tight">
+				Migrating from Plausible or GoatCounter?
+			</h2>
+			<p class="text-dim">
+				Just change the host in your script. Your old snippets keep working, and so do your
+				custom events and API calls.
+			</p>
 		</div>
 		<div class="flex flex-col gap-4">
 			<span class="label">plausible</span>
