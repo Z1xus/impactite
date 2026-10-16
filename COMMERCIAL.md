@@ -11,4 +11,4 @@ It also comes with direct support from the maintainer and helps impactite stay f
 
 To get one, open an issue titled "commercial license" or write to the maintainer through the address on [their GitHub profile](https://github.com/Z1xus).
 
-The tracker in `tracker/` is MIT, so it can sit on any site without either license.
+The tracker in `tracker/` is MIT.

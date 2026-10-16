@@ -338,10 +338,7 @@
 	<section id="scale" class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]">
 		<div class="flex flex-col gap-4" data-appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Do you really need Kubernetes?</h2>
-			<p class="text-dim">
-				Set your monthly pageviews to see the load on one server, based on the benchmark
-				above.
-			</p>
+			<p class="text-dim">Set your monthly pageviews to see the load on one server.</p>
 		</div>
 		<Scale
 			cpu={STATS.find((stat) => stat.label === "cpu for 1M pageviews")?.values[0] ?? 0}
@@ -359,8 +356,8 @@
 				Migrating from Plausible or GoatCounter?
 			</h2>
 			<p class="text-dim">
-				Just change the host in your script. Your old snippets keep working, and so do your
-				custom events and API calls.
+				Just change the host in your script. Your old snippets, custom events and API calls
+				keep working.
 			</p>
 		</div>
 		<div class="flex flex-col gap-4">
