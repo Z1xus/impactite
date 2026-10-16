@@ -3,8 +3,7 @@
 	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
 
 	const SITE = "https://impactite.dev";
-	const DESCRIPTION =
-		"Self-hosted web analytics in one binary. Works with Plausible and GoatCounter scripts, APIs and exports.";
+	const DESCRIPTION = "Self-hosted web analytics in one binary.";
 
 	let { children } = $props();
 </script>
@@ -16,12 +15,11 @@
 	<link rel="canonical" href="{SITE}/" />
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{SITE}/" />
-	<meta property="og:title" content="impactite: analytics that land" />
+	<meta property="og:title" content="impactite" />
 	<meta property="og:description" content={DESCRIPTION} />
 	<meta property="og:image" content="{SITE}/og.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:site_name" content="impactite" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- static json built from constants above -->
 	{@html `<script type="application/ld+json">${JSON.stringify({
