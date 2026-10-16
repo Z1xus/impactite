@@ -1,5 +1,5 @@
 <script lang="ts">
-	import chartIcon from "pixelarticons/svg/chart.svg?raw";
+	import bell from "pixelarticons/svg/bell.svg?raw";
 	import coins from "pixelarticons/svg/coins.svg?raw";
 	import download from "pixelarticons/svg/download.svg?raw";
 	import filter from "pixelarticons/svg/filter.svg?raw";
@@ -14,7 +14,7 @@
 	import cloud from "pixelarticons/svg/cloud-server.svg?raw";
 	import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 	import lock from "pixelarticons/svg/lock.svg?raw";
-	import theme from "pixelarticons/svg/cloud-moon.svg?raw";
+	import target from "pixelarticons/svg/target.svg?raw";
 	import Meteor from "#lib/art/Meteor.svelte";
 	import Chart from "#lib/dither/Chart.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
@@ -95,22 +95,22 @@
 	];
 
 	const FEATURES = [
-		{ icon: key, label: "passkeys and two factor" },
-		{ icon: users, label: "teams and guests" },
-		{ icon: filter, label: "funnels and segments" },
-		{ icon: coins, label: "revenue goals" },
-		{ icon: link, label: "shared and embedded dashboards" },
-		{ icon: mail, label: "reports to mail, slack or webhooks" },
-		{ icon: search, label: "search console terms" },
-		{ icon: shield, label: "shields and data controls" },
-		{ icon: upload, label: "ga4 and umami imports" },
-		{ icon: download, label: "exports to both" },
-		{ icon: globe, label: "no cookies, no fingerprints" },
-		{ icon: chartIcon, label: "visitor counter" },
-		{ icon: lock, label: "single sign-on" },
-		{ icon: cloud, label: "daily raw exports to s3" },
+		{ icon: target, label: "goals and custom events" },
+		{ icon: filter, label: "funnels" },
+		{ icon: coins, label: "revenue tracking" },
+		{ icon: search, label: "google search keywords" },
+		{ icon: link, label: "shareable dashboards" },
+		{ icon: mail, label: "email and slack reports" },
+		{ icon: bell, label: "traffic alerts" },
 		{ icon: grid, label: "all sites in one view" },
-		{ icon: theme, label: "dark and light" }
+		{ icon: upload, label: "import from ga4 and umami" },
+		{ icon: download, label: "full data export" },
+		{ icon: cloud, label: "daily exports to s3" },
+		{ icon: shield, label: "bot and ip filtering" },
+		{ icon: globe, label: "no cookies" },
+		{ icon: key, label: "passkeys and two factor" },
+		{ icon: lock, label: "single sign-on" },
+		{ icon: users, label: "teams and guest access" }
 	];
 
 	// split so the svelte parser does not end the script block
@@ -226,7 +226,7 @@
 
 	<section id="scale" class="flex flex-col gap-10 pb-28">
 		<div class="flex flex-col gap-4" use:appear>
-			<h2 class="font-mono text-[32px] tracking-tight">Do you need Kubernetes?</h2>
+			<h2 class="font-mono text-[32px] tracking-tight">Do you really need Kubernetes?</h2>
 			<p class="max-w-2xl text-[17px] text-dim">
 				Set your monthly pageviews to see the load on one server, based on the benchmark
 				above.
@@ -256,7 +256,7 @@
 	</section>
 
 	<section
-		class="grid grid-cols-2 gap-px overflow-hidden rounded-px border border-line bg-line md:grid-cols-4"
+		class="grid gap-px overflow-hidden rounded-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4"
 	>
 		{#each FEATURES as feature, i (feature.label)}
 			<div class="flex items-center gap-3 bg-panel px-4 py-5" use:appear={{ delay: i * 40 }}>
