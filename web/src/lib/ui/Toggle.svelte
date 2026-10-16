@@ -8,7 +8,7 @@
 
 <div class="flex max-w-full shrink-0 flex-col gap-2">
 	{#if label}
-		<span class="label">{label}</span>
+		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<div
 		class="flex h-9 w-fit max-w-full shrink-0 [scrollbar-width:none] gap-0.5 overflow-x-auto rounded-px border border-edge p-0.5"

@@ -64,7 +64,7 @@
 		{@render children()}
 	</div>
 	{#if footer && !arranging}
-		<footer class="flex justify-end border-t border-line px-2 py-1">
+		<footer class="flex justify-end border-t border-line px-3 py-1">
 			{@render footer()}
 		</footer>
 	{/if}

@@ -726,20 +726,23 @@
 		{/if}
 		{#if editable}
 			<a
-				href={resolve("/[site]/settings", { site: domain })}
-				class="grid h-9 w-9 place-items-center rounded-px border border-edge text-dim transition-colors duration-100 hover:border-dim hover:text-fg"
-				aria-label="site settings"
-				title="site settings"
+				href="{resolve('/[site]/settings', { site: domain })}{newEvents ? '#goals' : ''}"
+				class="relative grid h-9 w-9 place-items-center rounded-px border border-edge text-dim transition-colors duration-100 hover:border-dim hover:text-fg"
+				aria-label={newEvents
+					? `site settings, ${newEvents} new ${newEvents === 1 ? "event" : "events"}`
+					: "site settings"}
+				title={newEvents
+					? `${newEvents} new ${newEvents === 1 ? "event" : "events"} to review`
+					: "site settings"}
 			>
 				<Icon svg={sliders} size={14} />
+				{#if newEvents}
+					<span
+						class="absolute -top-1.5 -right-1.5 grid h-4 min-w-4 place-items-center rounded-px bg-cyan px-1 font-mono text-[10px] text-ink"
+						>{newEvents}</span
+					>
+				{/if}
 			</a>
-			{#if newEvents}
-				<a
-					href="{resolve('/[site]/settings', { site: domain })}#goals"
-					class="flex h-9 items-center rounded-px border border-edge px-3 label text-cyan transition-colors duration-100 hover:border-dim"
-					>{newEvents} new {newEvents === 1 ? "event" : "events"}</a
-				>
-			{/if}
 		{/if}
 		{#each filters as filter (encodeFilter(filter))}
 			<Chip
@@ -965,14 +968,16 @@
 							{/if}
 						{/snippet}
 						{#if tabs[panel.id] === "map"}
-							<WorldMap
-								values={Object.fromEntries(
-									(ranked[panel.id] ?? []).map((row) => [row.key, row.value])
-								)}
-								label={(code) => display("visit:country", code)}
-								format={(value) => format("visitors", value)}
-								pick={(code) => addFilter("visit:country", code)}
-							/>
+							<div class="px-2 py-1">
+								<WorldMap
+									values={Object.fromEntries(
+										(ranked[panel.id] ?? []).map((row) => [row.key, row.value])
+									)}
+									label={(code) => display("visit:country", code)}
+									format={(value) => format("visitors", value)}
+									pick={(code) => addFilter("visit:country", code)}
+								/>
+							</div>
 						{:else}
 							<Rows
 								rows={PAGES.has(dimOf(panel.id))

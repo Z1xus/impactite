@@ -62,10 +62,13 @@
 						active = section.id;
 						pinned = true;
 					}}
-					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 label transition-colors duration-100 hover:bg-raised hover:text-fg {active ===
-					section.id
-						? 'bg-raised text-fg'
-						: ''} {section.id === 'danger' ? 'text-bad hover:text-bad' : ''}"
+					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 label transition-colors duration-100 hover:bg-raised {section.id ===
+					'danger'
+						? 'text-bad'
+						: 'hover:text-fg'} {active === section.id ? 'bg-raised' : ''} {active ===
+						section.id && section.id !== 'danger'
+						? 'text-fg'
+						: ''}"
 				>
 					{#if section.icon}
 						<Icon

@@ -113,8 +113,8 @@
 	});
 </script>
 
-<section class="flex max-w-2xl flex-col gap-5">
-	<div class="flex flex-col gap-3 rounded-px border border-line bg-panel p-4">
+<section class="flex max-w-2xl flex-col gap-4">
+	<div class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5">
 		<canvas
 			bind:this={canvas}
 			width={WIDTH}

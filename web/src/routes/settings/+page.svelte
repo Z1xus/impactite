@@ -213,7 +213,7 @@
 		</Section>
 
 		<Section id="display" label="display">
-			<div class="flex flex-wrap gap-6">
+			<div class="flex flex-wrap gap-4">
 				<Toggle
 					label="theme"
 					bind:value={() => display.theme, (theme) => saveDisplay({ theme })}

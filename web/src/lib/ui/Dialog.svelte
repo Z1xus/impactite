@@ -31,7 +31,7 @@
 			<span class="label text-fg">{title}</span>
 			<button
 				type="button"
-				class="grid h-9 w-9 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
+				class="-mr-2.5 grid h-9 w-9 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
 				aria-label="close"
 				title="close"
 				onclick={() => (open = false)}

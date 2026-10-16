@@ -9,7 +9,7 @@
 </script>
 
 <label class="flex flex-col gap-2">
-	<span class="label">{label}</span>
+	<span class="label leading-[14px]">{label}</span>
 	<input
 		{...rest}
 		bind:value
