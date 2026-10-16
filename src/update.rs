@@ -3,12 +3,12 @@ use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
 use aws_lc_rs::digest::{SHA256, digest};
 use flate2::read::GzDecoder;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::accounts::Web;
@@ -16,6 +16,36 @@ use crate::app::{hex, lock};
 
 const REPO: &str = "z1xus/impactite";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Clone, Serialize)]
+pub struct Status {
+	pub enabled: bool,
+	pub checking: bool,
+	pub checked_at: Option<i64>,
+	pub failed: bool,
+	pub latest: Option<serde_json::Value>,
+	#[serde(skip)]
+	attempted: Option<Instant>,
+}
+
+impl Status {
+	pub fn new(enabled: bool) -> Self {
+		Self {
+			enabled,
+			checking: false,
+			checked_at: None,
+			failed: false,
+			latest: None,
+			attempted: None,
+		}
+	}
+}
+
+pub enum CheckError {
+	Disabled,
+	Busy,
+	Recent,
+}
 
 #[derive(Deserialize)]
 struct Release {
@@ -29,6 +59,7 @@ async fn latest(http: &reqwest::Client) -> anyhow::Result<Release> {
 			"https://api.github.com/repos/{REPO}/releases/latest"
 		))
 		.header("user-agent", "impactite")
+		.timeout(Duration::from_secs(10))
 		.send()
 		.await?
 		.error_for_status()?
@@ -54,6 +85,7 @@ async fn changes(http: &reqwest::Client, tag: &str) -> anyhow::Result<serde_json
 		.get(format!(
 			"https://raw.githubusercontent.com/{REPO}/{tag}/CHANGELOG.md"
 		))
+		.timeout(Duration::from_secs(10))
 		.send()
 		.await?
 		.error_for_status()?
@@ -80,24 +112,54 @@ async fn changes(http: &reqwest::Client, tag: &str) -> anyhow::Result<serde_json
 		.collect())
 }
 
-// asks github once a day, so admins see when a release is out
+pub async fn check(web: &Web) -> Result<(), CheckError> {
+	{
+		let mut status = lock(&web.updates);
+		if !status.enabled {
+			return Err(CheckError::Disabled);
+		}
+		if status.checking {
+			return Err(CheckError::Busy);
+		}
+		if status
+			.attempted
+			.is_some_and(|at| at.elapsed() < Duration::from_secs(60))
+		{
+			return Err(CheckError::Recent);
+		}
+		status.checking = true;
+		status.attempted = Some(Instant::now());
+	}
+	match latest(&web.http).await {
+		Ok(release) => {
+			let latest = match newer(&release.tag_name) {
+				true => Some(json!({
+					"version": release.tag_name.trim_start_matches('v'),
+					"url": release.html_url,
+					"changes": changes(&web.http, &release.tag_name).await.unwrap_or_else(|_| json!([])),
+				})),
+				false => None,
+			};
+			let mut status = lock(&web.updates);
+			status.latest = latest;
+			status.checked_at = Some(crate::accounts::now());
+			status.failed = false;
+			status.checking = false;
+		}
+		Err(err) => {
+			tracing::debug!(%err, "update check");
+			let mut status = lock(&web.updates);
+			status.failed = true;
+			status.checking = false;
+		}
+	}
+	Ok(())
+}
+
 pub async fn watch(web: Arc<Web>) {
 	loop {
-		match latest(&web.http).await {
-			Ok(release) => {
-				let latest = match newer(&release.tag_name) {
-					true => Some(json!({
-						"version": release.tag_name.trim_start_matches('v'),
-						"url": release.html_url,
-						"changes": changes(&web.http, &release.tag_name).await.unwrap_or_default(),
-					})),
-					false => None,
-				};
-				*lock(&web.latest) = latest;
-			}
-			Err(err) => tracing::debug!(%err, "update check"),
-		}
-		tokio::time::sleep(Duration::from_secs(86_400)).await;
+		let _ = check(&web).await;
+		tokio::time::sleep(Duration::from_secs(3600)).await;
 	}
 }
 

@@ -38,7 +38,7 @@ pub struct Web {
 	pub setup: Mutex<Option<String>>,
 	pub ceremonies: Mutex<std::collections::HashMap<String, (Purpose, i64)>>,
 	pub alias: Option<String>,
-	pub latest: Mutex<Option<Value>>,
+	pub updates: Mutex<crate::update::Status>,
 	pub sso: Option<crate::sso::Provider>,
 	pub google: Option<crate::google::Client>,
 }

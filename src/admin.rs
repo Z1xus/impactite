@@ -17,6 +17,7 @@ pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
 		.route("/api/app/admin", get(show).patch(update))
 		.route("/api/app/admin/mail", post(test_mail))
+		.route("/api/app/admin/update-check", post(check_update))
 		.route(
 			"/api/app/admin/users/{user}",
 			patch(set_admin).delete(remove),
@@ -47,11 +48,29 @@ async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 			"mail": web.mail.ready(),
 			"users": users,
 			"version": crate::update::VERSION,
-			"latest": lock(&web.latest)
-				.clone(),
+			"update": lock(&web.updates).clone(),
 		}))
 		.into_response(),
 		Err(err) => internal(err),
+	}
+}
+
+async fn check_update(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
+	if !web.app.is_admin(viewer.user) {
+		return denied();
+	}
+	match crate::update::check(&web).await {
+		Ok(()) => show(State(web), viewer).await,
+		Err(crate::update::CheckError::Disabled) => {
+			fail(StatusCode::FORBIDDEN, "Update checks are disabled.")
+		}
+		Err(crate::update::CheckError::Busy) => {
+			fail(StatusCode::CONFLICT, "An update check is already running.")
+		}
+		Err(crate::update::CheckError::Recent) => fail(
+			StatusCode::TOO_MANY_REQUESTS,
+			"Wait a minute before checking again.",
+		),
 	}
 }
 

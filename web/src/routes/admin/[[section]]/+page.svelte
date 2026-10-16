@@ -6,7 +6,7 @@
 	import userPlus from "pixelarticons/svg/user-plus.svg?raw";
 	import mail from "pixelarticons/svg/mail.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
-	import { date } from "#lib/display.svelte.ts";
+	import { date, clock } from "#lib/display.svelte.ts";
 	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
@@ -33,14 +33,21 @@
 		mail: boolean;
 		users: User[];
 		version: string;
-		latest: {
-			version: string;
-			url: string;
-			changes: { version: string; lines: string[] }[];
-		} | null;
+		update: {
+			enabled: boolean;
+			checking: boolean;
+			checked_at: number | null;
+			failed: boolean;
+			latest: {
+				version: string;
+				url: string;
+				changes: { version: string; lines: string[] }[];
+			} | null;
+		};
 	};
 
 	let info = $state<Admin | null>(null);
+	let checking = $state(false);
 
 	$effect(() => {
 		api<Admin>("/api/app/admin").then((result) => (info = result));
@@ -49,6 +56,16 @@
 	const update = (action: () => Promise<Admin | void>) =>
 		attempt(async () => {
 			info = (await action()) || info;
+		});
+
+	const checkUpdate = () =>
+		attempt(async () => {
+			checking = true;
+			try {
+				info = await api<Admin>("/api/app/admin/update-check", {});
+			} finally {
+				checking = false;
+			}
 		});
 
 	const setSignup = (mode: "invite" | "open") =>
@@ -81,6 +98,14 @@
 			{ id: "users", label: "users", icon: users }
 		].map((item) => ({ ...item, href: resolve("/admin/[[section]]", { section: item.id }) }))
 	);
+
+	$effect(() => {
+		if (section !== "version" || !info?.update.checking) return;
+		const timer = setTimeout(() => {
+			api<Admin>("/api/app/admin").then((result) => (info = result));
+		}, 1000);
+		return () => clearTimeout(timer);
+	});
 </script>
 
 <Shell>
@@ -94,16 +119,27 @@
 
 			{#if section === "version"}
 				<Section id="version" label="version">
-					{#if info.latest}
+					{#snippet actions()}
+						{#if info && info.update.enabled}
+							<Button
+								variant="text"
+								busy={checking || info.update.checking}
+								onclick={checkUpdate}
+							>
+								{checking || info.update.checking ? "Checking…" : "Check now"}
+							</Button>
+						{/if}
+					{/snippet}
+					{#if info.update.latest}
 						<div class="flex flex-col gap-2">
 							<span class="text-[14px] text-fg">
-								impactite {info.latest.version} is available. You're on {info.version}.
+								impactite {info.update.latest.version} is available. You're on {info.version}.
 								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the release page on github -->
-								<a href={info.latest.url} class="text-cyan hover:text-fg"
+								<a href={info.update.latest.url} class="text-cyan hover:text-fg"
 									>What changed</a
 								>
 							</span>
-							{#each info.latest.changes as change (change.version)}
+							{#each info.update.latest.changes as change (change.version)}
 								<div class="flex flex-col gap-1">
 									<span class="label text-dim">{change.version}</span>
 									{#each change.lines as line, i (i)}
@@ -128,9 +164,36 @@
 							</span>
 						</div>
 					{:else}
+						<span class="text-[14px] text-dim">
+							{#if !info.update.enabled}
+								impactite {info.version}. Update checks are disabled.
+							{:else if checking || info.update.checking}
+								impactite {info.version}. Checking for updates…
+							{:else if info.update.failed}
+								impactite {info.version}. Could not check for updates.
+							{:else if info.update.checked_at !== null}
+								impactite {info.version} is up to date.
+							{:else}
+								impactite {info.version}. Updates have not been checked yet.
+							{/if}
+						</span>
+					{/if}
+					{#if info.update.latest && info.update.failed}
 						<span class="text-[14px] text-dim"
-							>impactite {info.version} is up to date.</span
+							>Could not refresh update information.</span
 						>
+					{/if}
+					{#if info.update.checked_at !== null}
+						<span class="text-[14px] text-dim">
+							Last successful check:
+							<time datetime={new Date(info.update.checked_at * 1000).toISOString()}>
+								{date(info.update.checked_at)} at {clock(
+									new Date(info.update.checked_at * 1000)
+										.toTimeString()
+										.slice(0, 5)
+								)}
+							</time>
+						</span>
 					{/if}
 				</Section>
 			{/if}

@@ -404,7 +404,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		setup: Mutex::new(setup),
 		ceremonies: Mutex::default(),
 		alias: args.alias.clone(),
-		latest: Mutex::default(),
+		updates: Mutex::new(update::Status::new(!args.no_update_check)),
 		sso: args
 			.sso_issuer
 			.clone()
