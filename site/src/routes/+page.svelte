@@ -35,8 +35,8 @@
 
 	let { data } = $props();
 
-	const REPO = "https://github.com/z1xus/impactite";
-	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
+	const REPO = "https://github.com/Z1xus/impactite";
+	const BENCH = "https://github.com/Z1xus/impactite-benchmarks";
 	// impactite's own public dashboard, set VITE_DEMO_URL when the landing gets a real host
 	const DEMO = import.meta.env.VITE_DEMO_URL ?? "http://localhost:5173/demo/impactite.dev";
 
@@ -214,7 +214,11 @@
 	let swap = $state(false);
 </script>
 
-<div id="top" class="mx-auto flex max-w-6xl flex-col px-6">
+<svelte:head>
+	<link rel="prefetch" href={DEMO} />
+</svelte:head>
+
+<div id="top" class="mx-auto flex max-w-6xl flex-col px-6" use:appear>
 	<header class="flex h-16 items-center justify-between">
 		<a href="#top" class="flex items-center gap-2 font-mono text-[15px]">
 			<img src="/favicon.svg" alt="" width="22" height="22" />
@@ -241,7 +245,7 @@
 
 	<div class="relative" use:impact={() => (landed = true)}>
 		<section class="grid items-center gap-12 py-20 md:grid-cols-[1fr_auto]">
-			<div class="flex flex-col gap-6" use:appear>
+			<div class="shown flex flex-col gap-6" data-appear>
 				<h1 class="font-mono text-[44px] leading-[1.05] tracking-tight md:text-[64px]">
 					Analytics<br />that land.
 				</h1>
@@ -266,7 +270,11 @@
 			</div>
 		</section>
 
-		<section class="rounded-px border border-line bg-panel">
+		<section
+			class="shown rounded-px border border-line bg-panel"
+			data-appear
+			style:--delay="120ms"
+		>
 			<Kpis
 				totals={landed ? TOTALS : TOTALS.map(() => 0)}
 				previous={landed ? PREVIOUS : null}
@@ -274,8 +282,8 @@
 				pick={(i) => (metric = i)}
 			/>
 			<div
-				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-[steps(28)]"
-				style:clip-path={landed ? "inset(0 0 0 0)" : "inset(0 100% 0 0)"}
+				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-out"
+				style:clip-path={landed ? "inset(0)" : "inset(0 100% 0 0)"}
 			>
 				<Chart
 					values={shape(metric)}
@@ -299,13 +307,13 @@
 	</div>
 
 	<section id="speed" class="flex flex-col gap-14 py-28">
-		<div class="flex flex-col gap-4" use:appear>
+		<div class="flex flex-col gap-4" data-appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Benchmarks</h2>
 			<p class="max-w-2xl text-[17px] text-dim">1M pageviews each, one machine.</p>
 		</div>
 		<div class="grid gap-x-12 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
 			{#each STATS as stat, i (stat.label)}
-				<div class="flex flex-col gap-4" use:appear={{ delay: (i % 3) * 80 }}>
+				<div class="flex flex-col gap-4" data-appear style:--delay="{(i % 3) * 80}ms">
 					<span class="label">{stat.label}</span>
 					<Race
 						unit={stat.unit}
@@ -327,7 +335,7 @@
 	</section>
 
 	<section id="scale" class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]">
-		<div class="flex flex-col gap-4" use:appear>
+		<div class="flex flex-col gap-4" data-appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Do you really need Kubernetes?</h2>
 			<p class="text-dim">
 				Set your monthly pageviews to see the load on one server, based on the benchmark
@@ -345,7 +353,7 @@
 		class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]"
 		use:reveal={(on) => (swap = on)}
 	>
-		<div class="flex flex-col gap-4" use:appear>
+		<div class="flex flex-col gap-4" data-appear>
 			<h2 class="font-mono text-[32px] tracking-tight">
 				Migrating from Plausible or GoatCounter?
 			</h2>
@@ -366,7 +374,11 @@
 		class="grid gap-px overflow-hidden rounded-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4"
 	>
 		{#each FEATURES as feature, i (feature.label)}
-			<div class="flex items-center gap-3 bg-panel px-4 py-5" use:appear={{ delay: i * 40 }}>
+			<div
+				class="flex items-center gap-3 bg-panel px-4 py-5"
+				data-appear
+				style:--delay="{i * 40}ms"
+			>
 				<Icon svg={feature.icon} size={14} class="text-cyan" />
 				<span class="text-[14px]">{feature.label}</span>
 			</div>
@@ -374,7 +386,7 @@
 	</section>
 
 	<section id="install" class="grid gap-12 py-28 md:grid-cols-[1fr_1.4fr]">
-		<div class="flex flex-col gap-4" use:appear>
+		<div class="flex flex-col gap-4" data-appear>
 			<h2 class="font-mono text-[32px] tracking-tight">One binary. Done.</h2>
 			<p class="text-dim">Pick how you run it and copy the result.</p>
 		</div>

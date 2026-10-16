@@ -67,8 +67,8 @@ export function impact(stage: HTMLElement, landed: () => void) {
 			const t = Math.max(0, time) / FALL;
 			const head = along(t * t);
 			rock.style.opacity = "1";
-			rock.style.transform = `translate(${Math.round(((head[0] - end[0]) * CELL) / 4) * 4}px, ${
-				Math.round(((head[1] - end[1]) * CELL) / 4) * 4
+			rock.style.transform = `translate(${(head[0] - end[0]) * CELL}px, ${
+				(head[1] - end[1]) * CELL
 			}px) scale(${0.35 + 0.65 * t})`;
 			// a tapered stream behind the rock, longer as it speeds up
 			const size = radius * (0.35 + 0.65 * t);

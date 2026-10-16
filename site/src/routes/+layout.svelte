@@ -1,5 +1,6 @@
 <script lang="ts">
 	import "./layout.css";
+	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
 
 	const SITE = "https://impactite.dev";
 	const DESCRIPTION =
@@ -9,6 +10,7 @@
 </script>
 
 <svelte:head>
+	<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
 	<title>impactite: self-hosted web analytics in one binary</title>
 	<meta name="description" content={DESCRIPTION} />
 	<link rel="canonical" href="{SITE}/" />

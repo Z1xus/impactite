@@ -261,8 +261,11 @@
 			></canvas>
 			{#if hover !== null}
 				<div
-					class="pointer-events-none absolute -top-2 z-10 flex -translate-x-1/2 -translate-y-full flex-col gap-1.5 rounded-px border border-edge bg-raised px-2.5 py-2 whitespace-nowrap transition-[left] duration-75 ease-out"
-					style:left="{Math.min(Math.max(tipLeft, 64), width - 64)}px"
+					class="pointer-events-none absolute top-0 z-10 flex flex-col gap-1.5 rounded-px border border-edge bg-raised px-2.5 py-2 whitespace-nowrap transition-[left] duration-75 ease-out {tipLeft >
+					width / 2
+						? '-translate-x-[calc(100%+12px)]'
+						: 'translate-x-3'}"
+					style:left="{tipLeft}px"
 				>
 					<span class="label">{labels[hover] ?? ""}</span>
 					<span class="num text-fg">{format(values[hover] ?? 0)}</span>

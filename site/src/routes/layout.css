@@ -12,11 +12,13 @@ html {
 	}
 }
 
-@keyframes wipe {
-	from {
-		clip-path: inset(0 0 100% 0);
+/* hidden only when script runs, so the page still shows without it */
+@media (prefers-reduced-motion: no-preference) {
+	.js [data-appear] {
+		opacity: 0;
 	}
-	to {
-		clip-path: inset(0);
+	.js [data-appear].shown {
+		opacity: 1;
+		animation: rise 700ms cubic-bezier(0.2, 0, 0, 1) var(--delay, 0ms) both;
 	}
 }

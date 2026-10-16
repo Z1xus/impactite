@@ -1,5 +1,6 @@
 <script lang="ts">
 	import "./layout.css";
+	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
 	import { goto, onNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -56,6 +57,7 @@
 
 <svelte:head>
 	<title>impactite</title>
+	<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
 </svelte:head>
 
 {#if session.ready && !redirect}

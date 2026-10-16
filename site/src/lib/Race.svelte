@@ -30,7 +30,7 @@
 			<span class="label {row.ours ? 'text-fg' : ''}">{row.label}</span>
 			<span class="h-5 overflow-hidden rounded-px">
 				<span
-					class="block h-full min-w-px transition-[width] duration-[1200ms] ease-[steps(14)] {row.value ===
+					class="block h-full min-w-px transition-[width] duration-[1200ms] ease-out {row.value ===
 					best
 						? 'bg-cyan'
 						: 'dither [--dither-gap:var(--color-ink)]'}"

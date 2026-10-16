@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
+	import { goto, preloadCode } from "$app/navigation";
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import { api, ApiError, type Me } from "#lib/api.ts";
@@ -37,6 +37,10 @@
 	const ssoError = $derived(SSO_ERRORS[page.url.searchParams.get("sso") ?? ""] ?? "");
 
 	let panel = $state<HTMLElement>();
+
+	$effect(() => {
+		void preloadCode("/");
+	});
 
 	async function finish(promise: Promise<{ me: Me }>) {
 		const { me } = await promise;
