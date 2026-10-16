@@ -550,7 +550,6 @@
 		return () => (stale = true);
 	});
 
-	// each panel reloads on its own, so changing one tab leaves the others alone
 	const stops: Record<string, () => void> = {};
 	const loaded: Record<string, string> = {};
 	const signature = (id: string) => `${tabs[id]}:${dimOf(id)}`;

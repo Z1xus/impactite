@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{Client, Hit, Ingest};
+use crate::{net, stats};
 
 #[derive(Deserialize)]
 struct Payload {
@@ -114,11 +115,27 @@ pub async fn event(
 		country: visitor.country,
 		language: super::language(&headers),
 	};
+	// a proxy only sees the sender, so a keyed sender says which visitor it reports
+	let reported = headers
+		.contains_key(header::AUTHORIZATION)
+		.then(|| net::reported(&headers))
+		.flatten()
+		.map(|ip| Client {
+			ip,
+			ua,
+			country: None,
+			language: super::language(&headers),
+		});
 	let domains = payload.d.unwrap_or_else(|| hostname.clone());
 	let mut dropped = 0;
 	for domain in domains.split(',').map(str::trim).filter(|d| !d.is_empty()) {
 		let tracked = match ingest.site(domain) {
-			Some(site) => ingest.track(&site, hit(), &client),
+			Some(site) => {
+				let keyed = reported
+					.as_ref()
+					.filter(|_| stats::keyed(&ingest.app, &headers, domain));
+				ingest.track(&site, hit(), keyed.unwrap_or(&client))
+			}
 			None => {
 				ingest.stray(domain);
 				Err(super::Rejected::Failed)

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.4
+- New: Servers can report the visitor with an API key and `X-Forwarded-For`
+
 ## 0.1.3
 - Fix: Switching a panel tab no longer reloads the other panels
 

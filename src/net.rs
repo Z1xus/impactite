@@ -102,6 +102,16 @@ impl Proxies {
 	}
 }
 
+pub fn reported(headers: &HeaderMap) -> Option<IpAddr> {
+	let first = headers
+		.get("x-forwarded-for")?
+		.to_str()
+		.ok()?
+		.split(',')
+		.next()?;
+	Some(first.trim().parse::<IpAddr>().ok()?.to_canonical())
+}
+
 fn forwarded(value: &str) -> Option<IpAddr> {
 	value
 		.split([';', ','])
