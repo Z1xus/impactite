@@ -2,6 +2,7 @@
 
 ## 0.1.4
 - New: Servers can report the visitor with an API key and `X-Forwarded-For`
+- New: Admins see a notice when an update is available
 - Improved: Clearer update notes
 
 ## 0.1.3

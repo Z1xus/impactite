@@ -130,9 +130,15 @@ async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 	let user = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let setup = web.app.users_exist().map(|exists| !exists).unwrap_or(false);
 	let me = user.and_then(|user| web.app.me(user).ok());
+	let update = me.as_ref().filter(|me| me["admin"] == true).and_then(|_| {
+		lock(&web.updates)
+			.latest
+			.as_ref()
+			.map(|latest| latest["version"].clone())
+	});
 	Json(
 		json!({ "setup": setup, "signup": web.app.signup_open(), "me": me, "alias": web.alias,
-		"sso": web.sso.as_ref().map(|provider| &provider.name) }),
+		"sso": web.sso.as_ref().map(|provider| &provider.name), "update": update }),
 	)
 	.into_response()
 }

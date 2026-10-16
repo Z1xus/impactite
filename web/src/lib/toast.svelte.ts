@@ -1,13 +1,16 @@
 import { ask, type Question } from "./ask.svelte.ts";
 
-export const toasts = $state<{ id: number; text: string; bad: boolean }[]>([]);
+type Link = { label: string; href: string };
+
+export const toasts = $state<{ id: number; text: string; bad: boolean; link?: Link }[]>([]);
 let next = 0;
 
-export function toast(text: string, bad = false) {
+// a toast with a link stays until it is dismissed
+export function toast(text: string, bad = false, link?: Link) {
 	if (toasts.some((item) => item.text === text)) return;
 	const id = next++;
-	toasts.push({ id, text, bad });
-	setTimeout(() => dismiss(id), bad ? 8000 : 4000);
+	toasts.push({ id, text, bad, link });
+	if (!link) setTimeout(() => dismiss(id), bad ? 8000 : 4000);
 }
 
 export function dismiss(id: number) {

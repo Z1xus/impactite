@@ -19,6 +19,15 @@
 				: 'border-edge text-fg'}"
 		>
 			<span class="flex-1 py-2">{item.text}</span>
+			{#if item.link}
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
+				<a
+					href={item.link.href}
+					class="shrink-0 text-cyan transition-colors duration-100 hover:text-fg"
+					onclick={() => dismiss(item.id)}>{item.link.label}</a
+				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			{/if}
 			<button
 				type="button"
 				class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"

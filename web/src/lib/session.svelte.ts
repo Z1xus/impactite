@@ -9,7 +9,17 @@ export const session = $state<{
 	team: number | null;
 	alias: string | null;
 	sso: string | null;
-}>({ ready: false, setup: false, signup: false, me: null, team: null, alias: null, sso: null });
+	update: string | null;
+}>({
+	ready: false,
+	setup: false,
+	signup: false,
+	me: null,
+	team: null,
+	alias: null,
+	sso: null,
+	update: null
+});
 
 export async function refresh() {
 	const state = await api<{
@@ -18,11 +28,13 @@ export async function refresh() {
 		me: Me | null;
 		alias: string | null;
 		sso: string | null;
+		update: string | null;
 	}>("/api/app/state");
 	session.setup = state.setup;
 	session.signup = state.signup;
 	session.alias = state.alias;
 	session.sso = state.sso;
+	session.update = state.update;
 	adopt(state.me);
 	session.ready = true;
 }

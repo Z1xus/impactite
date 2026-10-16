@@ -7,6 +7,7 @@
 	import users from "pixelarticons/svg/users.svg?raw";
 	import { api } from "#lib/api.ts";
 	import { adopt, currentTeam, pickTeam, refresh, session } from "#lib/session.svelte.ts";
+	import { toast } from "#lib/toast.svelte.ts";
 	import Dialog from "./Dialog.svelte";
 	import Field from "./Field.svelte";
 	import Form from "./Form.svelte";
@@ -18,6 +19,16 @@
 
 	let creating = $state(false);
 	let name = $state("");
+
+	$effect(() => {
+		const version = session.update;
+		if (!version || localStorage.getItem("update") === version) return;
+		localStorage.setItem("update", version);
+		toast(`impactite ${version} is available.`, false, {
+			label: "Details",
+			href: resolve("/admin/[[section]]", { section: "version" })
+		});
+	});
 
 	const team = $derived(currentTeam());
 	const workspace = $derived([
