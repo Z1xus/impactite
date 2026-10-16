@@ -550,106 +550,132 @@
 		return () => (stale = true);
 	});
 
-	$effect(() => {
-		void version;
-		if (!dates || empty !== false) return;
-		const where = toQueryFilters(filters);
-		const cleanups: (() => void)[] = [];
-		terms = false;
-		for (const panel of panels) {
-			if (!panel.tabs.length) continue;
-			const dim = dimOf(panel.id);
-			let stale = false;
-			loading[panel.id] = true;
-			if (tabs[panel.id] === "funnels") {
-				api<{ steps: { name: string; visitors: number }[] }>("/api/app/funnel", {
+	// each panel reloads on its own, so changing one tab leaves the others alone
+	const stops: Record<string, () => void> = {};
+	const loaded: Record<string, string> = {};
+	const signature = (id: string) => `${tabs[id]}:${dimOf(id)}`;
+
+	function load(panel: (typeof panels)[number], where: ReturnType<typeof toQueryFilters>) {
+		stops[panel.id]?.();
+		if (!dates || !panel.tabs.length) return;
+		const dim = dimOf(panel.id);
+		loaded[panel.id] = signature(panel.id);
+		let stale = false;
+		stops[panel.id] = () => (stale = true);
+		loading[panel.id] = true;
+		if (tabs[panel.id] === "funnels") {
+			api<{ steps: { name: string; visitors: number }[] }>("/api/app/funnel", {
+				site_id: domain,
+				funnel: funnelId,
+				date_range: dates.current === "30m" ? "day" : dates.current,
+				filters: where
+			}).then((result) => {
+				if (stale) return;
+				const first = result.steps[0]?.visitors || 1;
+				ranked[panel.id] = result.steps.map((step, i) => ({
+					key: String(i),
+					label: `${i + 1}. ${step.name}`,
+					value: step.visitors,
+					extra: `${Math.round((step.visitors / first) * 1000) / 10}%`
+				}));
+				loading[panel.id] = false;
+			});
+			return;
+		}
+		const regular = () =>
+			ask({
+				metrics:
+					dim === "event:goal" || converting
+						? ["visitors", "conversion_rate"]
+						: ["visitors"],
+				date_range: dates.current,
+				dimensions: [dim],
+				filters: where,
+				pagination: { limit: tabs[panel.id] === "map" ? 300 : 9 }
+			}).then((result) => {
+				if (stale) return;
+				ranked[panel.id] = result.results.map((row) => {
+					const value = row.dimensions[0];
+					const label = display(dim, value);
+					return {
+						key: value,
+						label,
+						value: row.metrics[0],
+						...((dim === "event:goal" || converting) && {
+							extra: `${row.metrics[1]}%`
+						}),
+						...(!combined &&
+							PAGES.has(dim) &&
+							value.startsWith("/") && { href: `https://${domain}${value}` }),
+						...(ICONIC.has(dim) && {
+							icon: icon(dim, value),
+							fallback: LETTERED.has(dim) ? label : undefined
+						})
+					};
+				});
+				loading[panel.id] = false;
+			});
+		const google = filters.find((item) => item.dim === "visit:source");
+		if (
+			!combined &&
+			tabs[panel.id] === "visit:source" &&
+			google?.op === "is" &&
+			google.values.length === 1 &&
+			google.values[0] === "Google"
+		) {
+			const page = filters.find(
+				(item) => item.dim === "event:page" && item.op === "is" && item.values.length === 1
+			)?.values[0];
+			api<{ keywords: { name: string; visitors: number; position: number }[] }>(
+				"/api/app/keywords",
+				{
 					site_id: domain,
-					funnel: funnelId,
 					date_range: dates.current === "30m" ? "day" : dates.current,
-					filters: where
-				}).then((result) => {
+					page
+				}
+			)
+				.then((result) => {
 					if (stale) return;
-					const first = result.steps[0]?.visitors || 1;
-					ranked[panel.id] = result.steps.map((step, i) => ({
-						key: String(i),
-						label: `${i + 1}. ${step.name}`,
-						value: step.visitors,
-						extra: `${Math.round((step.visitors / first) * 1000) / 10}%`
+					terms = true;
+					ranked[panel.id] = result.keywords.map((keyword) => ({
+						key: keyword.name,
+						label: keyword.name,
+						value: keyword.visitors,
+						extra: `#${Math.round(keyword.position)}`
 					}));
 					loading[panel.id] = false;
-				});
-				cleanups.push(() => (stale = true));
-				continue;
-			}
-			const regular = () =>
-				ask({
-					metrics:
-						dim === "event:goal" || converting
-							? ["visitors", "conversion_rate"]
-							: ["visitors"],
-					date_range: dates.current,
-					dimensions: [dim],
-					filters: where,
-					pagination: { limit: tabs[panel.id] === "map" ? 300 : 9 }
-				}).then((result) => {
-					if (stale) return;
-					ranked[panel.id] = result.results.map((row) => {
-						const value = row.dimensions[0];
-						const label = display(dim, value);
-						return {
-							key: value,
-							label,
-							value: row.metrics[0],
-							...((dim === "event:goal" || converting) && {
-								extra: `${row.metrics[1]}%`
-							}),
-							...(!combined &&
-								PAGES.has(dim) &&
-								value.startsWith("/") && { href: `https://${domain}${value}` }),
-							...(ICONIC.has(dim) && {
-								icon: icon(dim, value),
-								fallback: LETTERED.has(dim) ? label : undefined
-							})
-						};
-					});
-					loading[panel.id] = false;
-				});
-			const google = filters.find((item) => item.dim === "visit:source");
-			if (
-				!combined &&
-				tabs[panel.id] === "visit:source" &&
-				google?.op === "is" &&
-				google.values.length === 1 &&
-				google.values[0] === "Google"
-			) {
-				const page = filters.find(
-					(item) =>
-						item.dim === "event:page" && item.op === "is" && item.values.length === 1
-				)?.values[0];
-				api<{ keywords: { name: string; visitors: number; position: number }[] }>(
-					"/api/app/keywords",
-					{
-						site_id: domain,
-						date_range: dates.current === "30m" ? "day" : dates.current,
-						page
-					}
-				)
-					.then((result) => {
-						if (stale) return;
-						terms = true;
-						ranked[panel.id] = result.keywords.map((keyword) => ({
-							key: keyword.name,
-							label: keyword.name,
-							value: keyword.visitors,
-							extra: `#${Math.round(keyword.position)}`
-						}));
-						loading[panel.id] = false;
-					})
-					.catch(regular);
-			} else regular();
-			cleanups.push(() => (stale = true));
-		}
-		return () => cleanups.forEach((cleanup) => cleanup());
+				})
+				.catch(regular);
+		} else regular();
+	}
+
+	// the page url settles in two steps, so the same query can arrive twice
+	let loadedKey = "";
+	$effect(() => {
+		if (!dates || empty !== false) return;
+		const where = toQueryFilters(filters);
+		const shown = panels;
+		const key = JSON.stringify([
+			domain,
+			version,
+			dates.current,
+			where,
+			withImports,
+			converting,
+			shown.map((panel) => [panel.id, panel.tabs.map((tab) => tab.key)])
+		]);
+		if (key === loadedKey) return;
+		loadedKey = key;
+		terms = false;
+		untrack(() => shown.forEach((panel) => load(panel, where)));
+	});
+
+	$effect(() => () => Object.values(stops).forEach((stop) => stop()));
+
+	$effect(() => {
+		const changed = panels.filter((panel) => loaded[panel.id] !== signature(panel.id));
+		if (!dates || empty !== false) return;
+		untrack(() => changed.forEach((panel) => load(panel, toQueryFilters(filters))));
 	});
 </script>
 
