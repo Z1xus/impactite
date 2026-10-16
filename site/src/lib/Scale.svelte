@@ -26,7 +26,7 @@
 			class="h-5 w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-cyan [&::-moz-range-track]:h-1 [&::-moz-range-track]:bg-edge [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-edge [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-cyan"
 		/>
 	</label>
-	<dl class="grid grid-cols-3 gap-6">
+	<dl class="grid grid-cols-2 gap-6 sm:grid-cols-3">
 		<div class="flex flex-col gap-2">
 			<dt class="label">cpu a day</dt>
 			<dd class="font-mono text-[22px]">
@@ -35,7 +35,7 @@
 		</div>
 		<div class="flex flex-col gap-2">
 			<dt class="label">of one core</dt>
-			<dd class="font-mono text-[22px]">{core < 0.01 ? "under 0.01" : core.toFixed(2)}%</dd>
+			<dd class="font-mono text-[22px]">{core < 0.01 ? "<0.01" : core.toFixed(2)}%</dd>
 		</div>
 		<div class="flex flex-col gap-2">
 			<dt class="label">headroom at peak</dt>

@@ -3,6 +3,7 @@
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import { api, ApiError, type Me } from "#lib/api.ts";
+	import { absorb } from "#lib/art/absorb.ts";
 	import { get } from "#lib/passkey.ts";
 	import { adopt, session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
@@ -35,8 +36,12 @@
 	};
 	const ssoError = $derived(SSO_ERRORS[page.url.searchParams.get("sso") ?? ""] ?? "");
 
+	let panel = $state<HTMLElement>();
+
 	async function finish(promise: Promise<{ me: Me }>) {
-		adopt((await promise).me);
+		const { me } = await promise;
+		if (panel) await absorb(panel);
+		adopt(me);
 		await goto(resolve("/"));
 	}
 
@@ -67,7 +72,7 @@
 </script>
 
 <Gate>
-	<div class="flex flex-col gap-3">
+	<div class="flex flex-col gap-3" bind:this={panel}>
 		{#if session.sso}
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a server redirect, not a page -->
 			<a

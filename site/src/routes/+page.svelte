@@ -31,7 +31,7 @@
 	const REPO = "https://github.com/z1xus/impactite";
 	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
 	// impactite's own public dashboard, set VITE_DEMO_URL when the landing gets a real host
-	const DEMO = import.meta.env.VITE_DEMO_URL ?? "http://localhost:5173/share/impactite.dev";
+	const DEMO = import.meta.env.VITE_DEMO_URL ?? "http://localhost:5173/demo/impactite.dev";
 
 	// impactite-benchmarks, results/2026-10-15T130903Z.jsonl. impactite runs on its own api,
 	// which is plausible's, the others on theirs

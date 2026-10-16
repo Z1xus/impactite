@@ -10,7 +10,7 @@
 
 	let { children }: LayoutProps = $props();
 
-	const open = ["/setup", "/login", "/invite", "/signup", "/share"];
+	const open = ["/setup", "/login", "/invite", "/signup", "/share", "/demo"];
 
 	$effect(() => {
 		refresh();
@@ -21,7 +21,9 @@
 		const path = page.url.pathname;
 		// shared dashboards stay readable before anyone has set the server up
 		if (session.setup)
-			return path.startsWith("/setup") || path.startsWith("/share") ? null : "/setup";
+			return ["/setup", "/share", "/demo"].some((prefix) => path.startsWith(prefix))
+				? null
+				: "/setup";
 		if (!session.me) return open.some((prefix) => path.startsWith(prefix)) ? null : "/login";
 		if (path.startsWith("/admin") && !session.me.admin) return "/";
 		return null;

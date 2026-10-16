@@ -36,8 +36,10 @@ export function impact(stage: HTMLElement, landed: () => void) {
 		(target.top - box.top + target.height / 2) / CELL
 	];
 	const radius = target.width / CELL / 2;
-	// down from the upper middle, so the trail crosses the open space beside the headline
-	const start = [end[0] - 150, -radius];
+	// beside the headline it falls from the upper middle, below it on phones it comes straight
+	// at the viewer, so it never crosses the text
+	const beside = target.left - box.left > box.width * 0.45;
+	const start = beside ? [end[0] - 150, -radius] : end;
 	const along = (t: number) => [
 		start[0] + (end[0] - start[0]) * t,
 		start[1] + (end[1] - start[1]) * t
@@ -61,9 +63,9 @@ export function impact(stage: HTMLElement, landed: () => void) {
 			// a tapered stream behind the rock, longer as it speeds up
 			const size = radius * (0.35 + 0.65 * t);
 			const [ux, uy] = [start[0] - end[0], start[1] - end[1]];
-			const unit = Math.hypot(ux, uy);
+			const unit = Math.hypot(ux, uy) || 1;
 			const [dx, dy] = [ux / unit, uy / unit];
-			const length = 30 + 90 * t;
+			const length = beside ? 30 + 90 * t : 0;
 			for (let j = 0; j < length; j++) {
 				const rest = 1 - j / length;
 				const half = 1 + size * 0.45 * rest;
