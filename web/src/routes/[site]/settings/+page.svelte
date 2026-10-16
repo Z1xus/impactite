@@ -1147,11 +1147,13 @@
 							...people.guests.map((guest) => ({
 								key: `g${guest.id}`,
 								title: guest.name,
+								avatar: guest.id,
 								meta: [guest.email, guest.role]
 							})),
 							...people.invites.map((invite) => ({
 								key: `i${invite.id}`,
 								title: invite.email,
+								avatar: null,
 								meta: ["invited", invite.role]
 							}))
 						]}

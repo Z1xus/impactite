@@ -92,7 +92,13 @@
 			<div class="ml-auto flex items-center gap-3">
 				{@render actions?.()}
 				{#if session.me}
-					<Menu label={session.me.name} data align="right" items={account} />
+					<Menu
+						label={session.me.name}
+						avatar={session.me.id}
+						data
+						align="right"
+						items={account}
+					/>
 				{/if}
 			</div>
 		</div>

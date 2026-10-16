@@ -198,12 +198,14 @@
 						...team.members.map((member) => ({
 							key: `m${member.id}`,
 							title: member.name,
+							avatar: member.id,
 							meta: editable(member) ? [member.email] : [member.email, member.role],
 							removable: editable(member)
 						})),
 						...(manager ? team.invites : []).map((invite) => ({
 							key: `i${invite.id}`,
 							title: invite.email,
+							avatar: null,
 							meta: ["invited", invite.role]
 						}))
 					]}

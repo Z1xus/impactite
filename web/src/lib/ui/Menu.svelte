@@ -2,6 +2,7 @@
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import check from "pixelarticons/svg/check.svg?raw";
 	import { fit } from "./fit.ts";
+	import Avatar from "./Avatar.svelte";
 	import Icon from "./Icon.svelte";
 
 	type Item =
@@ -17,12 +18,14 @@
 	let {
 		label,
 		icon,
+		avatar,
 		items,
 		align = "left",
 		data = false
 	}: {
 		label: string;
 		icon?: string;
+		avatar?: number;
 		items: Item[];
 		align?: "left" | "right";
 		data?: boolean;
@@ -50,7 +53,9 @@
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
-		{#if icon}
+		{#if avatar !== undefined}
+			<Avatar seed={avatar} size={18} />
+		{:else if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
 		<span class="max-w-32 truncate sm:max-w-56">{label}</span>
