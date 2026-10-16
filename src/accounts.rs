@@ -181,9 +181,19 @@ fn new_account(
 	passkey: Option<&Proof>,
 	purpose: &Purpose,
 ) -> Result<i64, Failure> {
-	let broken = |err: rusqlite::Error| {
-		tracing::error!(%err, "accounts");
-		(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
+	let broken = |err: rusqlite::Error| match err {
+		rusqlite::Error::SqliteFailure(err, _)
+			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+		{
+			(
+				StatusCode::CONFLICT,
+				"This email already has an account. Sign in instead.",
+			)
+		}
+		err => {
+			tracing::error!(%err, "accounts");
+			(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
+		}
 	};
 	valid_identity(name, email).map_err(|message| (StatusCode::BAD_REQUEST, message))?;
 	match (passkey, password) {

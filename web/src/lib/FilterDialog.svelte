@@ -79,15 +79,20 @@
 		if (event.key !== "Enter") return;
 		event.preventDefault();
 		const value = text.trim();
-		if (value) values = goal ? [value] : [...new Set([...values, value])];
+		// goals are a fixed list, so typing only searches it
+		if (goal) values = suggestions[0] ? [suggestions[0]] : values;
+		else if (value) values = [...new Set([...values, value])];
 		text = "";
 	}
 
-	function submit() {
+	const chosen = $derived.by(() => {
 		const typed = text.trim();
-		const chosen = values.length ? values : typed ? [typed] : [];
-		if (chosen.length)
-			apply({ op: goal ? "is" : op, dim, values: goal ? chosen.slice(-1) : chosen });
+		if (goal) return [...values, typed].filter((value) => goals.includes(value)).slice(-1);
+		return values.length ? values : typed ? [typed] : [];
+	});
+
+	function submit() {
+		if (chosen.length) apply({ op: goal ? "is" : op, dim, values: chosen });
 	}
 </script>
 
@@ -113,6 +118,6 @@
 		{:else}
 			<span></span>
 		{/if}
-		<Button onclick={submit} disabled={!values.length && !text.trim()}>apply</Button>
+		<Button onclick={submit} disabled={!chosen.length}>apply</Button>
 	</div>
 </div>

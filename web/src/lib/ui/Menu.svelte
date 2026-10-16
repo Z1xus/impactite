@@ -41,7 +41,7 @@
 	onkeydown={(event) => event.key === "Escape" && (open = false)}
 />
 
-<div class="relative" bind:this={root}>
+<div class="relative min-w-0" bind:this={root}>
 	<button
 		type="button"
 		class="flex h-9 cursor-pointer items-center gap-2 rounded-px border border-edge px-3 label whitespace-nowrap text-fg transition-colors duration-100 hover:border-dim {data
@@ -53,7 +53,7 @@
 		{#if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
-		{label}
+		<span class="max-w-32 truncate sm:max-w-56">{label}</span>
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
 	{#if open}
