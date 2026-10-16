@@ -817,7 +817,7 @@
 						<Icon
 							svg={back}
 							size={14}
-							class="text-dim transition-transform duration-150 group-hover:-translate-x-0.5 group-hover:text-cyan"
+							class="text-dim transition-colors duration-100 group-hover:text-cyan"
 						/>
 						<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
 						{domain}
