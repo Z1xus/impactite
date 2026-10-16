@@ -69,12 +69,9 @@
 		--color-bad: #c6372d;
 	}
 
-	/* chrome ignores the webkit rules below when these are set, and grows the bar on hover */
-	@supports not selector(::-webkit-scrollbar) {
-		* {
-			scrollbar-width: thin;
-			scrollbar-color: var(--color-edge) transparent;
-		}
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-edge) transparent;
 	}
 
 	::-webkit-scrollbar {
