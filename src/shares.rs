@@ -107,6 +107,121 @@ pub fn routes() -> Router<Arc<Web>> {
 		.route("/api/app/sites/{domain}/shares", get(list).post(add))
 		.route("/api/app/sites/{domain}/shares/{id}", delete(remove))
 		.route("/api/app/shares/{slug}", post(open))
+		.route("/api/app/shares/{slug}/card.png", get(card))
+		.route("/share/{slug}", get(page))
+}
+
+// visitors in the last 30 days, the 30 before, and each day, for link previews of public shares
+fn month(web: &Web, share: &Share) -> Option<(u64, u64, Vec<u64>)> {
+	let tz = jiff::tz::TimeZone::get(&share.timezone).unwrap_or(jiff::tz::TimeZone::UTC);
+	let today = jiff::Timestamp::now().to_zoned(tz).date();
+	let ask = |from: jiff::civil::Date, daily: bool| {
+		crate::stats::run(
+			&web.stats,
+			json!({
+				"site_id": share.domain,
+				"date_range": [from.to_string(), today.to_string()],
+				"metrics": ["visitors"],
+				"dimensions": if daily { vec!["time:day"] } else { Vec::new() },
+				"pagination": { "limit": 100 },
+				"include": { "imports": true },
+			}),
+		)
+		.ok()
+	};
+	let start = today.checked_sub(jiff::ToSpan::days(29)).ok()?;
+	let before = today.checked_sub(jiff::ToSpan::days(59)).ok()?;
+	let now = ask(start, false)?["results"][0]["metrics"][0]
+		.as_u64()
+		.unwrap_or(0);
+	let both = ask(before, false)?["results"][0]["metrics"][0]
+		.as_u64()
+		.unwrap_or(0);
+	let daily = ask(start, true)?;
+	let rows = daily["results"].as_array().cloned().unwrap_or_default();
+	let series = start
+		.series(jiff::ToSpan::days(1))
+		.take(30)
+		.map(|day| {
+			rows.iter()
+				.find(|row| row["dimensions"][0].as_str() == Some(&day.to_string()))
+				.and_then(|row| row["metrics"][0].as_u64())
+				.unwrap_or(0)
+		})
+		.collect();
+	Some((now, both.saturating_sub(now), series))
+}
+
+fn change(now: u64, then: u64) -> Option<i64> {
+	(then > 0).then(|| ((now as f64 - then as f64) / then as f64 * 100.0).round() as i64)
+}
+
+async fn page(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response {
+	let head = match web.app.share(&slug) {
+		Ok(Some(share)) if share.password.is_empty() => month(&web, &share)
+			.map(|(now, then, _)| {
+				let escape = |text: &str| {
+					text.replace('&', "&amp;")
+						.replace('<', "&lt;")
+						.replace('>', "&gt;")
+						.replace('"', "&quot;")
+				};
+				let title = escape(&format!(
+					"{}: {} visitors in the last 30 days",
+					share.domain,
+					crate::reports::grouped(now)
+				));
+				let description = match change(now, then) {
+					Some(change) if change >= 0 => format!("Up {change}% on the 30 days before."),
+					Some(change) => format!("Down {}% on the 30 days before.", -change),
+					None => "Shared with impactite.".to_owned(),
+				};
+				let image = escape(&format!(
+					"{}/api/app/shares/{slug}/card.png",
+					web.url.trim_end_matches('/')
+				));
+				format!(
+					"<meta property=\"og:title\" content=\"{title}\"><meta property=\"og:description\" content=\"{description}\"><meta property=\"og:image\" content=\"{image}\"><meta property=\"og:image:width\" content=\"1200\"><meta property=\"og:image:height\" content=\"630\"><meta property=\"og:site_name\" content=\"impactite\"><meta name=\"twitter:card\" content=\"summary_large_image\">"
+				)
+			})
+			.unwrap_or_default(),
+		_ => String::new(),
+	};
+	crate::assets::share_page(&head)
+}
+
+async fn card(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response {
+	use crate::card::{BAD, CYAN, Canvas, DIM, FAINT, FG, INK};
+	let share = match web.app.share(&slug) {
+		Ok(Some(share)) if share.password.is_empty() => share,
+		_ => return StatusCode::NOT_FOUND.into_response(),
+	};
+	let Some((now, then, series)) = month(&web, &share) else {
+		return StatusCode::NOT_FOUND.into_response();
+	};
+	let mut canvas = Canvas::new(1200, 630, INK);
+	canvas.text(
+		72,
+		64,
+		3,
+		DIM,
+		&format!("{} last 30 days", share.domain).to_uppercase(),
+	);
+	canvas.text(1200 - 72 - 9 * 7 * 3, 64, 3, FAINT, "IMPACTITE");
+	canvas.text(66, 130, 10, FG, &crate::reports::grouped(now));
+	if let Some(change) = change(now, then) {
+		let color = if change >= 0 { CYAN } else { BAD };
+		canvas.text(72, 290, 3, color, &format!("{change:+}% VISITORS"));
+	}
+	canvas.area([0, 370, 1200, 260], &series, 10);
+	(
+		[
+			(axum::http::header::CONTENT_TYPE, "image/png"),
+			(axum::http::header::CACHE_CONTROL, "public, max-age=3600"),
+		],
+		canvas.png(),
+	)
+		.into_response()
 }
 
 #[derive(Deserialize)]

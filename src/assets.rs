@@ -73,3 +73,22 @@ fn kind(path: &str) -> &'static str {
 		_ => "application/octet-stream",
 	}
 }
+
+// a share link's page: other sites may frame it for embeds, and a public one carries preview tags
+pub fn share_page(head: &str) -> Response {
+	let Some(file) = Assets::get("index.html") else {
+		return (StatusCode::NOT_FOUND, "dashboard not built").into_response();
+	};
+	let html =
+		String::from_utf8_lossy(&file.data).replacen("</head>", &format!("{head}</head>"), 1);
+	(
+		[
+			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
+			(header::CACHE_CONTROL, "no-cache"),
+			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+			(header::REFERRER_POLICY, "same-origin"),
+		],
+		html,
+	)
+		.into_response()
+}
