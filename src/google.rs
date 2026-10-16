@@ -180,8 +180,8 @@ async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) ->
 	let Ok(Some(domain)) = web.app.site_domain(site) else {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
 	};
-	let back = format!("/{domain}/settings#search-console");
-	let failed = format!("/{domain}/settings?google=failed#search-console");
+	let back = format!("/{domain}/settings/search-console");
+	let failed = format!("/{domain}/settings/search-console?google=failed");
 	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
 		return Redirect::to(&back).into_response();
 	};
@@ -427,7 +427,7 @@ async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Response {
 	let Ok(Some(domain)) = web.app.site_domain(site) else {
 		return fail(StatusCode::NOT_FOUND, "Site not found.");
 	};
-	let back = format!("/{domain}/settings#imports");
+	let back = format!("/{domain}/settings/imports");
 	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
 		return Redirect::to(&back).into_response();
 	};

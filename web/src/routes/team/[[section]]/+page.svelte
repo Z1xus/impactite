@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from "$app/state";
+	import Missing from "#lib/ui/Missing.svelte";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
 	import alert from "pixelarticons/svg/square-alert.svg?raw";
@@ -46,11 +48,14 @@
 	const manager = $derived(role === "owner" || role === "admin");
 	const editable = (member: Member) =>
 		manager && member.role !== "owner" && member.id !== session.me?.id;
-	const sections = $derived([
-		...(manager ? [{ id: "general", label: "general", icon: sliders }] : []),
-		{ id: "members", label: "members", icon: users },
-		{ id: "danger", label: "danger", icon: alert }
-	]);
+	const section = $derived(page.params.section ?? (manager ? "general" : "members"));
+	const sections = $derived(
+		[
+			...(manager ? [{ id: "general", label: "general", icon: sliders }] : []),
+			{ id: "members", label: "members", icon: users },
+			{ id: "danger", label: "danger", icon: alert }
+		].map((item) => ({ ...item, href: resolve("/team/[[section]]", { section: item.id }) }))
+	);
 
 	let team = $state<Team | null>(null);
 	let name = $state("");
@@ -172,90 +177,106 @@
 </Dialog>
 
 <Shell>
-	{#if team && !team.personal}
-		<Settings {sections}>
+	{#if !sections.some((item) => item.id === section)}
+		<Missing text="This settings page doesn't exist." />
+	{:else if team && !team.personal}
+		<Settings {sections} current={section}>
 			{#snippet title()}
 				<Title>{team?.name}</Title>
 			{/snippet}
 
 			{#if manager}
-				<Section id="general" label="general">
-					<Form action="rename" submit={rename} inline>
-						<Field label="name" bind:value={name} required />
-					</Form>
+				{#if section === "general"}
+					<Section id="general" label="general">
+						<Form action="rename" submit={rename} inline>
+							<Field label="name" bind:value={name} required />
+						</Form>
+					</Section>
+				{/if}
+			{/if}
+
+			{#if section === "members"}
+				<Section id="members" label="members">
+					{#snippet actions()}
+						{#if manager}
+							<Button variant="quiet" onclick={() => ((link = ""), (inviting = true))}
+								>Invite</Button
+							>
+						{/if}
+					{/snippet}
+					<List
+						items={[
+							...team.members.map((member) => ({
+								key: `m${member.id}`,
+								title: member.name,
+								avatar: member.id,
+								meta: editable(member)
+									? [member.email]
+									: [member.email, member.role],
+								removable: editable(member)
+							})),
+							...(manager ? team.invites : []).map((invite) => ({
+								key: `i${invite.id}`,
+								title: invite.email,
+								avatar: null,
+								meta: ["invited", invite.role]
+							}))
+						]}
+						{remove}
+					>
+						{#snippet control(key)}
+							{@const member = team?.members.find(
+								(member) => `m${member.id}` === key
+							)}
+							{@const invite = team?.invites.find(
+								(invite) => `i${invite.id}` === key
+							)}
+							{#if member && editable(member)}
+								<Select
+									align="right"
+									value={member.role}
+									options={role === "owner"
+										? [...ROLES, { key: "owner", label: "make owner" }]
+										: ROLES}
+									pick={(next) => setRole(member.id, next)}
+								/>
+							{:else if invite}
+								<Button variant="plain" onclick={() => resend(invite)}
+									>Resend</Button
+								>
+							{/if}
+						{/snippet}
+					</List>
 				</Section>
 			{/if}
 
-			<Section id="members" label="members">
-				{#snippet actions()}
-					{#if manager}
-						<Button variant="quiet" onclick={() => ((link = ""), (inviting = true))}
-							>invite</Button
+			{#if section === "danger"}
+				<Section id="danger" label="danger" danger>
+					{#if role === "owner"}
+						<Danger
+							title="Delete team"
+							body="This is permanent. You lose the team and all its sites."
 						>
+							<Form action="delete team" submit={destroy} inline danger>
+								<Field
+									label="type the team name to confirm"
+									placeholder={team.name}
+									bind:value={confirm}
+								/>
+							</Form>
+						</Danger>
+					{:else}
+						<Danger
+							title="Leave team"
+							body="You lose access to its sites until someone invites you again."
+						>
+							<div>
+								<Button variant="danger" onclick={leave}>Leave {team.name}</Button>
+							</div>
+						</Danger>
 					{/if}
-				{/snippet}
-				<List
-					items={[
-						...team.members.map((member) => ({
-							key: `m${member.id}`,
-							title: member.name,
-							avatar: member.id,
-							meta: editable(member) ? [member.email] : [member.email, member.role],
-							removable: editable(member)
-						})),
-						...(manager ? team.invites : []).map((invite) => ({
-							key: `i${invite.id}`,
-							title: invite.email,
-							avatar: null,
-							meta: ["invited", invite.role]
-						}))
-					]}
-					{remove}
-				>
-					{#snippet control(key)}
-						{@const member = team?.members.find((member) => `m${member.id}` === key)}
-						{@const invite = team?.invites.find((invite) => `i${invite.id}` === key)}
-						{#if member && editable(member)}
-							<Select
-								align="right"
-								value={member.role}
-								options={role === "owner"
-									? [...ROLES, { key: "owner", label: "make owner" }]
-									: ROLES}
-								pick={(next) => setRole(member.id, next)}
-							/>
-						{:else if invite}
-							<Button variant="plain" onclick={() => resend(invite)}>resend</Button>
-						{/if}
-					{/snippet}
-				</List>
-			</Section>
-
-			<Section id="danger" label="danger" danger>
-				{#if role === "owner"}
-					<Danger
-						title="Delete team"
-						body="This is permanent. You lose the team and all its sites."
-					>
-						<Form action="delete team" submit={destroy} inline danger>
-							<Field
-								label="type the team name to confirm"
-								placeholder={team.name}
-								bind:value={confirm}
-							/>
-						</Form>
-					</Danger>
-				{:else}
-					<Danger
-						title="Leave team"
-						body="You lose access to its sites until someone invites you again."
-					>
-						<div>
-							<Button variant="danger" onclick={leave}>leave {team.name}</Button>
-						</div>
-					</Danger>
-				{/if}
-			</Section>
+				</Section>
+			{/if}
 		</Settings>
 	{/if}
 </Shell>

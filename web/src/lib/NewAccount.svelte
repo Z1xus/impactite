@@ -49,6 +49,6 @@
 		{/if}
 	</Form>
 	<Button variant="plain" type="button" onclick={() => (usePassword = !usePassword)}>
-		{usePassword ? "use a passkey" : "use a password instead"}
+		{usePassword ? "Use a passkey" : "Use a password instead"}
 	</Button>
 </div>

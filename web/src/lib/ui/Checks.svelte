@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends string">
+	import { sentence } from "./text";
 	import check from "pixelarticons/svg/check.svg?raw";
 	import Icon from "./Icon.svelte";
 
@@ -20,7 +21,7 @@
 			type="button"
 			role="checkbox"
 			aria-checked={on}
-			class="flex h-9 cursor-pointer items-center gap-2.5 rounded-px border px-3 label transition-colors duration-100 {data
+			class="flex h-9 cursor-pointer items-center gap-2.5 rounded-px border px-3 font-sans text-[14px] transition-colors duration-100 {data
 				? 'tracking-normal normal-case'
 				: ''} {on
 				? 'border-cyan/70 bg-cyan/10 text-fg'
@@ -36,7 +37,7 @@
 					<Icon svg={check} size={10} />
 				{/if}
 			</span>
-			{option.label}
+			{data ? option.label : sentence(option.label)}
 		</button>
 	{/each}
 </div>

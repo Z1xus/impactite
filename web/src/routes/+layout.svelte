@@ -1,7 +1,7 @@
 <script lang="ts">
 	import "./layout.css";
 	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
-	import { goto, onNavigate } from "$app/navigation";
+	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { ApiError } from "#lib/api.ts";
@@ -32,16 +32,6 @@
 
 	$effect(() => {
 		if (session.ready && redirect) goto(resolve(redirect));
-	});
-
-	onNavigate((navigation) => {
-		if (!document.startViewTransition) return;
-		return new Promise((resolve) => {
-			document.startViewTransition(async () => {
-				resolve();
-				await navigation.complete;
-			});
-		});
 	});
 </script>
 

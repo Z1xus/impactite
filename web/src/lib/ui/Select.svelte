@@ -1,4 +1,6 @@
 <script lang="ts" generics="T extends string | number">
+	import { sentence } from "./text";
+	import type { Snippet } from "svelte";
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
@@ -13,7 +15,9 @@
 		icon,
 		text: shown,
 		align = "left",
-		label
+		label,
+		plain = false,
+		footer
 	}: {
 		value: T;
 		options: { key: T; label: string; glyph?: Spec | null }[];
@@ -23,9 +27,11 @@
 		text?: string;
 		align?: "left" | "right";
 		label?: string;
+		plain?: boolean;
+		footer?: Snippet;
 	} = $props();
 
-	const text = $derived(data ? "normal-case tracking-normal" : "");
+	const text = "font-sans text-[14px]";
 
 	let open = $state(false);
 	let root: HTMLDivElement;
@@ -35,11 +41,11 @@
 
 	const current = $derived(options.find((option) => option.key === value));
 	// "new york" finds "America/New_York"
-	const plain = (text: string) => text.toLowerCase().replaceAll("_", " ");
+	const normalize = (text: string) => text.toLowerCase().replaceAll("_", " ");
 
 	const searchable = $derived(options.length > 12);
 	const shownOptions = $derived(
-		options.filter((option) => plain(option.label).includes(plain(query.trim())))
+		options.filter((option) => normalize(option.label).includes(normalize(query.trim())))
 	);
 
 	function toggle() {
@@ -91,16 +97,20 @@
 	{/if}
 	<button
 		type="button"
-		class="flex h-9 cursor-pointer items-center gap-2 rounded-px border border-edge px-3 label whitespace-nowrap {text} text-fg transition-colors duration-100 hover:border-dim"
+		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
+			? 'font-sans text-[14px] text-dim hover:bg-raised hover:text-fg'
+			: `border border-edge ${text} text-fg hover:border-dim`} transition-colors duration-100"
 		aria-expanded={open}
 		onclick={toggle}
 	>
 		{#if current?.glyph !== undefined}
-			<Glyph spec={current.glyph} fallback={current.label} />
+			<Glyph spec={current.glyph} fallback={current.label} eager />
 		{:else if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
-		{shown ?? current?.label}
+		<span class={plain ? "max-w-48 truncate" : ""}
+			>{shown ?? (current ? (data ? current.label : sentence(current.label)) : "")}</span
+		>
 		<Icon svg={chevron} size={12} class="ml-auto text-dim" />
 	</button>
 	{#if open}
@@ -125,7 +135,7 @@
 					<li>
 						<button
 							type="button"
-							class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left label {text} whitespace-nowrap transition-colors duration-75 hover:bg-line {i ===
+							class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left {text} whitespace-nowrap transition-colors duration-75 hover:bg-line {i ===
 							active
 								? 'bg-line'
 								: ''} {option.key === value ? 'text-cyan' : 'text-fg'}"
@@ -133,15 +143,27 @@
 							onpointerenter={() => (active = i)}
 						>
 							{#if option.glyph !== undefined}
-								<Glyph spec={option.glyph} fallback={option.label} />
+								<Glyph
+									spec={option.glyph}
+									fallback={data ? option.label : sentence(option.label)}
+								/>
 							{/if}
-							{option.label}
+							{data ? option.label : sentence(option.label)}
 						</button>
 					</li>
 				{:else}
 					<li class="px-3 py-2 label text-faint">no match</li>
 				{/each}
 			</ul>
+			{#if footer}
+				<div
+					class="border-t border-line p-1"
+					onclick={() => (open = false)}
+					role="presentation"
+				>
+					{@render footer()}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

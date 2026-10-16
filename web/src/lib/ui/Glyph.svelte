@@ -3,13 +3,19 @@
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Icon from "./Icon.svelte";
 
-	let { spec, fallback }: { spec: Spec | null; fallback?: string } = $props();
+	let {
+		spec,
+		fallback,
+		eager = false
+	}: { spec: Spec | null; fallback?: string; eager?: boolean } = $props();
 
 	let broken = $state(false);
+	let loaded = $state(false);
 
 	$effect(() => {
 		void spec;
 		broken = false;
+		loaded = false;
 	});
 
 	const color = $derived.by(() => {
@@ -38,12 +44,16 @@
 				<path d={spec.path} />
 			</svg>
 		{:else if spec?.kind === "image"}
+			{#if eager && !loaded && letter}
+				<span class="absolute font-mono text-[11px] leading-none text-dim">{letter}</span>
+			{/if}
 			<img
 				src={access.share && spec.url.startsWith("/api/")
 					? `${spec.url}?share=${encodeURIComponent(access.share)}`
 					: spec.url}
 				alt=""
-				loading="lazy"
+				loading={eager ? "eager" : "lazy"}
+				onload={() => (loaded = true)}
 				class={spec.flag ? "h-[9px] w-3 rounded-[1px] object-cover" : "h-3 w-3"}
 				onerror={() => (broken = true)}
 			/>

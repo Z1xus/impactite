@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { preloadData } from "$app/navigation";
+	import { sentence } from "./text";
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import check from "pixelarticons/svg/check.svg?raw";
 	import { fit } from "./fit.ts";
@@ -21,7 +23,9 @@
 		avatar,
 		items,
 		align = "left",
-		data = false
+		data = false,
+		plain = false,
+		iconOnly = false
 	}: {
 		label: string;
 		icon?: string;
@@ -29,10 +33,19 @@
 		items: Item[];
 		align?: "left" | "right";
 		data?: boolean;
+		plain?: boolean;
+		iconOnly?: boolean;
 	} = $props();
 
 	let open = $state(false);
 	let root: HTMLDivElement;
+
+	$effect(() => {
+		if (!open) return;
+		for (const item of items) {
+			if (item !== "divider" && item.href) void preloadData(item.href).catch(() => {});
+		}
+	});
 
 	function outside(event: PointerEvent) {
 		if (open && !root.contains(event.target as Node)) open = false;
@@ -47,10 +60,13 @@
 <div class="relative min-w-0" bind:this={root}>
 	<button
 		type="button"
-		class="flex h-9 cursor-pointer items-center gap-2 rounded-px border border-edge px-3 label whitespace-nowrap text-fg transition-colors duration-100 hover:border-dim {data
+		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap text-fg transition-colors duration-100 {plain
+			? 'font-sans text-[14px] hover:bg-raised'
+			: 'border border-edge font-sans text-[14px] hover:border-dim'} {data
 			? 'tracking-normal normal-case'
 			: ''}"
 		aria-expanded={open}
+		aria-label={iconOnly ? label : undefined}
 		onclick={() => (open = !open)}
 	>
 		{#if avatar !== undefined}
@@ -58,8 +74,10 @@
 		{:else if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
-		<span class="max-w-32 truncate sm:max-w-56">{label}</span>
-		<Icon svg={chevron} size={12} class="text-dim" />
+		{#if !iconOnly}
+			<span class="max-w-32 truncate sm:max-w-56">{data ? label : sentence(label)}</span>
+			<Icon svg={chevron} size={12} class="text-dim" />
+		{/if}
 	</button>
 	{#if open}
 		<ul
@@ -81,7 +99,7 @@
 							tabindex="0"
 							href={item.href}
 							type={item.href ? undefined : "button"}
-							class="flex h-9 w-full cursor-pointer items-center gap-2.5 px-3 text-left label whitespace-nowrap transition-colors duration-75 hover:bg-line {item.current
+							class="flex h-9 w-full cursor-pointer items-center gap-2.5 px-3 text-left font-sans text-[14px] whitespace-nowrap transition-colors duration-75 hover:bg-line {item.current
 								? 'text-cyan'
 								: 'text-fg'}"
 							onclick={() => {
@@ -92,7 +110,7 @@
 							{#if item.icon}
 								<Icon svg={item.icon} size={12} class="text-dim" />
 							{/if}
-							<span class="flex-1">{item.label}</span>
+							<span class="flex-1">{data ? item.label : sentence(item.label)}</span>
 							{#if item.current}
 								<Icon svg={check} size={12} />
 							{/if}

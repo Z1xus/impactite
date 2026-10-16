@@ -22,7 +22,7 @@
 	const team = $derived(currentTeam());
 	const workspace = $derived([
 		...(session.me?.teams ?? []).map((item) => ({
-			label: item.personal ? "personal" : item.name,
+			label: item.personal ? "Personal" : item.name,
 			icon: item.personal ? user : users,
 			current: item.id === session.team,
 			onclick: (): void => {
@@ -32,20 +32,22 @@
 		})),
 		"divider" as const,
 		...(team && team.id !== 0 && !team.personal
-			? [{ label: "team settings", href: resolve("/team") }]
+			? [{ label: "Team settings", href: resolve("/team/[[section]]", {}) }]
 			: []),
 		{
-			label: "new team",
+			label: "New team",
 			onclick: (): void => {
 				creating = true;
 			}
 		}
 	]);
 	const account = $derived([
-		{ label: "account", href: resolve("/settings") },
-		...(session.me?.admin ? [{ label: "instance", href: resolve("/admin") }] : []),
+		{ label: "Account", href: resolve("/settings/[[section]]", {}) },
+		...(session.me?.admin
+			? [{ label: "Instance", href: resolve("/admin/[[section]]", {}) }]
+			: []),
 		"divider" as const,
-		{ label: "sign out", onclick: (): void => void signOut() }
+		{ label: "Sign out", onclick: (): void => void signOut() }
 	]);
 
 	async function create() {
@@ -71,7 +73,7 @@
 </Dialog>
 
 <div class="min-h-dvh">
-	<header class="border-b border-line">
+	<header class="relative z-40 border-b border-line">
 		<div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-6">
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
@@ -84,7 +86,8 @@
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{#if team}
 				<Menu
-					label={team.personal ? "personal" : team.name}
+					data
+					label={team.personal ? "Personal" : team.name}
 					icon={team.personal ? user : users}
 					items={workspace}
 				/>

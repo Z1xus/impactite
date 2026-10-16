@@ -5,11 +5,14 @@
 	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, copy, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
+	import { archive } from "#lib/download.ts";
+	let exportFormat = $state("impactite");
 	import { icon } from "#lib/icons/resolve.ts";
 	import { goto } from "$app/navigation";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import NewEvents from "#lib/NewEvents.svelte";
 	import Snippet from "#lib/Snippet.svelte";
+	import back from "pixelarticons/svg/arrow-left.svg?raw";
 	import close from "pixelarticons/svg/close.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import code from "pixelarticons/svg/code.svg?raw";
@@ -60,6 +63,7 @@
 	};
 
 	const domain = $derived(page.params.site ?? "");
+	const section = $derived(page.params.section ?? "general");
 	const site = $derived(
 		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
 	);
@@ -167,7 +171,8 @@
 	let guestLink = $state("");
 
 	$effect(() => {
-		if (owner) api<People>(`/api/app/sites/${domain}/guests`).then((r) => (people = r));
+		if (owner && section === "guests")
+			api<People>(`/api/app/sites/${domain}/guests`).then((r) => (people = r));
 	});
 
 	async function inviteGuest() {
@@ -216,26 +221,36 @@
 
 	$effect(() => {
 		if (!site) return;
-		api<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`).then(
-			(r) => (funnels = r.funnels)
-		);
-		api<{ shields: Shield[] }>(`/api/app/sites/${domain}/shields`).then(
-			(r) => (shields = r.shields)
-		);
-		api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`).then((r) => (links = r.shares));
-		api<{ reports: Report[] }>(`/api/app/sites/${domain}/reports`).then(
-			(r) => (reports = r.reports)
-		);
-		api<Google>(`/api/app/sites/${domain}/google`)
-			.then((r) => (google = r))
-			.catch(() => (google = null));
-		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
-			(r) => (segments = r.segments)
-		);
-		api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then((r) => (goals = r.goals));
-		api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`).then(
-			(r) => (imports = r.imports)
-		);
+		if (section === "funnels")
+			api<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`).then(
+				(r) => (funnels = r.funnels)
+			);
+		if (section === "shields")
+			api<{ shields: Shield[] }>(`/api/app/sites/${domain}/shields`).then(
+				(r) => (shields = r.shields)
+			);
+		if (section === "sharing")
+			api<{ shares: Link[] }>(`/api/app/sites/${domain}/shares`).then(
+				(r) => (links = r.shares)
+			);
+		if (section === "reports")
+			api<{ reports: Report[] }>(`/api/app/sites/${domain}/reports`).then(
+				(r) => (reports = r.reports)
+			);
+		if (section === "search-console")
+			api<Google>(`/api/app/sites/${domain}/google`)
+				.then((r) => (google = r))
+				.catch(() => (google = null));
+		if (section === "segments")
+			api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`).then(
+				(r) => (segments = r.segments)
+			);
+		if (["goals", "funnels"].includes(section))
+			api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then((r) => (goals = r.goals));
+		if (section === "imports")
+			api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`).then(
+				(r) => (imports = r.imports)
+			);
 	});
 
 	const setTimezone = (timezone: string) =>
@@ -466,13 +481,13 @@
 	}
 
 	$effect(() => {
-		if (!site) return;
+		if (!site || section !== "imports") return;
 		untrack(loadAnalytics);
 	});
 
 	// an import runs on the server, so this checks back until it's done
 	$effect(() => {
-		if (!analytics?.importing) return;
+		if (section !== "imports" || !analytics?.importing) return;
 		const timer = setInterval(loadAnalytics, 4000);
 		return () => clearInterval(timer);
 	});
@@ -515,7 +530,7 @@
 		const next = session.me?.teams
 			.flatMap((team) => team.sites)
 			.find((item) => item.id === id)?.domain;
-		if (next) await goto(resolve("/[site]/settings", { site: next }));
+		if (next) await goto(resolve("/[site]/settings/[[section]]", { site: next }));
 	}
 
 	// split so the svelte parser does not end this block
@@ -608,29 +623,30 @@
 				action: "remove import"
 			}
 		);
-	const sections = $derived([
-		{ id: "general", label: "general", icon: sliders, group: "site" },
-		{ id: "tracking", label: "tracking", icon: code, group: "site" },
-		{ id: "collection", label: "collection", icon: eye, group: "site" },
-		{ id: "shields", label: "shields", icon: shield, group: "site" },
-		{ id: "goals", label: "goals", icon: target, group: "measure" },
-		{ id: "funnels", label: "funnels", icon: filter, group: "measure" },
-		...(segments?.length
-			? [{ id: "segments", label: "segments", icon: bookmark, group: "measure" }]
-			: []),
-		{ id: "imports", label: "imports", icon: download, group: "measure" },
-		...(google
-			? [{ id: "search-console", label: "search console", icon: search, group: "measure" }]
-			: []),
-		{ id: "sharing", label: "sharing", icon: share, group: "share" },
-		{ id: "reports", label: "reports", icon: mail, group: "share" },
-		...(owner
-			? [
-					{ id: "guests", label: "guests", icon: users, group: "share" },
-					{ id: "danger", label: "danger", icon: alert }
-				]
-			: [])
-	]);
+	const sections = $derived(
+		[
+			{ id: "general", label: "general", icon: sliders, group: "site" },
+			{ id: "tracking", label: "tracking", icon: code, group: "site" },
+			{ id: "collection", label: "collection", icon: eye, group: "site" },
+			{ id: "shields", label: "shields", icon: shield, group: "site" },
+			{ id: "goals", label: "goals", icon: target, group: "measure" },
+			{ id: "funnels", label: "funnels", icon: filter, group: "measure" },
+			{ id: "segments", label: "segments", icon: bookmark, group: "measure" },
+			{ id: "imports", label: "data", icon: download, group: "measure" },
+			{ id: "search-console", label: "search console", icon: search, group: "measure" },
+			{ id: "sharing", label: "sharing", icon: share, group: "share" },
+			{ id: "reports", label: "reports", icon: mail, group: "share" },
+			...(owner
+				? [
+						{ id: "guests", label: "guests", icon: users, group: "share" },
+						{ id: "danger", label: "danger zone", icon: alert }
+					]
+				: [])
+		].map((item) => ({
+			...item,
+			href: resolve("/[site]/settings/[[section]]", { site: domain, section: item.id })
+		}))
+	);
 </script>
 
 <Dialog title="add goal" bind:open={adding}>
@@ -719,7 +735,7 @@
 				<Button
 					type="button"
 					variant="quiet"
-					onclick={() => (steps = [...steps, goals?.[0]?.id ?? 0])}>add step</Button
+					onclick={() => (steps = [...steps, goals?.[0]?.id ?? 0])}>Add step</Button
 				>
 			</div>
 		{/if}
@@ -739,7 +755,7 @@
 				/>
 			</div>
 			{#if shieldKind === "ip"}
-				<Button type="button" variant="quiet" onclick={myIp}>use my ip</Button>
+				<Button type="button" variant="quiet" onclick={myIp}>Use my ip</Button>
 			{/if}
 		</div>
 	</Form>
@@ -789,456 +805,519 @@
 </Dialog>
 
 <Shell>
-	{#if site}
-		<Settings {sections}>
+	{#if site && sections.some((item) => item.id === section)}
+		<Settings {sections} current={section}>
 			{#snippet title()}
 				<Title>
 					<a
 						href={resolve("/[site]", { site: domain })}
-						class="flex items-center gap-3 transition-colors duration-100 hover:text-cyan"
+						class="group flex items-center gap-3 transition-colors duration-100 hover:text-cyan"
+						title="Back to dashboard"
 					>
+						<Icon
+							svg={back}
+							size={14}
+							class="text-dim transition-transform duration-150 group-hover:-translate-x-0.5 group-hover:text-cyan"
+						/>
 						<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
 						{domain}
 					</a>
 				</Title>
 			{/snippet}
 
-			<Section id="general" label="general">
-				<Form action="rename" submit={renameSite} inline>
-					<Field label="domain" bind:value={domainName} required />
-				</Form>
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					<Select
-						label="keep data"
-						value={site.retention}
-						options={RETENTION}
-						pick={setRetention}
-					/>
-					<Select
-						label="timezone"
-						value={site.timezone}
-						options={ZONES}
-						data
-						pick={setTimezone}
-					/>
-					{#if owner && home && targets.length > 1}
-						<Select label="team" value={home.id} options={targets} pick={moveTo} />
-					{/if}
-				</div>
-			</Section>
-
-			<Section id="tracking" label="tracking">
-				<Snippet {domain} />
-			</Section>
-
-			<Section id="collection" label="collection">
-				<span class="text-[14px] text-dim"
-					>Unchecked data is never stored for new visits. Without sessions every pageview
-					counts as a new visitor.</span
-				>
-				<Checks
-					bind:value={
-						() =>
-							COLLECTED.map((item) => item.key).filter(
-								(key) => !site?.skip.includes(key)
-							),
-						setCollected
-					}
-					options={COLLECTED}
-				/>
-			</Section>
-
-			<Section id="shields" label="shields">
-				{#snippet actions()}
-					<Button variant="quiet" onclick={() => (shielding = true)}>add rule</Button>
-				{/snippet}
-				{#if shields?.length === 0}
-					<span class="text-[14px] text-dim">Every visit counts.</span>
-				{/if}
-				<List
-					items={shields?.map((rule) => ({
-						key: rule.id,
-						title: rule.value,
-						meta: [KINDS.find((kind) => kind.key === rule.kind)?.meta ?? rule.kind]
-					})) ?? null}
-					remove={removeShield}
-				/>
-				<span class="text-[14px] text-dim"
-					>To skip your own browser, run this in its console on your site.</span
-				>
-				<Code code={IGNORE} />
-			</Section>
-
-			<Section id="goals" label="goals">
-				{#snippet actions()}
-					<Button variant="quiet" onclick={() => (adding = true)}>add goal</Button>
-				{/snippet}
-				<NewEvents
-					bind:this={review}
-					bind:events={suggestions}
-					{domain}
-					changed={() =>
-						api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then(
-							(r) => (goals = r.goals)
-						)}
-				/>
-				{#if goals?.length === 0 && !suggestions.length}
-					<span class="text-[14px] text-dim">No goals yet.</span>
-				{/if}
-				<List
-					items={goals?.map((goal) => ({
-						key: goal.id,
-						title: goal.name,
-						meta: [
-							goal.currency
-								? `revenue in ${goal.currency}`
-								: goal.page
-									? "page"
-									: "event",
-							...(goal.value !== goal.name ? [goal.value] : []),
-							...(goal.scroll ? [`scrolled ${goal.scroll}%`] : [])
-						]
-					})) ?? null}
-					remove={removeGoal}
-				>
-					{#snippet control(key)}
-						{@const goal = goals?.find((goal) => goal.id === key)}
-						{#if goal}
-							<Button
-								variant="plain"
-								onclick={() => ((newName = goal.name), (renaming = goal))}
-								>rename</Button
-							>
-						{/if}
-					{/snippet}
-				</List>
-			</Section>
-
-			<Section id="funnels" label="funnels">
-				{#snippet actions()}
-					{#if (goals?.length ?? 0) >= 2}
-						<Button variant="quiet" onclick={startFunnel}>add funnel</Button>
-					{/if}
-				{/snippet}
-				{#if (goals?.length ?? 0) < 2}
-					<span class="text-[14px] text-dim"
-						>Add two goals to build a funnel from them.</span
-					>
-				{:else if funnels?.length === 0}
-					<span class="text-[14px] text-dim">No funnels yet.</span>
-				{/if}
-				<List
-					items={funnels?.map((funnel) => ({
-						key: funnel.id,
-						title: funnel.name,
-						meta: funnel.steps.map(
-							(id, i) =>
-								`${i + 1}. ${goals?.find((goal) => goal.id === id)?.name ?? "?"}`
-						)
-					})) ?? null}
-					remove={removeFunnel}
-				/>
-			</Section>
-
-			{#if segments?.length}
-				<Section id="segments" label="segments">
-					<List
-						items={segments.map((segment) => ({
-							key: segment.id,
-							title: segment.name,
-							meta: [segment.shared ? "shared" : "personal"],
-							removable: segment.mine || owner
-						}))}
-						remove={removeSegment}
-					/>
-				</Section>
-			{/if}
-
-			<Section id="imports" label="imports">
-				<List
-					items={imports?.map((item) => ({
-						key: item.id,
-						title: `${item.first} to ${item.last}`,
-						meta: [item.source]
-					})) ?? null}
-					remove={removeImport}
-				/>
-				<Form action="import" submit={runImport} inline>
-					<Upload
-						bind:file
-						accept={source === "goatcounter"
-							? ".csv,.gz"
-							: source === "umami"
-								? ".csv"
-								: ".zip"}
-					/>
-					<Toggle
-						bind:value={source}
-						options={[
-							{ key: "impactite", label: "impactite" },
-							{ key: "plausible", label: "plausible" },
-							{ key: "goatcounter", label: "goatcounter" },
-							{ key: "umami", label: "umami" }
-						]}
-					/>
-				</Form>
-				<Message tone="cyan">{imported}</Message>
-				{#if analytics?.available}
-					<div class="flex flex-col gap-3 border-t border-line pt-4">
-						<span class="label">google analytics 4</span>
-						{#if analytics.importing}
-							<Message
-								>Importing from Google Analytics. This takes a few minutes. You can
-								leave this page.</Message
-							>
-						{:else if analytics.connected && analytics.properties.length}
-							<Form action="import" submit={importAnalytics} inline>
-								<Select
-									value={property}
-									options={analytics.properties}
-									pick={(key) => (property = key)}
-								/>
-							</Form>
-						{:else if analytics.connected}
-							<Message>This Google account has no Analytics properties.</Message>
-						{:else}
-							<div>
-								<Button
-									variant="quiet"
-									onclick={() =>
-										(location.href = `/api/app/sites/${domain}/analytics/connect`)}
-									>connect google analytics</Button
-								>
-							</div>
-						{/if}
-						{#if analytics.error}
-							<Message tone="bad">The last import stopped: {analytics.error}</Message>
+			{#if section === "general"}
+				<Section id="general" label="general">
+					<Form action="rename" submit={renameSite} inline>
+						<Field label="domain" bind:value={domainName} required />
+					</Form>
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						<Select
+							label="keep data"
+							value={site.retention}
+							options={RETENTION}
+							pick={setRetention}
+						/>
+						<Select
+							label="timezone"
+							value={site.timezone}
+							options={ZONES}
+							data
+							pick={setTimezone}
+						/>
+						{#if owner && home && targets.length > 1}
+							<Select label="team" value={home.id} options={targets} pick={moveTo} />
 						{/if}
 					</div>
-				{/if}
-			</Section>
-
-			{#if google}
-				<Section id="search-console" label="search console">
-					{#snippet actions()}
-						{#if google?.connected}
-							<Button variant="quiet" onclick={disconnectGoogle}>disconnect</Button>
-						{:else if google?.configured}
-							<Button
-								variant="quiet"
-								onclick={() =>
-									(location.href = `/api/app/sites/${domain}/google/connect`)}
-								>connect</Button
-							>
-						{/if}
-					{/snippet}
-					{#if googleFailed && !google.connected}
-						<Message tone="bad"
-							>Google didn't accept the sign-in. Connect again.</Message
-						>
-					{/if}
-					{#if !google.configured}
-						<span class="text-[14px] text-dim"
-							>Search terms need a Google OAuth client with this redirect URI. Ask the
-							server admin to set IMPACTITE_GOOGLE_CLIENT_ID and
-							IMPACTITE_GOOGLE_CLIENT_SECRET.</span
-						>
-						<Code code={google.redirect} />
-					{:else if !google.connected}
-						<span class="text-[14px] text-dim"
-							>Connect Google Search Console to see search terms when you filter by
-							the Google source.</span
-						>
-					{:else if google.properties.length}
-						<Select
-							label="property"
-							value={google.property}
-							options={google.properties.map((property) => ({
-								key: property,
-								label: property
-							}))}
-							pick={chooseProperty}
-							text={google.property || "choose a property"}
-							data
-						/>
-					{:else}
-						<span class="text-[14px] text-dim"
-							>This Google account has no Search Console properties.</span
-						>
-					{/if}
 				</Section>
 			{/if}
 
-			<Section id="sharing" label="sharing">
-				{#snippet actions()}
-					<Button variant="quiet" onclick={() => (linking = true)}>add link</Button>
-				{/snippet}
-				<div class="flex items-center justify-between gap-4">
-					<span class="min-w-0 text-[14px] [overflow-wrap:anywhere] text-dim"
-						>Anyone can view the dashboard at {url(domain)}</span
+			{#if section === "tracking"}
+				<Section id="tracking" label="tracking">
+					<Snippet {domain} />
+				</Section>
+			{/if}
+
+			{#if section === "collection"}
+				<Section id="collection" label="collection">
+					<span class="text-[14px] text-dim"
+						>Unchecked data is never stored for new visits. Without sessions every
+						pageview counts as a new visitor.</span
 					>
-					<Toggle
+					<Checks
 						bind:value={
-							() => (publicLink ? "public" : "private"),
-							(mode: "private" | "public") => setPublic(mode === "public")
+							() =>
+								COLLECTED.map((item) => item.key).filter(
+									(key) => !site?.skip.includes(key)
+								),
+							setCollected
 						}
-						options={[
-							{ key: "private", label: "private" },
-							{ key: "public", label: "public" }
-						]}
+						options={COLLECTED}
 					/>
-				</div>
-				<List
-					items={links
-						?.filter((link) => link.slug !== domain)
-						.map((link) => ({
-							key: link.id,
-							title: link.name,
-							meta: [url(link.slug), ...(link.locked ? ["password"] : [])]
+				</Section>
+			{/if}
+
+			{#if section === "shields"}
+				<Section id="shields" label="shields">
+					{#snippet actions()}
+						<Button variant="quiet" onclick={() => (shielding = true)}>Add rule</Button>
+					{/snippet}
+					{#if shields?.length === 0}
+						<span class="text-[14px] text-dim">Every visit counts.</span>
+					{/if}
+					<List
+						items={shields?.map((rule) => ({
+							key: rule.id,
+							title: rule.value,
+							meta: [KINDS.find((kind) => kind.key === rule.kind)?.meta ?? rule.kind]
 						})) ?? null}
-					remove={removeLink}
-				>
-					{#snippet control(key)}
-						{@const link = links?.find((link) => link.id === key)}
-						{#if link}
-							<Button
-								variant="plain"
-								onclick={async () =>
-									(await copy(url(link.slug))) && toast("Link copied.")}
-								>copy</Button
-							>
+						remove={removeShield}
+					/>
+					<span class="text-[14px] text-dim"
+						>To skip your own browser, run this in its console on your site.</span
+					>
+					<Code code={IGNORE} />
+				</Section>
+			{/if}
+
+			{#if section === "goals"}
+				<Section id="goals" label="goals">
+					{#snippet actions()}
+						<Button variant="quiet" onclick={() => (adding = true)}>Add goal</Button>
+					{/snippet}
+					<NewEvents
+						bind:this={review}
+						bind:events={suggestions}
+						{domain}
+						changed={() =>
+							api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then(
+								(r) => (goals = r.goals)
+							)}
+					/>
+					{#if goals?.length === 0 && !suggestions.length}
+						<span class="text-[14px] text-dim">No goals yet.</span>
+					{/if}
+					<List
+						items={goals?.map((goal) => ({
+							key: goal.id,
+							title: goal.name,
+							meta: [
+								goal.currency
+									? `revenue in ${goal.currency}`
+									: goal.page
+										? "page"
+										: "event",
+								...(goal.value !== goal.name ? [goal.value] : []),
+								...(goal.scroll ? [`scrolled ${goal.scroll}%`] : [])
+							]
+						})) ?? null}
+						remove={removeGoal}
+					>
+						{#snippet control(key)}
+							{@const goal = goals?.find((goal) => goal.id === key)}
+							{#if goal}
+								<Button
+									variant="plain"
+									onclick={() => ((newName = goal.name), (renaming = goal))}
+									>Rename</Button
+								>
+							{/if}
+						{/snippet}
+					</List>
+				</Section>
+			{/if}
+
+			{#if section === "funnels"}
+				<Section id="funnels" label="funnels">
+					{#snippet actions()}
+						{#if (goals?.length ?? 0) >= 2}
+							<Button variant="quiet" onclick={startFunnel}>Add funnel</Button>
 						{/if}
 					{/snippet}
-				</List>
-				{#if embedLink}
-					<span class="text-[14px] text-dim">Embed the dashboard in another page.</span>
-					<Code
-						code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
-					/>
-				{/if}
-				<div class="flex items-center justify-between gap-4">
-					<span class="text-[14px] text-dim">Pages can show their visitor count.</span>
-					<Toggle
-						bind:value={
-							() => (site?.counter ? "on" : "off"),
-							(mode: "off" | "on") => setCounter(mode === "on")
-						}
-						options={[
-							{ key: "off", label: "off" },
-							{ key: "on", label: "on" }
-						]}
-					/>
-				</div>
-				{#if site?.counter}
-					<Code code={counterSnippet} />
-				{/if}
-			</Section>
-
-			<Section id="reports" label="reports">
-				{#snippet actions()}
-					<Button variant="quiet" onclick={() => (reporting = true)}>add report</Button>
-				{/snippet}
-				{#if reports?.length === 0}
-					<span class="text-[14px] text-dim">No reports or alerts yet.</span>
-				{/if}
-				<List
-					items={reports?.map((report) => ({
-						key: report.id,
-						title: report.email,
-						meta: [
-							REPORTS.find((kind) => kind.key === report.kind)?.meta(
-								report.threshold
-							) ?? report.kind
-						]
-					})) ?? null}
-					remove={removeReport}
-				/>
-			</Section>
-
-			{#if owner && people}
-				<Section id="guests" label="guests">
+					{#if (goals?.length ?? 0) < 2}
+						<span class="text-[14px] text-dim"
+							>Add two goals to build a funnel from them.</span
+						>
+					{:else if funnels?.length === 0}
+						<span class="text-[14px] text-dim">No funnels yet.</span>
+					{/if}
 					<List
-						items={[
-							...people.guests.map((guest) => ({
-								key: `g${guest.id}`,
-								title: guest.name,
-								avatar: guest.id,
-								meta: [guest.email, guest.role]
-							})),
-							...people.invites.map((invite) => ({
-								key: `i${invite.id}`,
-								title: invite.email,
-								avatar: null,
-								meta: ["invited", invite.role]
-							}))
-						]}
-						remove={(key) =>
-							String(key).startsWith("g")
-								? removeGuest(String(key).slice(1))
-								: revokeGuest(String(key).slice(1))}
+						items={funnels?.map((funnel) => ({
+							key: funnel.id,
+							title: funnel.name,
+							meta: funnel.steps.map(
+								(id, i) =>
+									`${i + 1}. ${goals?.find((goal) => goal.id === id)?.name ?? "?"}`
+							)
+						})) ?? null}
+						remove={removeFunnel}
 					/>
-					<Form action="invite" submit={inviteGuest} inline>
-						<Field
-							label="email"
-							type="email"
-							placeholder="ada@example.com"
-							bind:value={guestEmail}
-							required
+				</Section>
+			{/if}
+
+			{#if segments}
+				{#if section === "segments"}
+					<Section id="segments" label="segments">
+						{#if !segments.length}<Message>No saved segments.</Message>{/if}
+						<List
+							items={segments.map((segment) => ({
+								key: segment.id,
+								title: segment.name,
+								meta: [segment.shared ? "shared" : "personal"],
+								removable: segment.mine || owner
+							}))}
+							remove={removeSegment}
+						/>
+					</Section>
+				{/if}
+			{/if}
+
+			{#if section === "imports"}
+				<Section id="imports" label="data">
+					<div class="flex flex-col gap-3">
+						<span class="text-[14px] text-fg">Export data</span>
+						<Message
+							>Export collected events from all dates. Imported summaries are not
+							included.</Message
+						>
+						<Form action="download" submit={() => archive(domain, exportFormat)} inline>
+							<Select
+								label="export format"
+								value={exportFormat}
+								pick={(value) => (exportFormat = value)}
+								data
+								options={[
+									{ key: "impactite", label: "Impactite archive" },
+									{ key: "plausible", label: "Plausible CSV archive" },
+									{ key: "goatcounter", label: "GoatCounter CSV" }
+								]}
+							/>
+						</Form>
+					</div>
+					<span class="border-t border-line pt-4 text-[14px] text-fg">Import data</span>
+					<List
+						items={imports?.map((item) => ({
+							key: item.id,
+							title: `${item.first} to ${item.last}`,
+							meta: [item.source]
+						})) ?? null}
+						remove={removeImport}
+					/>
+					<Form action="import" submit={runImport} inline>
+						<Upload
+							bind:file
+							accept={source === "goatcounter"
+								? ".csv,.gz"
+								: source === "umami"
+									? ".csv"
+									: ".zip"}
 						/>
 						<Toggle
-							bind:value={guestRole}
+							bind:value={source}
 							options={[
-								{ key: "viewer", label: "viewer" },
-								{ key: "editor", label: "editor" }
+								{ key: "impactite", label: "Impactite" },
+								{ key: "plausible", label: "Plausible" },
+								{ key: "goatcounter", label: "GoatCounter" },
+								{ key: "umami", label: "Umami" }
 							]}
 						/>
 					</Form>
-					{#if guestLink}
-						<Code code={guestLink} />
-						<Message>Mail is not set up, so share this link yourself.</Message>
+					<Message tone="cyan">{imported}</Message>
+					{#if analytics?.available}
+						<div class="flex flex-col gap-3 border-t border-line pt-4">
+							<span class="label">google analytics 4</span>
+							{#if analytics.importing}
+								<Message
+									>Importing from Google Analytics. This takes a few minutes. You
+									can leave this page.</Message
+								>
+							{:else if analytics.connected && analytics.properties.length}
+								<Form action="import" submit={importAnalytics} inline>
+									<Select
+										value={property}
+										options={analytics.properties}
+										pick={(key) => (property = key)}
+									/>
+								</Form>
+							{:else if analytics.connected}
+								<Message>This Google account has no Analytics properties.</Message>
+							{:else}
+								<div>
+									<Button
+										variant="quiet"
+										onclick={() =>
+											(location.href = `/api/app/sites/${domain}/analytics/connect`)}
+										>Connect google analytics</Button
+									>
+								</div>
+							{/if}
+							{#if analytics.error}
+								<Message tone="bad"
+									>The last import stopped: {analytics.error}</Message
+								>
+							{/if}
+						</div>
 					{/if}
 				</Section>
 			{/if}
 
-			{#if owner}
-				<Section id="danger" label="danger" danger>
-					<Danger
-						title="Remove a page"
-						body="All stats for this page are deleted permanently. Imported data is kept."
-					>
-						<Form action="remove page" submit={purgePage} inline danger>
-							<Field
-								label="page path"
-								placeholder="/old-page"
-								bind:value={purgePath}
+			{#if google}
+				{#if section === "search-console"}
+					<Section id="search-console" label="search console">
+						{#snippet actions()}
+							{#if google?.connected}
+								<Button variant="quiet" onclick={disconnectGoogle}
+									>Disconnect</Button
+								>
+							{:else if google?.configured}
+								<Button
+									variant="quiet"
+									onclick={() =>
+										(location.href = `/api/app/sites/${domain}/google/connect`)}
+									>Connect</Button
+								>
+							{/if}
+						{/snippet}
+						{#if googleFailed && !google.connected}
+							<Message tone="bad"
+								>Google didn't accept the sign-in. Connect again.</Message
+							>
+						{/if}
+						{#if !google.configured}
+							<span class="text-[14px] text-dim"
+								>Search terms need a Google OAuth client with this redirect URI. Ask
+								the server admin to set IMPACTITE_GOOGLE_CLIENT_ID and
+								IMPACTITE_GOOGLE_CLIENT_SECRET.</span
+							>
+							<Code code={google.redirect} />
+						{:else if !google.connected}
+							<span class="text-[14px] text-dim"
+								>Connect Google Search Console to see search terms when you filter
+								by the Google source.</span
+							>
+						{:else if google.properties.length}
+							<Select
+								label="property"
+								value={google.property}
+								options={google.properties.map((property) => ({
+									key: property,
+									label: property
+								}))}
+								pick={chooseProperty}
+								text={google.property || "choose a property"}
+								data
 							/>
-						</Form>
-					</Danger>
-					<Danger
-						title="Reset stats"
-						body="All stats are deleted permanently. The site and its settings are kept."
+						{:else}
+							<span class="text-[14px] text-dim"
+								>This Google account has no Search Console properties.</span
+							>
+						{/if}
+					</Section>
+				{/if}
+			{/if}
+
+			{#if section === "sharing"}
+				<Section id="sharing" label="sharing">
+					{#snippet actions()}
+						<Button variant="quiet" onclick={() => (linking = true)}>Add link</Button>
+					{/snippet}
+					<div class="flex items-center justify-between gap-4">
+						<span class="min-w-0 text-[14px] [overflow-wrap:anywhere] text-dim"
+							>Anyone can view the dashboard at {url(domain)}</span
+						>
+						<Toggle
+							bind:value={
+								() => (publicLink ? "public" : "private"),
+								(mode: "private" | "public") => setPublic(mode === "public")
+							}
+							options={[
+								{ key: "private", label: "private" },
+								{ key: "public", label: "public" }
+							]}
+						/>
+					</div>
+					<List
+						items={links
+							?.filter((link) => link.slug !== domain)
+							.map((link) => ({
+								key: link.id,
+								title: link.name,
+								meta: [url(link.slug), ...(link.locked ? ["password"] : [])]
+							})) ?? null}
+						remove={removeLink}
 					>
-						<Form action="reset stats" submit={resetStats} inline danger>
-							<Field
-								label="type reset to confirm"
-								placeholder="reset"
-								bind:value={resetConfirm}
-							/>
-						</Form>
-					</Danger>
-					<Danger
-						title="Delete site"
-						body="This is permanent. You lose the site and all its data."
-					>
-						<Form action="delete site" submit={destroy} inline danger>
-							<Field
-								label="type the domain to confirm"
-								placeholder={domain}
-								bind:value={confirm}
-							/>
-						</Form>
-					</Danger>
+						{#snippet control(key)}
+							{@const link = links?.find((link) => link.id === key)}
+							{#if link}
+								<Button
+									variant="plain"
+									onclick={async () =>
+										(await copy(url(link.slug))) && toast("Link copied.")}
+									>Copy</Button
+								>
+							{/if}
+						{/snippet}
+					</List>
+					{#if embedLink}
+						<span class="text-[14px] text-dim"
+							>Embed the dashboard in another page.</span
+						>
+						<Code
+							code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
+						/>
+					{/if}
+					<div class="flex items-center justify-between gap-4">
+						<span class="text-[14px] text-dim">Pages can show their visitor count.</span
+						>
+						<Toggle
+							bind:value={
+								() => (site?.counter ? "on" : "off"),
+								(mode: "off" | "on") => setCounter(mode === "on")
+							}
+							options={[
+								{ key: "off", label: "off" },
+								{ key: "on", label: "on" }
+							]}
+						/>
+					</div>
+					{#if site?.counter}
+						<Code code={counterSnippet} />
+					{/if}
 				</Section>
+			{/if}
+
+			{#if section === "reports"}
+				<Section id="reports" label="reports">
+					{#snippet actions()}
+						<Button variant="quiet" onclick={() => (reporting = true)}
+							>Add report</Button
+						>
+					{/snippet}
+					{#if reports?.length === 0}
+						<span class="text-[14px] text-dim">No reports or alerts yet.</span>
+					{/if}
+					<List
+						items={reports?.map((report) => ({
+							key: report.id,
+							title: report.email,
+							meta: [
+								REPORTS.find((kind) => kind.key === report.kind)?.meta(
+									report.threshold
+								) ?? report.kind
+							]
+						})) ?? null}
+						remove={removeReport}
+					/>
+				</Section>
+			{/if}
+
+			{#if owner && people}
+				{#if section === "guests"}
+					<Section id="guests" label="guests">
+						<List
+							items={[
+								...people.guests.map((guest) => ({
+									key: `g${guest.id}`,
+									title: guest.name,
+									avatar: guest.id,
+									meta: [guest.email, guest.role]
+								})),
+								...people.invites.map((invite) => ({
+									key: `i${invite.id}`,
+									title: invite.email,
+									avatar: null,
+									meta: ["invited", invite.role]
+								}))
+							]}
+							remove={(key) =>
+								String(key).startsWith("g")
+									? removeGuest(String(key).slice(1))
+									: revokeGuest(String(key).slice(1))}
+						/>
+						<Form action="invite" submit={inviteGuest} inline>
+							<Field
+								label="email"
+								type="email"
+								placeholder="ada@example.com"
+								bind:value={guestEmail}
+								required
+							/>
+							<Toggle
+								bind:value={guestRole}
+								options={[
+									{ key: "viewer", label: "viewer" },
+									{ key: "editor", label: "editor" }
+								]}
+							/>
+						</Form>
+						{#if guestLink}
+							<Code code={guestLink} />
+							<Message>Mail is not set up, so share this link yourself.</Message>
+						{/if}
+					</Section>
+				{/if}
+			{/if}
+
+			{#if owner}
+				{#if section === "danger"}
+					<Section id="danger" label="danger" danger>
+						<Danger
+							title="Remove a page"
+							body="All stats for this page are deleted permanently. Imported data is kept."
+						>
+							<Form action="remove page" submit={purgePage} inline danger>
+								<Field
+									label="page path"
+									placeholder="/old-page"
+									bind:value={purgePath}
+								/>
+							</Form>
+						</Danger>
+						<Danger
+							title="Reset stats"
+							body="All stats are deleted permanently. The site and its settings are kept."
+						>
+							<Form action="reset stats" submit={resetStats} inline danger>
+								<Field
+									label="type reset to confirm"
+									placeholder="reset"
+									bind:value={resetConfirm}
+								/>
+							</Form>
+						</Danger>
+						<Danger
+							title="Delete site"
+							body="This is permanent. You lose the site and all its data."
+						>
+							<Form action="delete site" submit={destroy} inline danger>
+								<Field
+									label="type the domain to confirm"
+									placeholder={domain}
+									bind:value={confirm}
+								/>
+							</Form>
+						</Danger>
+					</Section>
+				{/if}
 			{/if}
 		</Settings>
 	{:else}

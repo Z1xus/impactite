@@ -14,9 +14,9 @@
 
 	type Mode = "passkey" | "password" | "link";
 	const MODES: { key: Mode; label: string }[] = [
-		{ key: "passkey", label: "use a passkey" },
-		{ key: "password", label: "use a password" },
-		{ key: "link", label: "email me a link" }
+		{ key: "passkey", label: "Use a passkey" },
+		{ key: "password", label: "Use a password" },
+		{ key: "link", label: "Email me a link" }
 	];
 
 	let mode = $state<Mode>("passkey");
@@ -81,8 +81,8 @@
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a server redirect, not a page -->
 			<a
 				href="/api/app/sso"
-				class="flex h-9 w-full items-center justify-center rounded-px border border-edge label text-fg transition-colors duration-100 hover:border-dim"
-				>sign in with {session.sso}</a
+				class="flex h-9 w-full items-center justify-center rounded-px border border-edge font-sans text-[14px] text-fg transition-colors duration-100 hover:border-dim"
+				>Sign in with {session.sso}</a
 			>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		{/if}
@@ -139,8 +139,8 @@
 			{#if session.signup}
 				<a
 					href={resolve("/signup")}
-					class="inline-flex h-9 items-center px-1 label text-dim transition-colors duration-100 hover:text-fg"
-					>create an account</a
+					class="inline-flex h-9 items-center px-1 font-sans text-[14px] text-dim transition-colors duration-100 hover:text-fg"
+					>Create an account</a
 				>
 			{/if}
 		</div>
