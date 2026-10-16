@@ -357,7 +357,7 @@ fn discord(web: &Web, note: &Note, to: &str) -> anyhow::Result<reqwest::RequestB
 			.map(|(name, rows)| {
 				let value = rows
 					.iter()
-					.map(|(row, count)| format!("{row}  {}", grouped(*count)))
+					.map(|(row, count)| format!("`{}` {row}", grouped(*count)))
 					.collect::<Vec<_>>()
 					.join("\n");
 				json!({ "name": name, "value": value.chars().take(1000).collect::<String>(), "inline": true })
@@ -404,7 +404,7 @@ fn slack(note: &Note) -> Value {
 	for (name, rows) in note.lists.iter().filter(|(_, rows)| !rows.is_empty()) {
 		let rows = rows
 			.iter()
-			.map(|(row, count)| format!("{row}  {}", grouped(*count)))
+			.map(|(row, count)| format!("`{}` {row}", grouped(*count)))
 			.collect::<Vec<_>>()
 			.join("\n");
 		blocks.push(

@@ -144,7 +144,8 @@
 		);
 
 	async function destroy() {
-		if (confirm !== team?.name) throw new Error(`Type ${team?.name} to confirm.`);
+		if (confirm.trim().toLowerCase() !== team?.name.toLowerCase())
+			throw new Error(`Type ${team?.name} to confirm.`);
 		await api(`/api/app/teams/${id}`, undefined, "DELETE");
 		await refresh();
 		await goto(resolve("/"));
@@ -234,14 +235,21 @@
 				{#if role === "owner"}
 					<Danger
 						title="Delete team"
-						body="Deletes the team and all its sites. You can't undo this."
+						body="This is permanent. You lose the team and all its sites."
 					>
 						<Form action="delete team" submit={destroy} inline danger>
-							<Field label="type {team.name} to confirm" bind:value={confirm} />
+							<Field
+								label="type the team name to confirm"
+								placeholder={team.name}
+								bind:value={confirm}
+							/>
 						</Form>
 					</Danger>
 				{:else}
-					<Danger title="Leave team" body="You'll lose access to its sites.">
+					<Danger
+						title="Leave team"
+						body="You lose access to its sites until someone invites you again."
+					>
 						<div>
 							<Button variant="danger" onclick={leave}>leave {team.name}</Button>
 						</div>

@@ -51,6 +51,7 @@
 								class="flex flex-wrap gap-x-3 gap-y-1 label tracking-normal normal-case"
 							>
 								{#each item.meta as part, i (i)}
+									{#if i}<span class="h-2.5 w-px self-center bg-edge"></span>{/if}
 									<span class="min-w-0 break-all">{part}</span>
 								{/each}
 							</span>

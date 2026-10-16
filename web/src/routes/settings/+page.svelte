@@ -396,10 +396,14 @@
 		<Section id="danger" label="danger" danger>
 			<Danger
 				title="Delete account"
-				body="Deletes your account and your personal sites. You can't undo this."
+				body="This is permanent. You lose your account and your personal sites."
 			>
 				<Form action="delete account" submit={deleteAccount} inline danger>
-					<Field label="type your email to confirm" bind:value={confirm} />
+					<Field
+						label="type your email to confirm"
+						placeholder={session.me?.email}
+						bind:value={confirm}
+					/>
 				</Form>
 			</Danger>
 		</Section>

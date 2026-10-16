@@ -594,14 +594,15 @@
 	}
 
 	async function resetStats() {
-		if (resetConfirm !== "reset") throw new Error("Type reset to confirm.");
+		if (resetConfirm.trim().toLowerCase() !== "reset")
+			throw new Error("Type reset to confirm.");
 		await api(`/api/app/sites/${domain}/reset`, {});
 		resetConfirm = "";
 		imports = [];
 	}
 
 	async function destroy() {
-		if (confirm !== domain) throw new Error(`Type ${domain} to confirm.`);
+		if (confirm.trim().toLowerCase() !== domain) throw new Error(`Type ${domain} to confirm.`);
 		await api(`/api/app/sites/${domain}`, undefined, "DELETE");
 		await refresh();
 		await goto(resolve("/"));
@@ -1256,7 +1257,7 @@
 				<Section id="danger" label="danger" danger>
 					<Danger
 						title="Remove a page"
-						body="Deletes every stat for one page. Imported data isn't affected."
+						body="Its stats are gone for good. Imported data stays."
 					>
 						<Form action="remove page" submit={purgePage} inline danger>
 							<Field
@@ -1268,18 +1269,26 @@
 					</Danger>
 					<Danger
 						title="Reset stats"
-						body="Deletes all stats. The site and its settings stay."
+						body="Every stat is gone for good. The site and its settings stay."
 					>
 						<Form action="reset stats" submit={resetStats} inline danger>
-							<Field label="type reset to confirm" bind:value={resetConfirm} />
+							<Field
+								label="type reset to confirm"
+								placeholder="reset"
+								bind:value={resetConfirm}
+							/>
 						</Form>
 					</Danger>
 					<Danger
 						title="Delete site"
-						body="Deletes the site and all its data. You can't undo this."
+						body="This is permanent. You lose the site and all its data."
 					>
 						<Form action="delete site" submit={destroy} inline danger>
-							<Field label="type {domain} to confirm" bind:value={confirm} />
+							<Field
+								label="type the domain to confirm"
+								placeholder={domain}
+								bind:value={confirm}
+							/>
 						</Form>
 					</Danger>
 				</Section>
