@@ -31,7 +31,7 @@
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
 	import Details from "#lib/Details.svelte";
 	import FilterDialog from "#lib/FilterDialog.svelte";
-	import Snippet from "#lib/Snippet.svelte";
+	import Waiting from "#lib/Waiting.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";
@@ -46,7 +46,6 @@
 	import Title from "#lib/ui/Title.svelte";
 	import Kpi from "#lib/ui/Kpi.svelte";
 	import Live from "#lib/ui/Live.svelte";
-	import Message from "#lib/ui/Message.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
 	import Select from "#lib/ui/Select.svelte";
@@ -147,21 +146,9 @@
 
 	$effect(() => {
 		if (!quiet) return;
-		const site = domain;
-		let timer = 0;
-		const check = () =>
-			query(site, { metrics: ["events"], date_range: "all" }).then((result) => {
-				if (!result.results[0]?.metrics[0]) {
-					empty = true;
-					timer = window.setTimeout(check, 3000);
-				} else if (empty) {
-					empty = false;
-					quiet = false;
-					version++;
-				}
-			});
-		check();
-		return () => clearTimeout(timer);
+		query(domain, { metrics: ["events"], date_range: "all" }).then((result) => {
+			empty = !result.results[0]?.metrics[0];
+		});
 	});
 
 	let totals = $state<number[] | null>(null);
@@ -833,12 +820,13 @@
 	</div>
 
 	{#if empty && !combined}
-		<section class="flex max-w-2xl flex-col gap-5">
-			<Snippet {domain} />
-			<Message
-				>Add this to your site's head. The dashboard opens with the first visit.</Message
-			>
-		</section>
+		<Waiting
+			{domain}
+			landed={() => {
+				empty = quiet = false;
+				version++;
+			}}
+		/>
 	{:else}
 		<section class="rounded-px border border-line bg-panel">
 			<div class="grid grid-cols-2 border-b border-line sm:grid-cols-3 lg:grid-cols-6">

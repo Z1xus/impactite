@@ -119,7 +119,10 @@ pub async fn event(
 	for domain in domains.split(',').map(str::trim).filter(|d| !d.is_empty()) {
 		let tracked = match ingest.site(domain) {
 			Some(site) => ingest.track(&site, hit(), &client),
-			None => Err(super::Rejected::Failed),
+			None => {
+				ingest.stray(domain);
+				Err(super::Rejected::Failed)
+			}
 		};
 		dropped += usize::from(tracked.is_err());
 	}

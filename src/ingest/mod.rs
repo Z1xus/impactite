@@ -87,6 +87,8 @@ pub struct Ingest {
 	salts: Mutex<HashMap<(u64, i32), [u8; 32]>>,
 	sessions: Vec<Shard>,
 	titles: Mutex<HashMap<(u64, String), String>>,
+	// domains that sent hits without a site, with when, so setup can point out a typo
+	strays: Mutex<HashMap<String, i64>>,
 }
 
 impl Ingest {
@@ -100,7 +102,29 @@ impl Ingest {
 			salts: Mutex::default(),
 			sessions: (0..SHARDS).map(|_| Mutex::default()).collect(),
 			titles: Mutex::default(),
+			strays: Mutex::default(),
 		}
+	}
+
+	pub fn stray(&self, domain: &str) {
+		let now = Timestamp::now().as_second();
+		let mut strays = lock(&self.strays);
+		strays.retain(|_, seen| now - *seen < 600);
+		if strays.len() < 256 && domain.len() <= 253 {
+			strays.insert(domain.to_lowercase(), now);
+		}
+	}
+
+	// recent strays that look like this site under another name
+	pub fn strays(&self, domain: &str) -> Vec<String> {
+		let now = Timestamp::now().as_second();
+		lock(&self.strays)
+			.iter()
+			.filter(|(name, seen)| {
+				now - **seen < 600 && name.rsplit('.').take(2).eq(domain.rsplit('.').take(2))
+			})
+			.map(|(name, _)| name.clone())
+			.collect()
 	}
 
 	pub fn site(&self, domain: &str) -> Option<Arc<Tracked>> {

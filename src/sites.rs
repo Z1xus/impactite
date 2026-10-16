@@ -32,6 +32,7 @@ pub fn routes() -> Router<Arc<Web>> {
 		)
 		.route("/api/app/sites/{domain}/imports/{id}", delete(remove))
 		.route("/api/app/sites/{domain}/reset", axum::routing::post(reset))
+		.route("/api/app/sites/{domain}/strays", get(strays))
 		.route("/api/app/sites/{domain}/purge", axum::routing::post(purge))
 		.route(
 			"/api/app/sites/{domain}/guests",
@@ -278,6 +279,17 @@ fn manages(web: &Web, user: i64, site: &Site) -> bool {
 fn managed(web: &Web, user: i64, domain: &str) -> Option<Site> {
 	let site = web.app.site(domain).ok().flatten()?;
 	manages(web, user, &site).then_some(site)
+}
+
+async fn strays(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	match web.app.editable(viewer.user, &domain) {
+		Some(site) => Json(json!({ "domains": web.ingest.strays(&site.domain) })).into_response(),
+		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
+	}
 }
 
 async fn destroy(
