@@ -17,6 +17,8 @@ install-path = "CARGO_HOME"
 hosting = "github"
 # gzip, so `impactite update` unpacks it with what it already has
 unix-archive = ".tar.gz"
+# release only on tags, pull requests get the ci checks
+pr-run-mode = "skip"
 # Whether to install an updater program
 install-updater = false
 # The web dashboard is embedded, so it builds first
