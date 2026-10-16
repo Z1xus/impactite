@@ -131,36 +131,39 @@
 						{/if}
 					{/snippet}
 					{#if info.update.latest}
-						<div class="flex flex-col gap-2">
-							<span class="text-[14px] text-fg">
-								impactite {info.update.latest.version} is available. You're on {info.version}.
-								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the release page on github -->
-								<a href={info.update.latest.url} class="text-cyan hover:text-fg"
-									>What changed</a
+						<div class="flex flex-col gap-4">
+							<div class="flex items-baseline justify-between gap-4 text-[14px]">
+								<span class="text-fg">
+									impactite {info.update.latest.version} is available.
+									<span class="text-dim">You're on {info.version}.</span>
+								</span>
+								<!-- eslint-disable svelte/no-navigation-without-resolve -- the release page on github -->
+								<a
+									href={info.update.latest.url}
+									class="shrink-0 text-cyan hover:text-fg">Release notes</a
 								>
-							</span>
-							{#each info.update.latest.changes as change (change.version)}
-								<div class="flex flex-col gap-1">
-									<span class="label text-dim">{change.version}</span>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							</div>
+							<div
+								class="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-4 gap-y-2 rounded-px border border-line bg-panel px-3 py-3 text-[14px] text-fg"
+							>
+								{#each info.update.latest.changes as change (change.version)}
 									{#each change.lines as line, i (i)}
-										{@const [kind, text] = line.includes(": ")
-											? [
-													line.slice(0, line.indexOf(": ")),
-													line.slice(line.indexOf(": ") + 2)
-												]
-											: ["", line]}
-										<span class="flex gap-2 text-[14px] text-fg">
-											{#if kind}<span
-													class="w-14 shrink-0 pt-0.5 label text-cyan"
-													>{kind}</span
-												>{/if}
-											{text}
-										</span>
+										{@const at = line.indexOf(": ")}
+										<span class="label text-dim"
+											>{i === 0 ? change.version : ""}</span
+										>
+										<span class="label text-cyan"
+											>{at > 0 ? line.slice(0, at) : ""}</span
+										>
+										<span>{at > 0 ? line.slice(at + 2) : line}</span>
 									{/each}
-								</div>
-							{/each}
+								{/each}
+							</div>
 							<span class="text-[14px] text-dim">
-								Run impactite update or pull the new Docker image, then restart.
+								Run <code class="font-mono text-[12px] text-cyan"
+									>impactite update</code
+								> or pull the new Docker image, then restart.
 							</span>
 						</div>
 					{:else}
