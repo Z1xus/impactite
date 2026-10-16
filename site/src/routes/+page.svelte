@@ -22,6 +22,7 @@
 	import Edit from "../lib/Edit.svelte";
 	import Install from "../lib/Install.svelte";
 	import Race from "../lib/Race.svelte";
+	import Scale from "../lib/Scale.svelte";
 	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
 
@@ -221,6 +222,19 @@
 			Plausible CE 3.2.1, GoatCounter 2.7.0, Ryzen 5 7600X.
 			<a href={BENCH} class="text-cyan hover:text-fg">Source</a>
 		</p>
+	</section>
+
+	<section id="scale" class="flex flex-col gap-10 pb-28">
+		<div class="flex flex-col gap-4" use:appear>
+			<h2 class="font-mono text-[32px] tracking-tight">Do you need Kubernetes?</h2>
+			<p class="max-w-2xl text-[17px] text-dim">
+				Drag to your traffic. The numbers come from the benchmark above.
+			</p>
+		</div>
+		<Scale
+			cpu={STATS.find((stat) => stat.label === "cpu for 1M pageviews")?.values[0] ?? 0}
+			rate={STATS.find((stat) => stat.label === "pageviews per second")?.values[0] ?? 0}
+		/>
 	</section>
 
 	<section

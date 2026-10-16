@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { Tween } from "svelte/motion";
 	import { cubicOut } from "svelte/easing";
 
@@ -9,10 +10,14 @@
 		delay = 0
 	}: { value: number; on: boolean; digits?: number; delay?: number } = $props();
 
-	const tween = new Tween(0, { duration: 1400, easing: cubicOut });
+	// the built page carries the real number, the browser counts up to it once it scrolls in
+	const tween = new Tween(
+		untrack(() => value),
+		{ duration: 1400, easing: cubicOut }
+	);
 
 	$effect(() => {
-		if (on) tween.set(value, { delay });
+		tween.set(on ? value : 0, on ? { delay } : { duration: 0 });
 	});
 </script>
 
