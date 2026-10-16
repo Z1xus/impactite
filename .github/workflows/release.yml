@@ -129,9 +129,9 @@ jobs:
       - name: "Install bun"
         uses: "oven-sh/setup-bun@v2"
       - name: "Install web dependencies"
-        run: "bun install --frozen-lockfile"
+        run: "bun install --cwd web --frozen-lockfile"
       - name: "Build the dashboard"
-        run: "bun run build"
+        run: "bun run --cwd web build"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
