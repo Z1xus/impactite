@@ -5,6 +5,7 @@
 	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, copy, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
+	import { number } from "#lib/display.svelte.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { goto } from "$app/navigation";
 	import { refresh, session } from "#lib/session.svelte.ts";
@@ -64,6 +65,8 @@
 	);
 
 	let goals = $state<Goal[] | null>(null);
+	type Suggestion = { name: string; count: number; revenue: boolean };
+	let suggestions = $state<Suggestion[]>([]);
 	let imports = $state<Import[] | null>(null);
 	let kind = $state<"event" | "page" | "revenue">("event");
 	let value = $state("");
@@ -230,6 +233,7 @@
 			(r) => (segments = r.segments)
 		);
 		api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`).then((r) => (goals = r.goals));
+		untrack(suggest);
 		api<{ imports: Import[] }>(`/api/app/sites/${domain}/imports`).then(
 			(r) => (imports = r.imports)
 		);
@@ -239,6 +243,40 @@
 		attempt(async () => {
 			await api(`/api/app/sites/${domain}`, { timezone }, "PATCH");
 			await refresh();
+		});
+
+	function suggest() {
+		api<{ events: Suggestion[] }>(`/api/app/sites/${domain}/goals/suggestions`)
+			.then((r) => (suggestions = r.events))
+			.catch(() => (suggestions = []));
+	}
+
+	// revenue needs a currency, so those open the dialog
+	const adoptEvent = (event: Suggestion) =>
+		attempt(async () => {
+			if (event.revenue) {
+				kind = "revenue";
+				value = event.name;
+				adding = true;
+				return;
+			}
+			goals = (
+				await api<{ goals: Goal[] }>(`/api/app/sites/${domain}/goals`, {
+					page: false,
+					value: event.name,
+					name: ""
+				})
+			).goals;
+			suggest();
+		});
+
+	const ignoreEvent = (name: string) =>
+		attempt(async () => {
+			suggestions = (
+				await api<{ events: Suggestion[] }>(`/api/app/sites/${domain}/goals/suggestions`, {
+					name
+				})
+			).events;
 		});
 
 	async function addGoal() {
@@ -253,6 +291,7 @@
 		).goals;
 		value = goalName = scroll = "";
 		adding = false;
+		suggest();
 	}
 
 	async function addShield() {
@@ -431,6 +470,7 @@
 						"DELETE"
 					)
 				).goals;
+				suggest();
 			},
 			{
 				title: `Delete goal "${goals?.find((goal) => goal.id === id)?.name ?? ""}"?`,
@@ -867,7 +907,34 @@
 				{#snippet actions()}
 					<Button variant="quiet" onclick={() => (adding = true)}>add goal</Button>
 				{/snippet}
-				{#if goals?.length === 0}
+				{#if suggestions.length}
+					<span class="label">new events in the last 30 days</span>
+					<List
+						items={suggestions.map((event) => ({
+							key: event.name,
+							title: event.name,
+							meta: [
+								`${number(event.count)} ${event.count === 1 ? "time" : "times"}`,
+								...(event.revenue ? ["with revenue"] : [])
+							]
+						}))}
+					>
+						{#snippet control(key)}
+							{@const event = suggestions.find((event) => event.name === key)}
+							{#if event}
+								<div class="flex gap-2">
+									<Button variant="quiet" onclick={() => adoptEvent(event)}
+										>add goal</Button
+									>
+									<Button variant="plain" onclick={() => ignoreEvent(event.name)}
+										>ignore</Button
+									>
+								</div>
+							{/if}
+						{/snippet}
+					</List>
+				{/if}
+				{#if goals?.length === 0 && !suggestions.length}
 					<span class="text-[14px] text-dim">No goals yet.</span>
 				{/if}
 				<List

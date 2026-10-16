@@ -10,9 +10,10 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::{Viewer, Web, fail, internal};
+use crate::accounts::{Viewer, Web, broken, fail, internal};
 use crate::app::{App, Site};
 use crate::shares::Reader;
+use crate::stats::day_number;
 
 #[derive(Debug, Clone)]
 pub struct Goal {
@@ -61,9 +62,82 @@ pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
 		.route("/api/app/sites/{domain}/goals", get(list).post(add))
 		.route(
+			"/api/app/sites/{domain}/goals/suggestions",
+			get(suggestions).post(ignore),
+		)
+		.route(
 			"/api/app/sites/{domain}/goals/{id}",
 			delete(remove).patch(rename),
 		)
+}
+
+#[derive(Deserialize)]
+struct Ignore {
+	name: String,
+}
+
+async fn suggestions(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+) -> Response {
+	match web.app.editable(viewer.user, &domain) {
+		Some(site) => suggested(&web, &site),
+		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
+	}
+}
+
+async fn ignore(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+	Json(body): Json<Ignore>,
+) -> Response {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
+		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
+	};
+	match web.app.ignore_event(site.id, &body.name) {
+		Ok(()) => suggested(&web, &site),
+		Err(err) => internal(err),
+	}
+}
+
+// event names from the last 30 days that are neither goals nor ignored
+fn suggested(web: &Web, site: &Site) -> Response {
+	let (goals, ignored) = match (web.app.goals(site.id), web.app.ignored_events(site.id)) {
+		(Ok(goals), Ok(ignored)) => (goals, ignored),
+		(Err(err), _) | (_, Err(err)) => return internal(err),
+	};
+	let tz = jiff::tz::TimeZone::get(&site.timezone).unwrap_or(jiff::tz::TimeZone::UTC);
+	let today = day_number(jiff::Timestamp::now().to_zoned(tz).date());
+	let report = web.stats.db.query(&crater::Query {
+		site: site.id,
+		days: today - 29..=today,
+		filters: Vec::new(),
+		breakdown: Some(Field::Dim(Dim::Name)),
+		limit: 50,
+		daily: false,
+		imports: false,
+		since: None,
+	});
+	let rows = match report {
+		Ok(report) => report.rows,
+		Err(err) => {
+			tracing::error!(%err, "goal suggestions");
+			return broken();
+		}
+	};
+	let events: Vec<_> = rows
+		.iter()
+		.filter(|(name, _)| {
+			!matches!(&**name, "pageview" | "engagement")
+				&& !goals.iter().any(|goal| !goal.page && goal.value == **name)
+				&& !ignored.iter().any(|ignored| ignored == &**name)
+		})
+		.take(20)
+		.map(|(name, metrics)| json!({ "name": &**name, "count": metrics.events, "revenue": metrics.revenue > 0 }))
+		.collect();
+	Json(json!({ "events": events })).into_response()
 }
 
 #[derive(Deserialize)]
@@ -189,6 +263,20 @@ fn respond(web: &Web, site: u64) -> Response {
 }
 
 impl App {
+	pub fn ignored_events(&self, site: u64) -> rusqlite::Result<Vec<String>> {
+		let conn = self.conn();
+		let mut stmt = conn.prepare("select name from ignored_events where site = ?1")?;
+		stmt.query_map([site as i64], |row| row.get(0))?.collect()
+	}
+
+	pub fn ignore_event(&self, site: u64, name: &str) -> rusqlite::Result<()> {
+		self.conn().execute(
+			"insert or ignore into ignored_events (site, name) values (?1, ?2)",
+			params![site as i64, name],
+		)?;
+		Ok(())
+	}
+
 	pub fn goals(&self, site: u64) -> rusqlite::Result<Vec<Goal>> {
 		let conn = self.conn();
 		let mut stmt = conn.prepare(

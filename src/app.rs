@@ -235,6 +235,13 @@ const MIGRATIONS: &[&str] = &[
 		expires_at integer not null
 	);
 	",
+	"
+	create table ignored_events (
+		site integer not null references sites (id) on delete cascade,
+		name text not null,
+		primary key (site, name)
+	);
+	",
 ];
 
 #[derive(Debug, Clone)]

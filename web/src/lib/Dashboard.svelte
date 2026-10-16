@@ -86,6 +86,13 @@
 	const editable = $derived(
 		!readonly && ["owner", "admin", "editor"].includes(member?.role ?? "")
 	);
+	let newEvents = $state(0);
+	$effect(() => {
+		if (!editable || domain.startsWith("team:")) return;
+		api<{ events: unknown[] }>(`/api/app/sites/${domain}/goals/suggestions`)
+			.then((r) => (newEvents = r.events.length))
+			.catch(() => (newEvents = 0));
+	});
 	// `team:<id>` shows every site of the team added up
 	const combined = $derived(domain.startsWith("team:"));
 	const team = $derived(currentTeam());
@@ -739,6 +746,13 @@
 			>
 				<Icon svg={sliders} size={14} />
 			</a>
+			{#if newEvents}
+				<a
+					href="{resolve('/[site]/settings', { site: domain })}#goals"
+					class="flex h-9 items-center rounded-px border border-edge px-3 label text-cyan transition-colors duration-100 hover:border-dim"
+					>{newEvents} new {newEvents === 1 ? "event" : "events"}</a
+				>
+			{/if}
 		{/if}
 		{#each filters as filter (encodeFilter(filter))}
 			<Chip
