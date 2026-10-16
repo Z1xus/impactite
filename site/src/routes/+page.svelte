@@ -228,7 +228,8 @@
 		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Do you need Kubernetes?</h2>
 			<p class="max-w-2xl text-[17px] text-dim">
-				Drag to your traffic. The numbers come from the benchmark above.
+				Set your monthly pageviews to see the load on one server, based on the benchmark
+				above.
 			</p>
 		</div>
 		<Scale

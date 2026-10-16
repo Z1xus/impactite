@@ -1257,7 +1257,7 @@
 				<Section id="danger" label="danger" danger>
 					<Danger
 						title="Remove a page"
-						body="Its stats are gone for good. Imported data stays."
+						body="All stats for this page are deleted permanently. Imported data is kept."
 					>
 						<Form action="remove page" submit={purgePage} inline danger>
 							<Field
@@ -1269,7 +1269,7 @@
 					</Danger>
 					<Danger
 						title="Reset stats"
-						body="Every stat is gone for good. The site and its settings stay."
+						body="All stats are deleted permanently. The site and its settings are kept."
 					>
 						<Form action="reset stats" submit={resetStats} inline danger>
 							<Field
