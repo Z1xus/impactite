@@ -9,6 +9,7 @@ use anyhow::{Context, bail};
 use aws_lc_rs::digest::{SHA256, digest};
 use flate2::read::GzDecoder;
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::accounts::Web;
 
@@ -34,15 +35,48 @@ async fn latest(http: &reqwest::Client) -> anyhow::Result<Release> {
 		.await?)
 }
 
+fn parts(version: &str) -> Vec<u64> {
+	version
+		.trim_start_matches('v')
+		.split(['.', '-'])
+		.map_while(|part| part.parse().ok())
+		.collect()
+}
+
 fn newer(tag: &str) -> bool {
-	let parts = |version: &str| -> Vec<u64> {
-		version
-			.trim_start_matches('v')
-			.split(['.', '-'])
-			.map_while(|part| part.parse().ok())
-			.collect()
-	};
 	parts(tag) > parts(VERSION)
+}
+
+// the changelog sections after this version, up to the release
+async fn changes(http: &reqwest::Client, tag: &str) -> anyhow::Result<serde_json::Value> {
+	let text = http
+		.get(format!(
+			"https://raw.githubusercontent.com/{REPO}/{tag}/CHANGELOG.md"
+		))
+		.send()
+		.await?
+		.error_for_status()?
+		.text()
+		.await?;
+	let mut sections: Vec<(&str, Vec<&str>)> = Vec::new();
+	let mut shown = false;
+	for line in text.lines() {
+		if let Some(heading) = line.strip_prefix("## ") {
+			let version = heading.trim();
+			shown = parts(version) > parts(VERSION) && parts(version) <= parts(tag);
+			if shown {
+				sections.push((version, Vec::new()));
+			}
+		} else if let (Some(item), true) = (line.strip_prefix("- "), shown)
+			&& let Some((_, lines)) = sections.last_mut()
+		{
+			lines.push(item.trim());
+		}
+	}
+	Ok(sections
+		.into_iter()
+		.map(|(version, lines)| json!({ "version": version, "lines": lines }))
+		.collect())
 }
 
 // asks github once a day, so admins see when a release is out
@@ -50,13 +84,15 @@ pub async fn watch(web: Arc<Web>) {
 	loop {
 		match latest(&web.http).await {
 			Ok(release) => {
-				*web.latest.lock().unwrap_or_else(PoisonError::into_inner) =
-					newer(&release.tag_name).then(|| {
-						(
-							release.tag_name.trim_start_matches('v').to_owned(),
-							release.html_url,
-						)
-					});
+				let latest = match newer(&release.tag_name) {
+					true => Some(json!({
+						"version": release.tag_name.trim_start_matches('v'),
+						"url": release.html_url,
+						"changes": changes(&web.http, &release.tag_name).await.unwrap_or_default(),
+					})),
+					false => None,
+				};
+				*web.latest.lock().unwrap_or_else(PoisonError::into_inner) = latest;
 			}
 			Err(err) => tracing::debug!(%err, "update check"),
 		}

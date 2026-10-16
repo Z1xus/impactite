@@ -51,8 +51,7 @@ async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 				.latest
 				.lock()
 				.unwrap_or_else(std::sync::PoisonError::into_inner)
-				.as_ref()
-				.map(|(version, url)| json!({ "version": version, "url": url })),
+				.clone(),
 		}))
 		.into_response(),
 		Err(err) => internal(err),

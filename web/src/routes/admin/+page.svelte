@@ -25,7 +25,11 @@
 		mail: boolean;
 		users: User[];
 		version: string;
-		latest: { version: string; url: string } | null;
+		latest: {
+			version: string;
+			url: string;
+			changes: { version: string; lines: string[] }[];
+		} | null;
 	};
 
 	let info = $state<Admin | null>(null);
@@ -92,6 +96,25 @@
 								>What changed</a
 							>
 						</span>
+						{#each info.latest.changes as change (change.version)}
+							<div class="flex flex-col gap-1">
+								<span class="label text-dim">{change.version}</span>
+								{#each change.lines as line, i (i)}
+									{@const [kind, text] = line.includes(": ")
+										? [
+												line.slice(0, line.indexOf(": ")),
+												line.slice(line.indexOf(": ") + 2)
+											]
+										: ["", line]}
+									<span class="flex gap-2 text-[14px] text-fg">
+										{#if kind}<span class="w-14 shrink-0 pt-0.5 label text-cyan"
+												>{kind}</span
+											>{/if}
+										{text}
+									</span>
+								{/each}
+							</div>
+						{/each}
 						<span class="text-[14px] text-dim">
 							Run impactite update or pull the new Docker image, then restart.
 						</span>
