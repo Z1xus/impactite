@@ -224,10 +224,10 @@
 		</p>
 	</section>
 
-	<section id="scale" class="flex flex-col gap-10 pb-28">
+	<section id="scale" class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]">
 		<div class="flex flex-col gap-4" use:appear>
 			<h2 class="font-mono text-[32px] tracking-tight">Do you really need Kubernetes?</h2>
-			<p class="max-w-2xl text-[17px] text-dim">
+			<p class="text-dim">
 				Set your monthly pageviews to see the load on one server, based on the benchmark
 				above.
 			</p>

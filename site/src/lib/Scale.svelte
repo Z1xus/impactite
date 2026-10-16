@@ -13,10 +13,10 @@
 	const count = (value: number) => Math.round(value).toLocaleString("en-US");
 </script>
 
-<div class="flex max-w-2xl flex-col gap-8">
+<div class="flex flex-col gap-8 rounded-px border border-line bg-panel p-5">
 	<label class="flex flex-col gap-3">
 		<span class="label">your pageviews a month</span>
-		<span class="font-mono text-[32px] tracking-tight">{count(monthly)}</span>
+		<span class="font-mono text-[28px] tracking-tight">{count(monthly)}</span>
 		<input
 			type="range"
 			min="0"
@@ -42,7 +42,7 @@
 			<dd class="font-mono text-[22px]">{count(room)}x</dd>
 		</div>
 	</dl>
-	<p class="text-[17px]">
+	<p class="border-t border-line pt-5 text-[15px]">
 		{core < 5 ? "No. One small server is enough." : "Still one server. Give it more cores."}
 	</p>
 </div>
