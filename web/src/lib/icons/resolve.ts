@@ -180,6 +180,26 @@ function flag(code: string): Spec | null {
 
 const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
+// dimensions whose rows carry an icon, and those that fall back to their first letter
+export const ICONIC = new Set([
+	"visit:source",
+	"visit:referrer",
+	"visit:channel",
+	"event:hostname",
+	"visit:country",
+	"visit:region",
+	"visit:browser",
+	"visit:os",
+	"visit:device"
+]);
+export const LETTERED = new Set([
+	"visit:source",
+	"visit:referrer",
+	"event:hostname",
+	"visit:browser",
+	"visit:os"
+]);
+
 export function icon(dim: string, value: string): Spec | null {
 	switch (dim) {
 		case "visit:source":

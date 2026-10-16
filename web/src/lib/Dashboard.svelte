@@ -9,7 +9,7 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import WorldMap from "#lib/dither/Map.svelte";
 	import { api } from "#lib/api.ts";
-	import { icon } from "#lib/icons/resolve.ts";
+	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
 	import downloadIcon from "pixelarticons/svg/download.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
@@ -53,25 +53,6 @@
 	import Select from "#lib/ui/Select.svelte";
 
 	type Ranked = Parameters<typeof Rows>[1]["rows"];
-
-	const ICONIC = new Set([
-		"visit:source",
-		"visit:referrer",
-		"visit:channel",
-		"event:hostname",
-		"visit:country",
-		"visit:region",
-		"visit:browser",
-		"visit:os",
-		"visit:device"
-	]);
-	const LETTERED = new Set([
-		"visit:source",
-		"visit:referrer",
-		"event:hostname",
-		"visit:browser",
-		"visit:os"
-	]);
 
 	const PAGES = new Set(["event:page", "visit:entry_page", "visit:exit_page"]);
 

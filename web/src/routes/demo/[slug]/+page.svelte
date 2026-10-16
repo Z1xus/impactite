@@ -23,8 +23,6 @@
 			<Field label="email" value="demo@impactite.dev" readonly />
 			<Field label="password" type="password" value="impactite-demo" readonly />
 		</Form>
-		<Message
-			>This is the live dashboard of {slug}. You can look around, nothing can be changed.</Message
-		>
+		<Message>Read-only dashboard of {slug}.</Message>
 	</div>
 </Gate>

@@ -21,6 +21,10 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
+	import Kpi from "#lib/ui/Kpi.svelte";
+	import Panel from "#lib/ui/Panel.svelte";
+	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
+	import { METRICS, format } from "#lib/stats.ts";
 	import Edit from "../lib/Edit.svelte";
 	import Install from "../lib/Install.svelte";
 	import Race from "../lib/Race.svelte";
@@ -28,7 +32,6 @@
 	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
 	import { impact } from "../lib/impact.ts";
-	import Count from "../lib/Count.svelte";
 
 	let { data } = $props();
 
@@ -86,40 +89,95 @@
 	const compact = (value: number) => Math.round(value).toLocaleString("en-US");
 	// the preview wakes up when the meteor lands
 	let landed = $state(false);
-	const asleep = <T extends { value: number }>(rows: T[]) =>
-		rows.map((row) => ({ ...row, value: 0 }));
-	const KPIS: [string, number, (value: number) => string, string][] = [
-		["visitors", 9148, compact, "+38%"],
-		[
-			"pageviews",
-			21400,
-			(value) => (value < 1000 ? compact(value) : `${(value / 1000).toFixed(1)}k`),
-			"+37%"
-		],
-		["bounce", 54, (value) => `${Math.round(value)}%`, "+0pt"],
-		[
-			"duration",
-			127,
-			(value) =>
-				`${Math.floor(value / 60)}m ${String(Math.round(value % 60)).padStart(2, "0")}s`,
-			"-2%"
-		]
-	];
-
-	const sources = [
-		{ key: "google", label: "Google", value: 3811 },
-		{ key: "direct", label: "Direct / None", value: 2506 },
-		{ key: "hn", label: "Hacker News", value: 586 },
-		{ key: "twitter", label: "Twitter", value: 521 },
-		{ key: "reddit", label: "Reddit", value: 517 }
-	];
-	const pages = [
-		{ key: "/", label: "/", value: 4377 },
-		{ key: "/pricing", label: "/pricing", value: 2185 },
-		{ key: "/blog/crater", label: "/blog/crater", value: 2165 },
-		{ key: "/docs", label: "/docs", value: 1524 },
-		{ key: "/docs/install", label: "/docs/install", value: 1360 }
-	];
+	// the same six numbers, panels and tabs as the dashboard, filled with the demo site's month
+	const TOTALS = [9148, 10512, 21400, 54, 127, 2.04];
+	const CHANGES = [38, 36, 37, 0, -2, 1].map((change, i) => ({
+		change,
+		good: i === 3 ? change <= 0 : change >= 0
+	}));
+	let metric = $state(0);
+	// visits and pageviews follow the visitors line, the rates wander around their average
+	const FACTORS = [1, 1.15, 2.34];
+	const shape = (i: number) =>
+		i < FACTORS.length
+			? days.map((day) => Math.round(day * FACTORS[i]))
+			: days.map((_, k) => TOTALS[i] * (0.9 + 0.2 * Math.sin(k * 0.7 + i)));
+	const PANELS = {
+		left: {
+			tabs: [
+				{ key: "visit:source", label: "sources" },
+				{ key: "visit:channel", label: "channels" },
+				{ key: "visit:utm_source", label: "utm" }
+			],
+			rows: {
+				"visit:source": [
+					["Google", 3811],
+					["Direct / None", 2506],
+					["Hacker News", 586],
+					["Twitter", 521],
+					["Reddit", 517]
+				],
+				"visit:channel": [
+					["Organic Search", 4180],
+					["Direct", 2506],
+					["Organic Social", 1038],
+					["Referral", 1004],
+					["Email", 420]
+				],
+				"visit:utm_source": [
+					["newsletter", 420],
+					["github", 312],
+					["mastodon", 118]
+				]
+			} as Record<string, [string, number][]>
+		},
+		right: {
+			tabs: [
+				{ key: "event:page", label: "pages" },
+				{ key: "visit:entry_page", label: "entry" },
+				{ key: "visit:exit_page", label: "exit" },
+				{ key: "event:hostname", label: "hostnames" }
+			],
+			rows: {
+				"event:page": [
+					["/", 4377],
+					["/pricing", 2185],
+					["/blog/crater", 2165],
+					["/docs", 1524],
+					["/docs/install", 1360]
+				],
+				"visit:entry_page": [
+					["/", 5021],
+					["/blog/crater", 1840],
+					["/docs/install", 902],
+					["/pricing", 611],
+					["/docs", 400]
+				],
+				"visit:exit_page": [
+					["/docs/install", 2210],
+					["/", 2012],
+					["/pricing", 1630],
+					["/blog/crater", 1402],
+					["/docs", 980]
+				],
+				"event:hostname": [
+					["impactite.dev", 8890],
+					["docs.impactite.dev", 1622]
+				]
+			} as Record<string, [string, number][]>
+		}
+	};
+	let tabs = $state({ left: "visit:source", right: "event:page" });
+	const rowsOf = (side: "left" | "right") =>
+		PANELS[side].rows[tabs[side]].map(([label, value]) => ({
+			key: label,
+			label,
+			value,
+			...(ICONIC.has(tabs[side]) && {
+				icon: icon(tabs[side], label),
+				fallback: LETTERED.has(tabs[side]) ? label : undefined
+			})
+		}));
 
 	const FEATURES = [
 		{ icon: target, label: "goals and custom events" },
@@ -212,34 +270,38 @@
 		</section>
 
 		<section class="rounded-px border border-line bg-panel">
-			<div class="grid grid-cols-2 border-b border-line md:grid-cols-4">
-				{#each KPIS as [name, value, format, change], i (name)}
-					<div class="flex flex-col gap-2 p-4 {i ? 'border-l border-line' : ''}">
-						<span class="label {i ? '' : 'text-cyan'}">{name}</span>
-						<span class="text-num"
-							><Count {value} {format} on={landed} delay={i * 80} /></span
-						>
-						<span class="label {change.startsWith('-') ? 'text-bad' : 'text-cyan'}"
-							>{change}</span
-						>
-					</div>
+			<div class="grid grid-cols-2 border-b border-line sm:grid-cols-3 lg:grid-cols-6">
+				{#each METRICS as item, i (item.key)}
+					<Kpi
+						label={item.label}
+						value={landed ? TOTALS[i] : null}
+						change={landed ? CHANGES[i] : null}
+						unit={item.key === "bounce_rate" ? "pt" : "%"}
+						format={(value) => format(item.key, value)}
+						active={metric === i}
+						pick={() => (metric = i)}
+					/>
 				{/each}
 			</div>
 			<div
-				class="p-4 transition-[clip-path] duration-1000 ease-[steps(28)]"
+				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-[steps(28)]"
 				style:clip-path={landed ? "inset(0 0 0 0)" : "inset(0 100% 0 0)"}
 			>
-				<Chart values={days} {labels} format={compact} height={200} />
-			</div>
-			<div class="grid border-t border-line md:grid-cols-2">
-				<div class="p-2">
-					<Rows rows={landed ? sources : asleep(sources)} format={compact} limit={5} />
-				</div>
-				<div class="border-line p-2 md:border-l">
-					<Rows rows={landed ? pages : asleep(pages)} format={compact} limit={5} />
-				</div>
+				<Chart
+					values={shape(metric)}
+					{labels}
+					format={(value) => format(METRICS[metric].key, value)}
+					height={200}
+				/>
 			</div>
 		</section>
+		<div class="mt-6 grid gap-6 md:grid-cols-2">
+			{#each ["left", "right"] as const as side (side)}
+				<Panel tabs={PANELS[side].tabs} bind:tab={tabs[side]}>
+					<Rows rows={landed ? rowsOf(side) : null} format={compact} limit={5} />
+				</Panel>
+			{/each}
+		</div>
 	</div>
 
 	<section id="speed" class="flex flex-col gap-14 py-28">
