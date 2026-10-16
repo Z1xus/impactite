@@ -9,6 +9,7 @@ authors = ["Z1xus"]
 license = "AGPL-3.0-only"
 publish = false
 repository = "https://github.com/Z1xus/impactite"
+homepage = "https://impactite.dev"
 
 [workspace.dependencies]
 anyhow = "1.0.104"
@@ -56,6 +57,7 @@ unwrap_used = "deny"
 
 [package]
 name = "impactite"
+description = "Self-hosted web analytics in one binary"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -63,6 +65,7 @@ authors.workspace = true
 license.workspace = true
 publish.workspace = true
 repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 anyhow.workspace = true
