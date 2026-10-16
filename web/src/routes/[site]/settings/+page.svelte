@@ -10,6 +10,19 @@
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import Snippet from "#lib/Snippet.svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
+	import sliders from "pixelarticons/svg/sliders.svg?raw";
+	import code from "pixelarticons/svg/code.svg?raw";
+	import eye from "pixelarticons/svg/eye.svg?raw";
+	import shield from "pixelarticons/svg/shield.svg?raw";
+	import target from "pixelarticons/svg/target.svg?raw";
+	import filter from "pixelarticons/svg/filter.svg?raw";
+	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
+	import download from "pixelarticons/svg/download.svg?raw";
+	import search from "pixelarticons/svg/search.svg?raw";
+	import share from "pixelarticons/svg/share.svg?raw";
+	import mail from "pixelarticons/svg/mail.svg?raw";
+	import users from "pixelarticons/svg/users.svg?raw";
+	import alert from "pixelarticons/svg/square-alert.svg?raw";
 	import Button from "#lib/ui/Button.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
@@ -590,21 +603,25 @@
 			}
 		);
 	const sections = $derived([
-		{ id: "general", label: "general" },
-		{ id: "tracking", label: "tracking" },
-		{ id: "collection", label: "collection" },
-		{ id: "goals", label: "goals" },
-		{ id: "funnels", label: "funnels" },
-		...(segments?.length ? [{ id: "segments", label: "segments" }] : []),
-		{ id: "imports", label: "imports" },
-		...(google ? [{ id: "search-console", label: "search console" }] : []),
-		{ id: "shields", label: "shields" },
-		{ id: "sharing", label: "sharing" },
-		{ id: "reports", label: "reports" },
+		{ id: "general", label: "general", icon: sliders, group: "site" },
+		{ id: "tracking", label: "tracking", icon: code, group: "site" },
+		{ id: "collection", label: "collection", icon: eye, group: "site" },
+		{ id: "shields", label: "shields", icon: shield, group: "site" },
+		{ id: "goals", label: "goals", icon: target, group: "measure" },
+		{ id: "funnels", label: "funnels", icon: filter, group: "measure" },
+		...(segments?.length
+			? [{ id: "segments", label: "segments", icon: bookmark, group: "measure" }]
+			: []),
+		{ id: "imports", label: "imports", icon: download, group: "measure" },
+		...(google
+			? [{ id: "search-console", label: "search console", icon: search, group: "measure" }]
+			: []),
+		{ id: "sharing", label: "sharing", icon: share, group: "share" },
+		{ id: "reports", label: "reports", icon: mail, group: "share" },
 		...(owner
 			? [
-					{ id: "guests", label: "guests" },
-					{ id: "danger", label: "danger" }
+					{ id: "guests", label: "guests", icon: users, group: "share" },
+					{ id: "danger", label: "danger", icon: alert }
 				]
 			: [])
 	]);
@@ -825,6 +842,27 @@
 				/>
 			</Section>
 
+			<Section id="shields" label="shields">
+				{#snippet actions()}
+					<Button variant="quiet" onclick={() => (shielding = true)}>add rule</Button>
+				{/snippet}
+				{#if shields?.length === 0}
+					<span class="text-[14px] text-dim">Every visit counts.</span>
+				{/if}
+				<List
+					items={shields?.map((rule) => ({
+						key: rule.id,
+						title: rule.value,
+						meta: [KINDS.find((kind) => kind.key === rule.kind)?.meta ?? rule.kind]
+					})) ?? null}
+					remove={removeShield}
+				/>
+				<span class="text-[14px] text-dim"
+					>To skip your own browser, run this in its console on your site.</span
+				>
+				<Code code={IGNORE} />
+			</Section>
+
 			<Section id="goals" label="goals">
 				{#snippet actions()}
 					<Button variant="quiet" onclick={() => (adding = true)}>add goal</Button>
@@ -1015,27 +1053,6 @@
 					{/if}
 				</Section>
 			{/if}
-
-			<Section id="shields" label="shields">
-				{#snippet actions()}
-					<Button variant="quiet" onclick={() => (shielding = true)}>add rule</Button>
-				{/snippet}
-				{#if shields?.length === 0}
-					<span class="text-[14px] text-dim">Every visit counts.</span>
-				{/if}
-				<List
-					items={shields?.map((rule) => ({
-						key: rule.id,
-						title: rule.value,
-						meta: [KINDS.find((kind) => kind.key === rule.kind)?.meta ?? rule.kind]
-					})) ?? null}
-					remove={removeShield}
-				/>
-				<span class="text-[14px] text-dim"
-					>To skip your own browser, run this in its console on your site.</span
-				>
-				<Code code={IGNORE} />
-			</Section>
 
 			<Section id="sharing" label="sharing">
 				{#snippet actions()}

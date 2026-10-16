@@ -1,4 +1,12 @@
 <script lang="ts">
+	import user from "pixelarticons/svg/user.svg?raw";
+	import lock from "pixelarticons/svg/lock.svg?raw";
+	import phone from "pixelarticons/svg/phone.svg?raw";
+	import monitor from "pixelarticons/svg/monitor.svg?raw";
+	import key from "pixelarticons/svg/key.svg?raw";
+	import laptop from "pixelarticons/svg/laptop.svg?raw";
+	import code from "pixelarticons/svg/code.svg?raw";
+	import alert from "pixelarticons/svg/square-alert.svg?raw";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import qrcode from "qrcode-generator";
@@ -25,14 +33,14 @@
 	type Session = { id: number; current: boolean; device: string; created: number; seen: number };
 
 	const sections = [
-		{ id: "profile", label: "profile" },
-		{ id: "password", label: "password" },
-		{ id: "two-factor", label: "two factor" },
-		{ id: "display", label: "display" },
-		{ id: "passkeys", label: "passkeys" },
-		{ id: "sessions", label: "sessions" },
-		{ id: "keys", label: "api keys" },
-		{ id: "danger", label: "danger" }
+		{ id: "profile", label: "profile", icon: user, group: "account" },
+		{ id: "display", label: "display", icon: monitor, group: "account" },
+		{ id: "password", label: "password", icon: lock, group: "sign in" },
+		{ id: "two-factor", label: "two factor", icon: phone, group: "sign in" },
+		{ id: "passkeys", label: "passkeys", icon: key, group: "sign in" },
+		{ id: "sessions", label: "sessions", icon: laptop, group: "sign in" },
+		{ id: "keys", label: "api keys", icon: code, group: "developers" },
+		{ id: "danger", label: "danger", icon: alert }
 	];
 
 	let name = $state(session.me?.name ?? "");
@@ -204,6 +212,45 @@
 			</Form>
 		</Section>
 
+		<Section id="display" label="display">
+			<div class="flex flex-wrap gap-6">
+				<Toggle
+					label="theme"
+					bind:value={() => display.theme, (theme) => saveDisplay({ theme })}
+					options={[
+						{ key: "dark", label: "dark" },
+						{ key: "light", label: "light" },
+						{ key: "system", label: "system" }
+					]}
+				/>
+				<Toggle
+					label="week starts on"
+					bind:value={() => display.week, (week) => saveDisplay({ week })}
+					options={[
+						{ key: "monday", label: "monday" },
+						{ key: "sunday", label: "sunday" }
+					]}
+				/>
+				<Toggle
+					label="clock"
+					bind:value={() => display.clock, (clock) => saveDisplay({ clock })}
+					options={[
+						{ key: "24", label: "24 hour" },
+						{ key: "12", label: "12 hour" }
+					]}
+				/>
+				<Toggle
+					label="numbers"
+					bind:value={() => display.numbers, (numbers) => saveDisplay({ numbers })}
+					options={[
+						{ key: "en-US", label: "1,234.5" },
+						{ key: "de-DE", label: "1.234,5" },
+						{ key: "fr-FR", label: "1 234,5" }
+					]}
+				/>
+			</div>
+		</Section>
+
 		<Section id="password" label="password">
 			<Form
 				action={session.me?.password ? "change password" : "set password"}
@@ -281,45 +328,6 @@
 					>Ask for a code from an authenticator app when you sign in with a password.</span
 				>
 			{/if}
-		</Section>
-
-		<Section id="display" label="display">
-			<div class="flex flex-wrap gap-6">
-				<Toggle
-					label="theme"
-					bind:value={() => display.theme, (theme) => saveDisplay({ theme })}
-					options={[
-						{ key: "dark", label: "dark" },
-						{ key: "light", label: "light" },
-						{ key: "system", label: "system" }
-					]}
-				/>
-				<Toggle
-					label="week starts on"
-					bind:value={() => display.week, (week) => saveDisplay({ week })}
-					options={[
-						{ key: "monday", label: "monday" },
-						{ key: "sunday", label: "sunday" }
-					]}
-				/>
-				<Toggle
-					label="clock"
-					bind:value={() => display.clock, (clock) => saveDisplay({ clock })}
-					options={[
-						{ key: "24", label: "24 hour" },
-						{ key: "12", label: "12 hour" }
-					]}
-				/>
-				<Toggle
-					label="numbers"
-					bind:value={() => display.numbers, (numbers) => saveDisplay({ numbers })}
-					options={[
-						{ key: "en-US", label: "1,234.5" },
-						{ key: "de-DE", label: "1.234,5" },
-						{ key: "fr-FR", label: "1 234,5" }
-					]}
-				/>
-			</div>
 		</Section>
 
 		<Section id="passkeys" label="passkeys">

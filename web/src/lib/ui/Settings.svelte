@@ -1,11 +1,16 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import Icon from "./Icon.svelte";
 
 	let {
 		sections,
 		title,
 		children
-	}: { sections: { id: string; label: string }[]; title: Snippet; children: Snippet } = $props();
+	}: {
+		sections: { id: string; label: string; icon?: string; group?: string }[];
+		title: Snippet;
+		children: Snippet;
+	} = $props();
 
 	let active = $state("");
 
@@ -33,14 +38,32 @@
 		<nav
 			class="flex min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col"
 		>
-			{#each sections as section (section.id)}
+			{#each sections as section, i (section.id)}
+				{#if section.group !== sections[i - 1]?.group}
+					<span
+						class="hidden px-3 pb-1 label text-[10px] text-faint lg:block {i
+							? 'pt-4'
+							: ''}">{section.group ?? ""}</span
+					>
+				{/if}
 				<a
 					href="#{section.id}"
-					class="flex h-9 shrink-0 items-center rounded-px px-3 label transition-colors duration-100 hover:bg-raised hover:text-fg {active ===
+					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 label transition-colors duration-100 hover:bg-raised hover:text-fg {active ===
 					section.id
 						? 'bg-raised text-fg'
-						: ''}">{section.label}</a
+						: ''} {section.id === 'danger' ? 'text-bad hover:text-bad' : ''}"
 				>
+					{#if section.icon}
+						<Icon
+							svg={section.icon}
+							size={12}
+							class={active === section.id && section.id !== "danger"
+								? "text-cyan"
+								: ""}
+						/>
+					{/if}
+					{section.label}
+				</a>
 			{/each}
 		</nav>
 		<div class="flex max-w-3xl flex-col gap-6">

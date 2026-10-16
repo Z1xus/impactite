@@ -1,4 +1,8 @@
 <script lang="ts">
+	import server from "pixelarticons/svg/server.svg?raw";
+	import userPlus from "pixelarticons/svg/user-plus.svg?raw";
+	import mail from "pixelarticons/svg/mail.svg?raw";
+	import users from "pixelarticons/svg/users.svg?raw";
 	import { date } from "#lib/display.svelte.ts";
 	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
@@ -66,10 +70,10 @@
 			if (yes) return api<Admin>(`/api/app/admin/users/${user}`, undefined, "DELETE");
 		});
 	const sections = [
-		{ id: "version", label: "version" },
-		{ id: "signup", label: "sign-up" },
-		{ id: "mail", label: "mail" },
-		{ id: "users", label: "users" }
+		{ id: "version", label: "version", icon: server },
+		{ id: "signup", label: "sign-up", icon: userPlus },
+		{ id: "mail", label: "mail", icon: mail },
+		{ id: "users", label: "users", icon: users }
 	];
 </script>
 

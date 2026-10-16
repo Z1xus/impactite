@@ -1,4 +1,7 @@
 <script lang="ts">
+	import sliders from "pixelarticons/svg/sliders.svg?raw";
+	import users from "pixelarticons/svg/users.svg?raw";
+	import alert from "pixelarticons/svg/square-alert.svg?raw";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { ask } from "#lib/ask.svelte.ts";
@@ -44,9 +47,9 @@
 	const editable = (member: Member) =>
 		manager && member.role !== "owner" && member.id !== session.me?.id;
 	const sections = $derived([
-		...(manager ? [{ id: "general", label: "general" }] : []),
-		{ id: "members", label: "members" },
-		{ id: "danger", label: "danger" }
+		...(manager ? [{ id: "general", label: "general", icon: sliders }] : []),
+		{ id: "members", label: "members", icon: users },
+		{ id: "danger", label: "danger", icon: alert }
 	]);
 
 	let team = $state<Team | null>(null);
