@@ -21,9 +21,9 @@
 	// with an alias the script and its events use paths ad blockers don't know
 	const code = $derived(
 		session.alias
-			? `<script defer data-domain="${domain}" data-api="${location.origin}${session.alias}/e" src="${location.origin}${session.alias}/${file}"></` +
+			? `<script defer crossorigin="anonymous" data-domain="${domain}" data-api="${location.origin}${session.alias}/e" src="${location.origin}${session.alias}/${file}"></` +
 					`script>`
-			: `<script defer data-domain="${domain}" src="${location.origin}/js/${file}"></` +
+			: `<script defer crossorigin="anonymous" data-domain="${domain}" src="${location.origin}/js/${file}"></` +
 					`script>`
 	);
 </script>

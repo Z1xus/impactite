@@ -3,7 +3,7 @@ use std::io::Write;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use axum::extract::Path;
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
 
@@ -76,6 +76,10 @@ fn javascript(built: &Built, headers: &HeaderMap) -> Response {
 		(header::CACHE_CONTROL, "public, max-age=3600"),
 		(header::VARY, "accept-encoding"),
 		(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+		(
+			HeaderName::from_static("cross-origin-resource-policy"),
+			"cross-origin",
+		),
 	] {
 		headers.insert(name, HeaderValue::from_static(value));
 	}
