@@ -15,6 +15,8 @@ targets = ["aarch64-unknown-linux-musl", "x86_64-unknown-linux-musl"]
 install-path = "CARGO_HOME"
 # Where to host releases
 hosting = "github"
+github-attestations = true
+github-attestations-phase = "host"
 # gzip, so `impactite update` unpacks it with what it already has
 unix-archive = ".tar.gz"
 # release only on tags, pull requests get the ci checks
@@ -27,4 +29,4 @@ github-build-setup = "../build-setup.yml"
 publish-jobs = ["./docker"]
 
 [dist.github-custom-job-permissions]
-docker = { contents = "read", packages = "write" }
+docker = { contents = "read", packages = "write", attestations = "write", id-token = "write" }

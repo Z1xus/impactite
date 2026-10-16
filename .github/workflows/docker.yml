@@ -13,6 +13,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      attestations: write
+      id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ fromJson(inputs.plan).announcement_tag }}
@@ -32,10 +34,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - uses: docker/build-push-action@v6
+        id: push
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: mode=max
+          sbom: true
           tags: |
             ghcr.io/z1xus/impactite:${{ env.TAG }}
             ghcr.io/z1xus/impactite:latest
+      - uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/z1xus/impactite
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
