@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail, internal};
 use crate::app::{App, Site};
+use crate::card;
 use crate::stats::{self, day_number};
 
 const KINDS: [&str; 7] = [
@@ -113,10 +114,7 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 			deliver(
 				web,
 				report,
-				&subject,
-				&[line],
-				None,
-				&link(web, report, None),
+				&Note::alert(subject, line, link(web, report, None)),
 			)
 			.await?;
 			web.app.mark_report(report.id, ts)?;
@@ -136,7 +134,7 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 					report.site.domain, report.threshold
 				);
 				let link = link(web, report, Some((yesterday, yesterday)));
-				deliver(web, report, &subject, &[line], None, &link).await?;
+				deliver(web, report, &Note::alert(subject, line, link)).await?;
 			}
 			web.app
 				.mark_report(report.id, day_number(yesterday).into())?;
@@ -177,106 +175,247 @@ fn totals(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Result<Va
 	}))
 }
 
+struct Note {
+	subject: String,
+	line: String,
+	alert: bool,
+	fields: Vec<(&'static str, String)>,
+	lists: Vec<(&'static str, Vec<(String, u64)>)>,
+	series: Vec<u64>,
+	link: String,
+}
+
+impl Note {
+	fn alert(subject: String, line: String, link: String) -> Self {
+		Self {
+			subject,
+			line,
+			alert: true,
+			fields: Vec::new(),
+			lists: Vec::new(),
+			series: Vec::new(),
+			link,
+		}
+	}
+
+	// the monospace block in mails and plain webhooks
+	fn table(&self) -> String {
+		let fields = self
+			.fields
+			.iter()
+			.map(|(label, value)| format!("{label:<13} {value}"));
+		let lists = self.lists.iter().map(|(label, rows)| {
+			let rows = rows
+				.iter()
+				.map(|(name, count)| format!("{:>8}  {name}", grouped(*count)));
+			std::iter::once(format!("\n{label}"))
+				.chain(rows)
+				.collect::<Vec<_>>()
+				.join("\n")
+		});
+		fields.chain(lists).collect::<Vec<_>>().join("\n")
+	}
+}
+
+pub(crate) fn grouped(n: u64) -> String {
+	let digits = n.to_string();
+	let mut out = String::new();
+	for (i, ch) in digits.chars().enumerate() {
+		if i > 0 && (digits.len() - i).is_multiple_of(3) {
+			out.push(',');
+		}
+		out.push(ch);
+	}
+	out
+}
+
 async fn summary(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Result<()> {
 	let days = from.until(to)?.get_days() + 1;
 	let before = (from.checked_sub(days.days())?, from.checked_sub(1.day())?);
 	let now = totals(web, report, from, to)?;
 	let then = totals(web, report, before.0, before.1)?;
-	let change = |key: &str| {
-		let (a, b) = (
-			now[key].as_f64().unwrap_or(0.0),
-			then[key].as_f64().unwrap_or(0.0),
-		);
-		match b {
-			0.0 => String::new(),
-			_ => format!(" ({:+.0}%)", (a - b) / b * 100.0),
-		}
+	let value = |key: &str| now[key].as_u64().unwrap_or(0);
+	let change = |key: &str| match then[key].as_f64().unwrap_or(0.0) {
+		0.0 => String::new(),
+		b => format!(
+			" ({:+.0}%)",
+			(now[key].as_f64().unwrap_or(0.0) - b) / b * 100.0
+		),
 	};
-	let top = |dimension: &str| -> anyhow::Result<String> {
+	let top = |dimension: &str| -> anyhow::Result<Vec<(String, u64)>> {
 		let result = query(web, report, from, to, Some(dimension))?;
 		Ok(result["results"]
 			.as_array()
 			.into_iter()
 			.flatten()
 			.map(|row| {
-				format!(
-					"{:>8}  {}",
-					row["metrics"][0].to_string(),
-					row["dimensions"][0].as_str().unwrap_or("")
+				(
+					row["dimensions"][0].as_str().unwrap_or("").to_owned(),
+					row["metrics"][0].as_u64().unwrap_or(0),
 				)
 			})
-			.collect::<Vec<_>>()
-			.join("\n"))
+			.collect())
 	};
-	let table = format!(
-		"visitors      {visitors}{visitors_change}\n\
-		pageviews     {pageviews}{pageviews_change}\n\
-		bounce rate   {bounce}%\n\
-		visit time    {duration}s\n\n\
-		top pages\n{pages}\n\n\
-		top sources\n{sources}",
-		visitors = now["visitors"],
-		visitors_change = change("visitors"),
-		pageviews = now["pageviews"],
-		pageviews_change = change("pageviews"),
-		bounce = now["bounce"],
-		duration = now["duration"],
-		pages = top("event:page")?,
-		sources = top("visit:source")?,
-	);
-	let subject = format!("{} {} report", report.site.domain, report.kind);
-	let line = format!("{from} to {to}");
-	let link = link(web, report, Some((from, to)));
-	deliver(web, report, &subject, &[line], Some(&table), &link).await
+	let daily = stats::run(
+		&web.stats,
+		json!({
+			"site_id": report.site.domain,
+			"date_range": [from.to_string(), to.to_string()],
+			"metrics": ["visitors"],
+			"dimensions": ["time:day"],
+			"pagination": { "limit": 400 },
+			"include": { "imports": true },
+		}),
+	)
+	.map_err(anyhow::Error::msg)?;
+	let series = from
+		.series(1.day())
+		.take_while(|day| *day <= to)
+		.map(|day| {
+			daily["results"]
+				.as_array()
+				.into_iter()
+				.flatten()
+				.find(|row| row["dimensions"][0].as_str() == Some(&day.to_string()))
+				.and_then(|row| row["metrics"][0].as_u64())
+				.unwrap_or(0)
+		})
+		.collect();
+	let note = Note {
+		subject: format!("{} {} report", report.site.domain, report.kind),
+		line: format!("{} to {}", from.strftime("%b %-d"), to.strftime("%b %-d")),
+		alert: false,
+		fields: vec![
+			(
+				"Visitors",
+				format!("{}{}", grouped(value("visitors")), change("visitors")),
+			),
+			(
+				"Pageviews",
+				format!("{}{}", grouped(value("pageviews")), change("pageviews")),
+			),
+			("Bounce rate", format!("{}%", value("bounce"))),
+			("Visit time", format!("{}s", value("duration"))),
+		],
+		lists: vec![
+			("Top pages", top("event:page")?),
+			("Top sources", top("visit:source")?),
+		],
+		series,
+		link: link(web, report, Some((from, to))),
+	};
+	deliver(web, report, &note).await
 }
 
-// mail, or a webhook: slack and discord get their own format, anything else gets json
-async fn deliver(
-	web: &Web,
-	report: &Report,
-	subject: &str,
-	lines: &[String],
-	table: Option<&str>,
-	link: &str,
-) -> anyhow::Result<()> {
+// mail, or a webhook: slack and discord get their own layout, anything else gets json
+async fn deliver(web: &Web, report: &Report, note: &Note) -> anyhow::Result<()> {
 	let to = report.email.as_str();
+	let table = note.table();
 	if !to.starts_with("https://") {
+		let lines = [note.line.clone()];
 		let letter = crate::mail::Letter {
 			base: &web.url,
-			title: subject,
-			lines,
-			table,
-			button: Some(("Open dashboard", link)),
+			title: &note.subject,
+			lines: &lines,
+			table: (!table.is_empty()).then_some(table.as_str()),
+			button: Some(("Open dashboard", &note.link)),
 		};
 		return web
 			.mail
-			.send(to, subject, &letter.text(), &letter.html())
+			.send(to, &note.subject, &letter.text(), &letter.html())
 			.await;
 	}
-	let text = [
-		lines.join("\n\n"),
-		table.unwrap_or_default().to_owned(),
-		link.to_owned(),
-	]
-	.into_iter()
-	.filter(|part| !part.is_empty())
-	.collect::<Vec<_>>()
-	.join("\n\n");
-	let body = if to.starts_with("https://hooks.slack.com/") {
-		json!({ "text": format!("*{subject}*\n```{text}```") })
+	let request = if to.starts_with("https://hooks.slack.com/") {
+		web.http.post(to).json(&slack(note))
 	} else if to.contains("discord.com/api/webhooks/") {
-		let text: String = text.chars().take(1900).collect();
-		json!({ "content": format!("**{subject}**\n```{text}```") })
+		discord(web, note, to)?
 	} else {
-		json!({ "subject": subject, "text": text, "site": report.site.domain, "kind": report.kind })
+		let text = [note.line.as_str(), &table, &note.link].join("\n\n");
+		web.http.post(to).json(&json!({
+			"subject": note.subject,
+			"text": text,
+			"site": report.site.domain,
+			"kind": report.kind,
+			"link": note.link,
+		}))
 	};
-	web.http
-		.post(to)
-		.json(&body)
-		.send()
-		.await?
-		.error_for_status()?;
+	request.send().await?.error_for_status()?;
 	Ok(())
+}
+
+fn discord(web: &Web, note: &Note, to: &str) -> anyhow::Result<reqwest::RequestBuilder> {
+	let mut fields: Vec<Value> = note
+		.fields
+		.iter()
+		.take(3)
+		.map(|(name, value)| json!({ "name": name, "value": value, "inline": true }))
+		.collect();
+	fields.extend(
+		note.lists
+			.iter()
+			.filter(|(_, rows)| !rows.is_empty())
+			.map(|(name, rows)| {
+				let value = rows
+					.iter()
+					.map(|(row, count)| format!("{row}  {}", grouped(*count)))
+					.collect::<Vec<_>>()
+					.join("\n");
+				json!({ "name": name, "value": value.chars().take(1000).collect::<String>(), "inline": true })
+			}),
+	);
+	let mut embed = json!({
+		"title": note.subject,
+		"url": note.link,
+		"description": note.line,
+		"color": if note.alert { 0xf0645a } else { 0x38e1f2 },
+		"fields": fields,
+		"footer": { "text": "impactite" },
+	});
+	if note.series.is_empty() {
+		return Ok(web.http.post(to).json(&json!({ "embeds": [embed] })));
+	}
+	embed["image"] = json!({ "url": "attachment://chart.png" });
+	let mut chart = card::Canvas::new(800, 200, card::INK);
+	chart.area([0, 8, 800, 192], &note.series, 8);
+	let form = reqwest::multipart::Form::new()
+		.text("payload_json", json!({ "embeds": [embed] }).to_string())
+		.part(
+			"files[0]",
+			reqwest::multipart::Part::bytes(chart.png())
+				.file_name("chart.png")
+				.mime_str("image/png")?,
+		);
+	Ok(web.http.post(to).multipart(form))
+}
+
+fn slack(note: &Note) -> Value {
+	let mut blocks = vec![
+		json!({ "type": "header", "text": { "type": "plain_text", "text": note.subject } }),
+		json!({ "type": "section", "text": { "type": "mrkdwn", "text": note.line } }),
+	];
+	if !note.fields.is_empty() {
+		let fields: Vec<Value> = note
+			.fields
+			.iter()
+			.map(|(name, value)| json!({ "type": "mrkdwn", "text": format!("*{name}*\n{value}") }))
+			.collect();
+		blocks.push(json!({ "type": "section", "fields": fields }));
+	}
+	for (name, rows) in note.lists.iter().filter(|(_, rows)| !rows.is_empty()) {
+		let rows = rows
+			.iter()
+			.map(|(row, count)| format!("{row}  {}", grouped(*count)))
+			.collect::<Vec<_>>()
+			.join("\n");
+		blocks.push(
+			json!({ "type": "section", "text": { "type": "mrkdwn", "text": format!("*{name}*\n{rows}") } }),
+		);
+	}
+	blocks.push(json!({
+		"type": "actions",
+		"elements": [{ "type": "button", "text": { "type": "plain_text", "text": "Open dashboard" }, "url": note.link }],
+	}));
+	json!({ "text": format!("{}. {}", note.subject, note.line), "blocks": blocks })
 }
 
 fn link(web: &Web, report: &Report, range: Option<(Date, Date)>) -> String {

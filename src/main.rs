@@ -3,6 +3,7 @@ mod admin;
 mod api;
 mod app;
 mod assets;
+mod card;
 mod cli;
 mod counter;
 mod demo;

@@ -31,7 +31,7 @@ jiff = { version = "0.2.38", default-features = false, features = ["std", "tzdb-
 lettre = { version = "0.11.23", default-features = false, features = ["aws-lc-rs", "builder", "smtp-transport", "tokio1-rustls", "webpki-roots"] }
 maxminddb = "0.32.0"
 mimalloc = { version = "0.1.52", features = ["no_thp"] }
-reqwest = { version = "0.13.5", default-features = false, features = ["form", "http2", "json", "rustls"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["form", "http2", "json", "multipart", "rustls"] }
 rust-embed = { version = "8.13.0", features = ["include-exclude"] }
 rustls-acme = { version = "0.15.4", features = ["axum"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
@@ -76,6 +76,7 @@ brotli.workspace = true
 ciborium.workspace = true
 clap.workspace = true
 crater.workspace = true
+crc32fast.workspace = true
 csv.workspace = true
 flate2.workspace = true
 futures-util.workspace = true
