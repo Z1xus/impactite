@@ -878,6 +878,29 @@
 			}}
 		/>
 	{:else if empty === false}
+		{#snippet viewControls()}
+			{#if dates && dates.choices.length > 1}
+				<Select
+					align="left"
+					plain
+					value={dates.interval}
+					options={dates.choices.map((key) => ({ key, label: key }))}
+					pick={(key) => go({ interval: key })}
+				/>
+			{/if}
+			<Toggle
+				plain
+				bind:value={
+					() => (layout.table ? "table" : "chart"),
+					(view: "chart" | "table") => saveLayout({ ...layout, table: view === "table" })
+				}
+				options={[
+					{ key: "chart", label: "Chart" },
+					{ key: "table", label: "Table" }
+				]}
+			/>
+		{/snippet}
+
 		<section class="rounded-px border border-line bg-panel">
 			<Kpis
 				{totals}
@@ -886,47 +909,34 @@
 				pick={(i) => navigate((params) => params.set("metric", METRICS[i].key))}
 			/>
 			<div class="px-4 pt-3 pb-5">
-				<div class="flex items-center justify-end gap-2 {layout.table ? '' : 'mb-2'}">
-					{#if dates && dates.choices.length > 1}
-						<Select
-							align="right"
-							plain
-							value={dates.interval}
-							options={dates.choices.map((key) => ({ key, label: key }))}
-							pick={(key) => go({ interval: key })}
-						/>
-					{/if}
-					<Toggle
-						plain
-						bind:value={
-							() => (layout.table ? "table" : "chart"),
-							(view: "chart" | "table") =>
-								saveLayout({ ...layout, table: view === "table" })
-						}
-						options={[
-							{ key: "chart", label: "Chart" },
-							{ key: "table", label: "Table" }
-						]}
-					/>
-				</div>
 				{#if layout.table}
-					<div class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto pr-2">
-						<Table
-							columns={tableMetrics.map((item) => ({
-								key: item.key,
-								label: item.label,
-								format: (value: number | null) => format(item.key, value ?? 0)
-							}))}
-							rows={sortedLines.map((line) => ({
-								...line,
-								values: tableMetrics.map(
-									(item) => line.values[METRICS.indexOf(item)]
-								)
-							}))}
-							bind:sort={lineSort}
-						/>
+					<div class="relative">
+						<div class="absolute top-0 left-0 z-20 flex h-9 items-center gap-2">
+							{@render viewControls()}
+						</div>
+						<div
+							class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto pr-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:h-9 [&_thead_th]:bg-panel [&_thead_th]:shadow-[inset_0_-1px_0_var(--color-line)] [&_thead_th:first-child]:min-w-56 [&>div]:overflow-visible"
+						>
+							<Table
+								columns={tableMetrics.map((item) => ({
+									key: item.key,
+									label: item.label,
+									format: (value: number | null) => format(item.key, value ?? 0)
+								}))}
+								rows={sortedLines.map((line) => ({
+									...line,
+									values: tableMetrics.map(
+										(item) => line.values[METRICS.indexOf(item)]
+									)
+								}))}
+								bind:sort={lineSort}
+							/>
+						</div>
 					</div>
 				{:else}
+					<div class="mb-2 flex items-center gap-2">
+						{@render viewControls()}
+					</div>
 					<Chart
 						values={series}
 						previous={previousSeries}
