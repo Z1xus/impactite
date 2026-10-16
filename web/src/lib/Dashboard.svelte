@@ -910,7 +910,7 @@
 					/>
 				</div>
 				{#if layout.table}
-					<div class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto">
+					<div class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto pr-2">
 						<Table
 							columns={tableMetrics.map((item) => ({
 								key: item.key,

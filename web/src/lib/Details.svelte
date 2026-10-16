@@ -143,7 +143,7 @@
 	<div class="w-72">
 		<Field label="search" bind:value={search} />
 	</div>
-	<div class="max-h-[60vh] [scrollbar-gutter:stable] overflow-y-auto">
+	<div class="max-h-[60vh] [scrollbar-gutter:stable] overflow-y-auto pr-2">
 		<Table {columns} {rows} bind:sort {pick} />
 	</div>
 	{#if more}

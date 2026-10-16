@@ -68,7 +68,7 @@
 			These events came in over the last 30 days. Add the ones you want to track as goals.
 			{#if events.some((event) => event.revenue)}Events with revenue need a currency.{/if}
 		</p>
-		<div class="max-h-[50vh] overflow-y-auto">
+		<div class="max-h-[50vh] [scrollbar-gutter:stable] overflow-y-auto pr-2">
 			<List
 				items={events.map((event) => ({
 					key: event.name,
