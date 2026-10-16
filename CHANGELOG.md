@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.3
+- Fix: Switching a panel tab no longer reloads the other panels
+
 ## 0.1.2
 - New: Add all new events as goals at once
 - Improved: Chart and table controls sit on the left and share a line with the table headers
