@@ -20,7 +20,7 @@
 	--color-edge: #24323a;
 	--color-fg: #e3eef0;
 	--color-dim: #8798a0;
-	--color-faint: #64757e;
+	--color-faint: #6e818b;
 	--color-cyan: #38e1f2;
 	--color-cyan-deep: #0e7f8d;
 	--color-cyan-night: #06343b;
@@ -61,12 +61,12 @@
 		--color-edge: #c9d3d8;
 		--color-fg: #0c1518;
 		--color-dim: #52626a;
-		--color-faint: #73838b;
-		--color-cyan: #0a7e8a;
+		--color-faint: #606d74;
+		--color-cyan: #097782;
 		--color-cyan-deep: #4fbcc7;
 		--color-cyan-night: #d4f0f3;
-		--color-warn: #9a6200;
-		--color-bad: #c6372d;
+		--color-warn: #965f00;
+		--color-bad: #c5372d;
 	}
 
 	* {

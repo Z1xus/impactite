@@ -168,7 +168,7 @@ impl Letter<'_> {
 		if let Some((label, url)) = self.button {
 			let url = escape(url);
 			body.push_str(&format!(
-				"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 16px\"><tr><td style=\"background:#38e1f2;border-radius:2px\"><a href=\"{url}\" style=\"display:inline-block;padding:11px 18px;font:500 12px {MONO};letter-spacing:0.08em;text-transform:uppercase;color:#06090b;text-decoration:none\">{}</a></td></tr></table><p style=\"font:12px/1.5 {SANS};color:#64757e;margin:0;word-break:break-all\">Or open <a href=\"{url}\" style=\"color:#64757e\">{url}</a></p>",
+				"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 16px\"><tr><td style=\"background:#0e7f8d;border-radius:2px\"><a href=\"{url}\" style=\"display:inline-block;padding:11px 18px;font:500 12px {MONO};letter-spacing:0.08em;text-transform:uppercase;color:#ffffff;text-decoration:none\"><span style=\"color:#ffffff\">{}</span></a></td></tr></table><p style=\"font:12px/1.5 {SANS};color:#6e818b;margin:0;word-break:break-all\">Or open <a href=\"{url}\" style=\"color:#6e818b\">{url}</a></p>",
 				escape(label)
 			));
 		}
@@ -187,7 +187,7 @@ impl Letter<'_> {
 			<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:520px\">\
 			<tr><td style=\"padding:0 0 18px\">{logo}<span style=\"font:15px {MONO};color:#e3eef0;vertical-align:middle;padding-left:8px\">impactite</span></td></tr>\
 			<tr><td style=\"background:#0a0f12;border:1px solid #172127;border-radius:2px;padding:28px\">{body}</td></tr>\
-			<tr><td style=\"padding:16px 2px 0;font:12px {SANS};color:#64757e\">{}</td></tr>\
+			<tr><td style=\"padding:16px 2px 0;font:12px {SANS};color:#6e818b\">{}</td></tr>\
 			</table></td></tr></table></body></html>",
 			escape(&self.footer())
 		)
