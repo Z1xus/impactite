@@ -25,6 +25,8 @@
 	import Scale from "../lib/Scale.svelte";
 	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
+	import { impact } from "../lib/impact.ts";
+	import Count from "../lib/Count.svelte";
 
 	const REPO = "https://github.com/z1xus/impactite";
 	const BENCH = "https://github.com/z1xus/impactite-benchmarks";
@@ -78,6 +80,27 @@
 		});
 	});
 	const compact = (value: number) => Math.round(value).toLocaleString("en-US");
+	// the preview wakes up when the meteor lands
+	let landed = $state(false);
+	const asleep = <T extends { value: number }>(rows: T[]) =>
+		rows.map((row) => ({ ...row, value: 0 }));
+	const KPIS: [string, number, (value: number) => string, string][] = [
+		["visitors", 9148, compact, "+38%"],
+		[
+			"pageviews",
+			21400,
+			(value) => (value < 1000 ? compact(value) : `${(value / 1000).toFixed(1)}k`),
+			"+37%"
+		],
+		["bounce", 54, (value) => `${Math.round(value)}%`, "+0pt"],
+		[
+			"duration",
+			127,
+			(value) =>
+				`${Math.floor(value / 60)}m ${String(Math.round(value % 60)).padStart(2, "0")}s`,
+			"-2%"
+		]
+	];
 
 	const sources = [
 		{ key: "google", label: "Google", value: 3811 },
@@ -147,54 +170,63 @@
 		</nav>
 	</header>
 
-	<section class="grid items-center gap-12 py-20 md:grid-cols-[1fr_auto]">
-		<div class="flex flex-col gap-6" use:appear>
-			<h1 class="font-mono text-[44px] leading-[1.05] tracking-tight md:text-[64px]">
-				Analytics<br />that land.
-			</h1>
-			<p class="max-w-md text-[17px] text-dim">
-				Self-hosted web analytics in one binary. Drop-in for Plausible and GoatCounter.
-			</p>
-			<div class="flex gap-3">
-				<a
-					href="#install"
-					class="flex h-9 items-center rounded-px bg-cyan px-4 label text-ink hover:bg-fg"
-					>install</a
-				>
-				<a
-					href={DEMO}
-					class="flex h-9 items-center rounded-px border border-edge px-4 label text-fg hover:border-dim"
-					>live demo</a
-				>
-			</div>
-		</div>
-		<div class="justify-self-center" use:appear={{ kind: "wipe", delay: 150 }}>
-			<Meteor size={340} pixel={4} />
-		</div>
-	</section>
-
-	<section class="rounded-px border border-line bg-panel" use:appear={{ kind: "wipe" }}>
-		<div class="grid grid-cols-2 border-b border-line md:grid-cols-4">
-			{#each [["visitors", "9,148", "+38%"], ["pageviews", "21.4k", "+37%"], ["bounce", "54%", "+0pt"], ["duration", "2m 07s", "-2%"]] as [name, value, change], i (name)}
-				<div class="flex flex-col gap-2 p-4 {i ? 'border-l border-line' : ''}">
-					<span class="label {i ? '' : 'text-cyan'}">{name}</span>
-					<span class="num text-num">{value}</span>
-					<span class="label {change.startsWith('-') ? 'text-bad' : 'text-cyan'}"
-						>{change}</span
+	<div class="relative" use:impact={() => (landed = true)}>
+		<section class="grid items-center gap-12 py-20 md:grid-cols-[1fr_auto]">
+			<div class="flex flex-col gap-6" use:appear>
+				<h1 class="font-mono text-[44px] leading-[1.05] tracking-tight md:text-[64px]">
+					Analytics<br />that land.
+				</h1>
+				<p class="max-w-md text-[17px] text-dim">
+					Self-hosted web analytics in one binary. Drop-in for Plausible and GoatCounter.
+				</p>
+				<div class="flex gap-3">
+					<a
+						href="#install"
+						class="flex h-9 items-center rounded-px bg-cyan px-4 label text-ink hover:bg-fg"
+						>install</a
+					>
+					<a
+						href={DEMO}
+						class="flex h-9 items-center rounded-px border border-edge px-4 label text-fg hover:border-dim"
+						>live demo</a
 					>
 				</div>
-			{/each}
-		</div>
-		<div class="p-4">
-			<Chart values={days} {labels} format={compact} height={200} />
-		</div>
-		<div class="grid border-t border-line md:grid-cols-2">
-			<div class="p-2"><Rows rows={sources} format={compact} limit={5} /></div>
-			<div class="border-line p-2 md:border-l">
-				<Rows rows={pages} format={compact} limit={5} />
 			</div>
-		</div>
-	</section>
+			<div class="relative z-20 justify-self-center" data-rock style="opacity: 0">
+				<Meteor size={340} pixel={4} />
+			</div>
+		</section>
+
+		<section class="rounded-px border border-line bg-panel">
+			<div class="grid grid-cols-2 border-b border-line md:grid-cols-4">
+				{#each KPIS as [name, value, format, change], i (name)}
+					<div class="flex flex-col gap-2 p-4 {i ? 'border-l border-line' : ''}">
+						<span class="label {i ? '' : 'text-cyan'}">{name}</span>
+						<span class="text-num"
+							><Count {value} {format} on={landed} delay={i * 80} /></span
+						>
+						<span class="label {change.startsWith('-') ? 'text-bad' : 'text-cyan'}"
+							>{change}</span
+						>
+					</div>
+				{/each}
+			</div>
+			<div
+				class="p-4 transition-[clip-path] duration-1000 ease-[steps(28)]"
+				style:clip-path={landed ? "inset(0 0 0 0)" : "inset(0 100% 0 0)"}
+			>
+				<Chart values={days} {labels} format={compact} height={200} />
+			</div>
+			<div class="grid border-t border-line md:grid-cols-2">
+				<div class="p-2">
+					<Rows rows={landed ? sources : asleep(sources)} format={compact} limit={5} />
+				</div>
+				<div class="border-line p-2 md:border-l">
+					<Rows rows={landed ? pages : asleep(pages)} format={compact} limit={5} />
+				</div>
+			</div>
+		</section>
+	</div>
 
 	<section id="speed" class="flex flex-col gap-14 py-28">
 		<div class="flex flex-col gap-4" use:appear>

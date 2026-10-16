@@ -14,7 +14,7 @@
 		[227, 238, 240]
 	];
 	const LIGHT = normalize([-0.55, -0.6, 0.58]);
-	const FPS = 12;
+	const FPS = 20;
 
 	type Vec = [number, number, number];
 
@@ -51,6 +51,10 @@
 			0.015 * Math.sin(angle * 11 + 4.2)
 		);
 	}
+
+	// the light eases toward the pointer, so the lit side follows it
+	let light: Vec = LIGHT;
+	let aim: Vec = LIGHT;
 
 	function render(ctx: CanvasRenderingContext2D, image: ImageData, n: number, turn: number) {
 		const cos = Math.cos(turn);
@@ -105,9 +109,8 @@
 					) *
 						0.12 -
 					0.06;
-				const light = Math.max(0, dot(normal, LIGHT)) * 0.95 + 0.05 + shade + grain;
-				const level =
-					light * (PALETTE.length - 1) + BAYER[(y % 8) * 8 + (x % 8)] / 64 - 0.5;
+				const lit = Math.max(0, dot(normal, light)) * 0.95 + 0.05 + shade + grain;
+				const level = lit * (PALETTE.length - 1) + BAYER[(y % 8) * 8 + (x % 8)] / 64 - 0.5;
 				const color = PALETTE[Math.max(0, Math.min(PALETTE.length - 1, Math.round(level)))];
 				data[i] = color[0];
 				data[i + 1] = color[1];
@@ -133,13 +136,34 @@
 		const tick = (now: number) => {
 			if (now - last >= 1000 / FPS) {
 				last = now;
+				light = normalize(light.map((v, k) => v + (aim[k] - v) * 0.2));
 				render(ctx, image, n, now * 0.00009);
 			}
 			frame = requestAnimationFrame(tick);
 		};
+		const point = (event: PointerEvent) => {
+			if (event.pointerType !== "mouse") return;
+			const box = canvas.getBoundingClientRect();
+			const reach = Math.max(box.width, 240) * 1.5;
+			const dx = Math.max(
+				-1,
+				Math.min(1, (event.clientX - box.left - box.width / 2) / reach)
+			);
+			const dy = Math.max(
+				-1,
+				Math.min(1, (event.clientY - box.top - box.height / 2) / reach)
+			);
+			aim = normalize([dx, dy, 0.55]);
+		};
 		if (still) render(ctx, image, n, 0.8);
-		else frame = requestAnimationFrame(tick);
-		return () => cancelAnimationFrame(frame);
+		else {
+			frame = requestAnimationFrame(tick);
+			addEventListener("pointermove", point);
+		}
+		return () => {
+			cancelAnimationFrame(frame);
+			removeEventListener("pointermove", point);
+		};
 	});
 </script>
 

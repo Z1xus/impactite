@@ -7,8 +7,19 @@
 		value,
 		on,
 		digits = 0,
-		delay = 0
-	}: { value: number; on: boolean; digits?: number; delay?: number } = $props();
+		delay = 0,
+		format = (value: number) =>
+			value.toLocaleString("en-US", {
+				minimumFractionDigits: digits,
+				maximumFractionDigits: digits
+			})
+	}: {
+		value: number;
+		on: boolean;
+		digits?: number;
+		delay?: number;
+		format?: (value: number) => string;
+	} = $props();
 
 	// the built page carries the real number, the browser counts up to it once it scrolls in
 	const tween = new Tween(
@@ -21,9 +32,4 @@
 	});
 </script>
 
-<span class="num"
-	>{tween.current.toLocaleString("en-US", {
-		minimumFractionDigits: digits,
-		maximumFractionDigits: digits
-	})}</span
->
+<span class="num">{format(tween.current)}</span>
