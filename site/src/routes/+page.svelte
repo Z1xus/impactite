@@ -21,7 +21,7 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
-	import Kpi from "#lib/ui/Kpi.svelte";
+	import Kpis from "#lib/ui/Kpis.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
 	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
 	import { METRICS, format } from "#lib/stats.ts";
@@ -91,10 +91,7 @@
 	let landed = $state(false);
 	// the same six numbers, panels and tabs as the dashboard, filled with the demo site's month
 	const TOTALS = [9148, 10512, 21400, 54, 127, 2.04];
-	const CHANGES = [38, 36, 37, 0, -2, 1].map((change, i) => ({
-		change,
-		good: i === 3 ? change <= 0 : change >= 0
-	}));
+	const PREVIOUS = [6629, 7729, 15620, 54, 130, 2.02];
 	let metric = $state(0);
 	// visits and pageviews follow the visitors line, the rates wander around their average
 	const FACTORS = [1, 1.15, 2.34];
@@ -270,19 +267,12 @@
 		</section>
 
 		<section class="rounded-px border border-line bg-panel">
-			<div class="grid grid-cols-2 border-b border-line sm:grid-cols-3 lg:grid-cols-6">
-				{#each METRICS as item, i (item.key)}
-					<Kpi
-						label={item.label}
-						value={landed ? TOTALS[i] : null}
-						change={landed ? CHANGES[i] : null}
-						unit={item.key === "bounce_rate" ? "pt" : "%"}
-						format={(value) => format(item.key, value)}
-						active={metric === i}
-						pick={() => (metric = i)}
-					/>
-				{/each}
-			</div>
+			<Kpis
+				totals={landed ? TOTALS : TOTALS.map(() => 0)}
+				previous={landed ? PREVIOUS : null}
+				active={metric}
+				pick={(i) => (metric = i)}
+			/>
 			<div
 				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-[steps(28)]"
 				style:clip-path={landed ? "inset(0 0 0 0)" : "inset(0 100% 0 0)"}
@@ -298,7 +288,11 @@
 		<div class="mt-6 grid gap-6 md:grid-cols-2">
 			{#each ["left", "right"] as const as side (side)}
 				<Panel tabs={PANELS[side].tabs} bind:tab={tabs[side]}>
-					<Rows rows={landed ? rowsOf(side) : null} format={compact} limit={5} />
+					<Rows
+						rows={rowsOf(side).map((row) => (landed ? row : { ...row, value: 0 }))}
+						format={compact}
+						limit={5}
+					/>
 				</Panel>
 			{/each}
 		</div>

@@ -20,7 +20,6 @@
 		OPS,
 		decodeFilter,
 		dimLabel,
-		delta,
 		display,
 		encodeFilter,
 		format,
@@ -46,7 +45,7 @@
 	import Icon from "#lib/ui/Icon.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
 	import Title from "#lib/ui/Title.svelte";
-	import Kpi from "#lib/ui/Kpi.svelte";
+	import Kpis from "#lib/ui/Kpis.svelte";
 	import Live from "#lib/ui/Live.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
@@ -834,21 +833,12 @@
 		/>
 	{:else}
 		<section class="rounded-px border border-line bg-panel">
-			<div class="grid grid-cols-2 border-b border-line sm:grid-cols-3 lg:grid-cols-6">
-				{#each METRICS as item, i (item.key)}
-					<Kpi
-						label={item.label}
-						value={totals?.[i] ?? null}
-						change={totals && previousTotals
-							? delta(item.key, totals[i], previousTotals[i])
-							: null}
-						unit={item.key === "bounce_rate" ? "pt" : "%"}
-						format={(value) => format(item.key, value)}
-						active={chartMetric === item.key}
-						pick={() => navigate((params) => params.set("metric", item.key))}
-					/>
-				{/each}
-			</div>
+			<Kpis
+				{totals}
+				previous={previousTotals}
+				active={METRICS.findIndex((item) => item.key === chartMetric)}
+				pick={(i) => navigate((params) => params.set("metric", METRICS[i].key))}
+			/>
 			<div class="px-4 pt-3 pb-5">
 				<div class="mb-2 flex items-center justify-end gap-2">
 					{#if dates && dates.choices.length > 1}
