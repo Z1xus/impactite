@@ -8,7 +8,7 @@ rust-version = "1.98"
 authors = ["Z1xus"]
 license = "AGPL-3.0-only"
 publish = false
-repository = "https://github.com/z1xus/impactite"
+repository = "https://github.com/Z1xus/impactite"
 
 [workspace.dependencies]
 anyhow = "1.0.104"
