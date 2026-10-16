@@ -17,5 +17,5 @@
 <span class="flex h-9 items-center gap-2 px-1" title="visitors in the last 5 minutes">
 	<span class="h-1.5 w-1.5 {count ? 'bg-cyan' : 'bg-faint'}"></span>
 	<Num value={count ?? 0} class="text-label text-fg" />
-	<span class="label">now</span>
+	<span class="label">current visitors</span>
 </span>
