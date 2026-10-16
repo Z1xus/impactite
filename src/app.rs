@@ -261,7 +261,7 @@ impl App {
 	}
 
 	pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
-		self.conn.lock().unwrap_or_else(PoisonError::into_inner)
+		lock(&self.conn)
 	}
 
 	pub fn add_site(
@@ -440,7 +440,15 @@ pub(crate) fn token() -> rusqlite::Result<String> {
 	let mut secret = [0; 32];
 	getrandom::fill(&mut secret)
 		.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.into()))?;
-	Ok(secret.iter().map(|byte| format!("{byte:02x}")).collect())
+	Ok(hex(&secret))
+}
+
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+	mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
+	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 pub(crate) fn key_hash(key: &str) -> String {

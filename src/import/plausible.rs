@@ -76,7 +76,6 @@ pub(super) fn write(
 		.map(|((&first, _), (&last, _))| (first, last)))
 }
 
-// one row of a plausible imported_* table, by column name
 pub(super) fn add<'a>(day: &mut Day, table: &str, get: &dyn Fn(&str) -> &'a str) {
 	let num = |name: &str| get(name).parse::<u64>().unwrap_or_default();
 	let visit = Metrics {

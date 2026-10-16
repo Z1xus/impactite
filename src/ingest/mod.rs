@@ -5,14 +5,14 @@ pub(crate) mod ua;
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use axum::http::{HeaderMap, header};
 use crater::{Db, Dim, Event};
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
 
-use crate::app::{App, Site};
+use crate::app::{App, Site, lock};
 use crate::geo::Geo;
 use crate::net::Proxies;
 use crate::shields::Shields;
@@ -385,10 +385,6 @@ pub fn language(headers: &HeaderMap) -> String {
 			(2..=3).contains(&tag.len()) && tag.bytes().all(|byte| byte.is_ascii_lowercase())
 		})
 		.unwrap_or_default()
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-	mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 fn referrer_parts(raw: &str, page_host: &str) -> (String, String) {

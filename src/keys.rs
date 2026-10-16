@@ -8,7 +8,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::{Viewer, Web, fail};
+use crate::accounts::{Viewer, Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -32,14 +32,14 @@ async fn add(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<NewKe
 	}
 	match web.app.create_key(name, Some(viewer.user)) {
 		Ok(key) => respond(&web, viewer.user, Some(key)),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
 }
 
 async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<i64>) -> Response {
 	match web.app.remove_key(viewer.user, id) {
 		Ok(()) => respond(&web, viewer.user, None),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
 }
 
@@ -53,6 +53,6 @@ fn respond(web: &Web, user: i64, key: Option<String>) -> Response {
 				.collect::<Vec<_>>()
 		}))
 		.into_response(),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
 }

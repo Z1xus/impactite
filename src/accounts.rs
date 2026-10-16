@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use axum::extract::{FromRequestParts, Path, State};
@@ -12,7 +12,7 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::app::{App, key_hash, token};
+use crate::app::{App, Site, key_hash, lock, token};
 use crate::ingest::Ingest;
 use crate::mail::Letter;
 use crate::mail::Mail;
@@ -38,7 +38,6 @@ pub struct Web {
 	pub setup: Mutex<Option<String>>,
 	pub ceremonies: Mutex<std::collections::HashMap<String, (Purpose, i64)>>,
 	pub alias: Option<String>,
-	// a newer release, its version, page and changes
 	pub latest: Mutex<Option<Value>>,
 	pub sso: Option<crate::sso::Provider>,
 	pub google: Option<crate::google::Client>,
@@ -143,11 +142,7 @@ async fn setup(
 	headers: HeaderMap,
 	Json(body): Json<Setup>,
 ) -> Response {
-	let expected = web
-		.setup
-		.lock()
-		.unwrap_or_else(PoisonError::into_inner)
-		.clone();
+	let expected = lock(&web.setup).clone();
 	if expected.as_deref() != Some(body.token.as_str()) || web.app.users_exist().unwrap_or(true) {
 		return fail(StatusCode::FORBIDDEN, "This setup link is no longer valid.");
 	}
@@ -169,7 +164,7 @@ async fn setup(
 	if let Err(err) = adopted {
 		return internal(err);
 	}
-	*web.setup.lock().unwrap_or_else(PoisonError::into_inner) = None;
+	*lock(&web.setup) = None;
 	signed_in(&web, user, None)
 }
 
@@ -519,6 +514,10 @@ pub fn fail(status: StatusCode, message: &str) -> Response {
 
 pub fn internal(err: rusqlite::Error) -> Response {
 	tracing::error!(%err, "accounts");
+	broken()
+}
+
+pub fn broken() -> Response {
 	fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
 }
 
@@ -742,6 +741,12 @@ impl App {
 				|row| row.get(0),
 			)
 			.optional()
+	}
+
+	pub fn editable(&self, user: i64, domain: &str) -> Option<Site> {
+		let role = self.site_role(user, domain).ok().flatten()?;
+		(role != "viewer").then_some(())?;
+		self.site(domain).ok().flatten()
 	}
 
 	pub fn site_role(&self, user: i64, domain: &str) -> rusqlite::Result<Option<String>> {

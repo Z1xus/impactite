@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::Json;
@@ -11,9 +11,9 @@ use jiff::tz::TimeZone;
 use serde_json::json;
 
 use crate::accounts::Web;
+use crate::app::lock;
 use crate::stats::run;
 
-// public goatcounter style visitor counter, only for sites that turn it on
 const FRESH: Duration = Duration::from_secs(300);
 
 type Counts = HashMap<(u64, String, String), (Instant, u64)>;
@@ -67,9 +67,7 @@ pub async fn counter(
 		]),
 	};
 	let key = (site.id, path.to_owned(), range.to_string());
-	let cached = COUNTS
-		.lock()
-		.unwrap_or_else(PoisonError::into_inner)
+	let cached = lock(&COUNTS)
 		.get(&key)
 		.filter(|(at, _)| at.elapsed() < FRESH)
 		.map(|&(_, count)| count);
@@ -91,7 +89,7 @@ pub async fn counter(
 					.unwrap_or_default(),
 				Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
 			};
-			let mut counts = COUNTS.lock().unwrap_or_else(PoisonError::into_inner);
+			let mut counts = lock(&COUNTS);
 			counts.retain(|_, (at, _)| at.elapsed() < FRESH);
 			counts.insert(key, (Instant::now(), count));
 			count

@@ -18,7 +18,6 @@ use crate::accounts::{Web, now, signed_in};
 use crate::passkeys::Purpose;
 use crate::webauthn;
 
-// openid connect, so teams sign in through their own identity provider
 pub struct Provider {
 	pub issuer: String,
 	pub id: String,
@@ -163,7 +162,6 @@ async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) ->
 	response
 }
 
-// trades the code for an id token, then checks its signature and claims
 async fn identify(
 	web: &Web,
 	provider: &Provider,

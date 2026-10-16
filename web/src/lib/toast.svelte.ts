@@ -1,3 +1,5 @@
+import { ask, type Question } from "./ask.svelte.ts";
+
 export const toasts = $state<{ id: number; text: string; bad: boolean }[]>([]);
 let next = 0;
 
@@ -13,7 +15,8 @@ export function dismiss(id: number) {
 	if (at >= 0) toasts.splice(at, 1);
 }
 
-export async function attempt(action: () => Promise<unknown>) {
+export async function attempt(action: () => Promise<unknown>, question?: Question) {
+	if (question && !(await ask(question))) return;
 	try {
 		await action();
 	} catch (err) {

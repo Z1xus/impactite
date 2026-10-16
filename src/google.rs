@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -10,13 +10,12 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail, internal, now};
-use crate::app::{App, Site};
+use crate::accounts::{Viewer, Web, broken, fail, internal, now};
+use crate::app::{App, lock};
 use crate::passkeys::Purpose;
 use crate::shares::Reader;
 use crate::stats::period;
 
-// search console terms for the google source, through the site owner's google account
 const SCOPE: &str = "https://www.googleapis.com/auth/webmasters.readonly";
 const TOKEN: &str = "https://oauth2.googleapis.com/token";
 const API: &str = "https://www.googleapis.com/webmasters/v3/sites";
@@ -72,18 +71,12 @@ struct Ask {
 	page: Option<String>,
 }
 
-fn editable(web: &Web, user: i64, domain: &str) -> Option<Site> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	(role != "viewer").then_some(())?;
-	web.app.site(domain).ok().flatten()
-}
-
 fn redirect_uri(web: &Web) -> String {
 	format!("{}/api/app/google/callback", web.url.trim_end_matches('/'))
 }
 
 async fn show(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let link = match web.app.google(site.id) {
@@ -115,28 +108,67 @@ async fn connect(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 ) -> Response {
-	let (Some(site), Some(client)) = (editable(&web, viewer.user, &domain), &web.google) else {
+	let (Some(site), Some(client)) = (web.app.editable(viewer.user, &domain), &web.google) else {
 		return fail(
 			StatusCode::FORBIDDEN,
 			"Search Console is not set up for this site.",
 		);
 	};
-	let Some(state) = web.begin(Purpose::Google(site.id)) else {
-		return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
+	consent(&web, client, Purpose::Google(site.id))
+}
+
+// search console keeps a refresh token, analytics imports only need an hour
+fn consent(web: &Web, client: &Client, purpose: Purpose) -> Response {
+	let offline = matches!(purpose, Purpose::Google(_));
+	let Some(state) = web.begin(purpose) else {
+		return broken();
 	};
-	let query = url::form_urlencoded::Serializer::new(String::new())
+	let mut query = url::form_urlencoded::Serializer::new(String::new());
+	query
 		.append_pair("client_id", &client.id)
-		.append_pair("redirect_uri", &redirect_uri(&web))
+		.append_pair("redirect_uri", &redirect_uri(web))
 		.append_pair("response_type", "code")
-		.append_pair("scope", SCOPE)
-		.append_pair("access_type", "offline")
+		.append_pair("scope", if offline { SCOPE } else { ANALYTICS })
 		.append_pair("prompt", "consent")
-		.append_pair("state", &state)
-		.finish();
+		.append_pair("state", &state);
+	if offline {
+		query.append_pair("access_type", "offline");
+	}
 	Redirect::to(&format!(
-		"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+		"https://accounts.google.com/o/oauth2/v2/auth?{}",
+		query.finish()
 	))
 	.into_response()
+}
+
+async fn exchange(web: &Web, client: &Client, code: &str) -> Option<Value> {
+	let exchanged = web
+		.http
+		.post(TOKEN)
+		.form(&[
+			("code", code),
+			("client_id", &client.id),
+			("client_secret", &client.secret),
+			("redirect_uri", &redirect_uri(web)),
+			("grant_type", "authorization_code"),
+		])
+		.send()
+		.await
+		.and_then(reqwest::Response::error_for_status);
+	match exchanged {
+		Ok(response) => response.json().await.ok(),
+		Err(err) => {
+			tracing::warn!(%err, "google token");
+			None
+		}
+	}
+}
+
+fn keep(cache: &Mutex<HashMap<u64, (String, i64)>>, site: u64, body: &Value) {
+	if let Some(access) = body["access_token"].as_str() {
+		let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
+		lock(cache).insert(site, (access.to_owned(), expires));
+	}
 }
 
 async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) -> Response {
@@ -153,36 +185,11 @@ async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) ->
 	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
 		return Redirect::to(&back).into_response();
 	};
-	let exchanged = web
-		.http
-		.post(TOKEN)
-		.form(&[
-			("code", code.as_str()),
-			("client_id", &client.id),
-			("client_secret", &client.secret),
-			("redirect_uri", &redirect_uri(&web)),
-			("grant_type", "authorization_code"),
-		])
-		.send()
-		.await
-		.and_then(reqwest::Response::error_for_status);
-	let body: Value = match exchanged {
-		Ok(response) => response.json().await.unwrap_or_default(),
-		Err(err) => {
-			tracing::warn!(%err, "search console token");
-			return Redirect::to(&failed).into_response();
-		}
-	};
+	let body = exchange(&web, client, &code).await.unwrap_or_default();
 	let Some(refresh) = body["refresh_token"].as_str() else {
 		return Redirect::to(&failed).into_response();
 	};
-	if let Some(access) = body["access_token"].as_str() {
-		let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
-		ACCESS
-			.lock()
-			.unwrap_or_else(PoisonError::into_inner)
-			.insert(site, (access.to_owned(), expires));
-	}
+	keep(&ACCESS, site, &body);
 	match web.app.link_google(site, refresh) {
 		Ok(()) => Redirect::to(&back).into_response(),
 		Err(err) => internal(err),
@@ -195,7 +202,7 @@ async fn choose(
 	Path(domain): Path<String>,
 	Json(body): Json<Choice>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	match web.app.set_google_property(site.id, &body.property) {
@@ -209,7 +216,7 @@ async fn disconnect(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	if let Ok(Some((refresh, _))) = web.app.google(site.id) {
@@ -221,10 +228,7 @@ async fn disconnect(
 			.send()
 			.await;
 	}
-	ACCESS
-		.lock()
-		.unwrap_or_else(PoisonError::into_inner)
-		.remove(&site.id);
+	lock(&ACCESS).remove(&site.id);
 	match web.app.unlink_google(site.id) {
 		Ok(()) => StatusCode::NO_CONTENT.into_response(),
 		Err(err) => internal(err),
@@ -302,9 +306,7 @@ async fn google(
 	site: u64,
 	request: impl Fn(&reqwest::Client, &str) -> reqwest::RequestBuilder,
 ) -> anyhow::Result<Value> {
-	let cached = ACCESS
-		.lock()
-		.unwrap_or_else(PoisonError::into_inner)
+	let cached = lock(&ACCESS)
 		.get(&site)
 		.filter(|(_, expires)| *expires > now())
 		.map(|(token, _)| token.clone());
@@ -338,10 +340,7 @@ async fn google(
 				.ok_or_else(|| anyhow::anyhow!("no access token"))?
 				.to_owned();
 			let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
-			ACCESS
-				.lock()
-				.unwrap_or_else(PoisonError::into_inner)
-				.insert(site, (token.clone(), expires));
+			lock(&ACCESS).insert(site, (token.clone(), expires));
 			token
 		}
 	};
@@ -404,9 +403,7 @@ struct Property {
 }
 
 fn token(site: u64) -> Option<String> {
-	ANALYTICS_ACCESS
-		.lock()
-		.unwrap_or_else(PoisonError::into_inner)
+	lock(&ANALYTICS_ACCESS)
 		.get(&site)
 		.filter(|(_, expires)| *expires > now())
 		.map(|(token, _)| token.clone())
@@ -417,27 +414,13 @@ async fn connect_analytics(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 ) -> Response {
-	let (Some(site), Some(client)) = (editable(&web, viewer.user, &domain), &web.google) else {
+	let (Some(site), Some(client)) = (web.app.editable(viewer.user, &domain), &web.google) else {
 		return fail(
 			StatusCode::FORBIDDEN,
 			"Google is not set up on this server.",
 		);
 	};
-	let Some(state) = web.begin(Purpose::Analytics(site.id)) else {
-		return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
-	};
-	let query = url::form_urlencoded::Serializer::new(String::new())
-		.append_pair("client_id", &client.id)
-		.append_pair("redirect_uri", &redirect_uri(&web))
-		.append_pair("response_type", "code")
-		.append_pair("scope", ANALYTICS)
-		.append_pair("prompt", "consent")
-		.append_pair("state", &state)
-		.finish();
-	Redirect::to(&format!(
-		"https://accounts.google.com/o/oauth2/v2/auth?{query}"
-	))
-	.into_response()
+	consent(&web, client, Purpose::Analytics(site.id))
 }
 
 async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Response {
@@ -448,50 +431,21 @@ async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Response {
 	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
 		return Redirect::to(&back).into_response();
 	};
-	let exchanged = web
-		.http
-		.post(TOKEN)
-		.form(&[
-			("code", code.as_str()),
-			("client_id", &client.id),
-			("client_secret", &client.secret),
-			("redirect_uri", &redirect_uri(web)),
-			("grant_type", "authorization_code"),
-		])
-		.send()
-		.await
-		.and_then(reqwest::Response::error_for_status);
-	let body: Value = match exchanged {
-		Ok(response) => response.json().await.unwrap_or_default(),
-		Err(err) => {
-			tracing::warn!(%err, "google analytics token");
-			return Redirect::to(&back).into_response();
-		}
-	};
-	if let Some(access) = body["access_token"].as_str() {
-		let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
-		ANALYTICS_ACCESS
-			.lock()
-			.unwrap_or_else(PoisonError::into_inner)
-			.insert(site, (access.to_owned(), expires));
+	if let Some(body) = exchange(web, client, &code).await {
+		keep(&ANALYTICS_ACCESS, site, &body);
 	}
 	Redirect::to(&back).into_response()
 }
 
-// whether google is connected, the properties it sees, and how an import is going
 async fn analytics(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
-	let status = IMPORTS
-		.lock()
-		.unwrap_or_else(PoisonError::into_inner)
-		.get(&site.id)
-		.cloned();
+	let status = lock(&IMPORTS).get(&site.id).cloned();
 	let mut properties = Vec::new();
 	if let Some(token) = token(site.id) {
 		let listed = web
@@ -541,7 +495,7 @@ async fn start_import(
 	Path(domain): Path<String>,
 	Json(body): Json<Property>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let Some(token) = token(site.id) else {
@@ -554,7 +508,7 @@ async fn start_import(
 		return fail(StatusCode::BAD_REQUEST, "Pick a property.");
 	}
 	{
-		let mut imports = IMPORTS.lock().unwrap_or_else(PoisonError::into_inner);
+		let mut imports = lock(&IMPORTS);
 		if matches!(imports.get(&site.id), Some(None)) {
 			return fail(StatusCode::CONFLICT, "An import is already running.");
 		}
@@ -589,7 +543,7 @@ async fn start_import(
 			tracing::warn!(%err, site = site.domain, "google analytics import");
 			err.to_string()
 		});
-		let mut imports = IMPORTS.lock().unwrap_or_else(PoisonError::into_inner);
+		let mut imports = lock(&IMPORTS);
 		match error {
 			Some(error) => imports.insert(site.id, Some(error)),
 			None => imports.remove(&site.id),

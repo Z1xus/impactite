@@ -157,7 +157,6 @@ fn respond(
 	}
 }
 
-// results as a table: rows for lists, metric and value for totals
 fn csv(results: &Value) -> anyhow::Result<String> {
 	let text = |value: &Value| match value {
 		Value::String(text) => text.clone(),

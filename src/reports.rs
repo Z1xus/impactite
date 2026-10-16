@@ -299,14 +299,8 @@ fn shown(to: &str) -> String {
 	}
 }
 
-fn editable(web: &Web, user: i64, domain: &str) -> Option<Site> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	(role != "viewer").then_some(())?;
-	web.app.site(domain).ok().flatten()
-}
-
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match editable(&web, viewer.user, &domain) {
+	match web.app.editable(viewer.user, &domain) {
 		Some(site) => respond(&web, site.id),
 		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
 	}
@@ -318,7 +312,7 @@ async fn add(
 	Path(domain): Path<String>,
 	Json(body): Json<NewReport>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let alert = matches!(body.kind.as_str(), "spike" | "drop");
@@ -363,7 +357,7 @@ async fn remove(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	match web.app.remove_report(site.id, id) {

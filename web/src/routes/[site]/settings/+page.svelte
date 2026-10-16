@@ -168,21 +168,20 @@
 	}
 
 	const removeGuest = (user: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Remove this guest?",
-					body: "They lose access to this site.",
-					action: "remove guest"
-				}))
-			)
-				return;
-			people = await api<People>(
-				`/api/app/sites/${domain}/guests/${user}`,
-				undefined,
-				"DELETE"
-			);
-		});
+		attempt(
+			async () => {
+				people = await api<People>(
+					`/api/app/sites/${domain}/guests/${user}`,
+					undefined,
+					"DELETE"
+				);
+			},
+			{
+				title: "Remove this guest?",
+				body: "They lose access to this site.",
+				action: "remove guest"
+			}
+		);
 
 	const revokeGuest = (invite: string | number) =>
 		attempt(async () => {
@@ -302,23 +301,22 @@
 	}
 
 	const removeLink = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Delete this shared link?",
-					body: "Anyone with the link loses access.",
-					action: "delete link"
-				}))
-			)
-				return;
-			links = (
-				await api<{ shares: Link[] }>(
-					`/api/app/sites/${domain}/shares/${id}`,
-					undefined,
-					"DELETE"
-				)
-			).shares;
-		});
+		attempt(
+			async () => {
+				links = (
+					await api<{ shares: Link[] }>(
+						`/api/app/sites/${domain}/shares/${id}`,
+						undefined,
+						"DELETE"
+					)
+				).shares;
+			},
+			{
+				title: "Delete this shared link?",
+				body: "Anyone with the link loses access.",
+				action: "delete link"
+			}
+		);
 
 	const chooseProperty = (property: string) =>
 		attempt(async () => {
@@ -327,18 +325,17 @@
 		});
 
 	const disconnectGoogle = () =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Disconnect Search Console?",
-					body: "Search terms stop showing until you connect again.",
-					action: "disconnect"
-				}))
-			)
-				return;
-			await api(`/api/app/sites/${domain}/google`, undefined, "DELETE");
-			google = await api<Google>(`/api/app/sites/${domain}/google`);
-		});
+		attempt(
+			async () => {
+				await api(`/api/app/sites/${domain}/google`, undefined, "DELETE");
+				google = await api<Google>(`/api/app/sites/${domain}/google`);
+			},
+			{
+				title: "Disconnect Search Console?",
+				body: "Search terms stop showing until you connect again.",
+				action: "disconnect"
+			}
+		);
 
 	async function addReport() {
 		reports = (
@@ -383,22 +380,21 @@
 	}
 
 	const removeFunnel = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: `Delete funnel "${funnels?.find((funnel) => funnel.id === id)?.name ?? ""}"?`,
-					action: "delete funnel"
-				}))
-			)
-				return;
-			funnels = (
-				await api<{ funnels: Funnel[] }>(
-					`/api/app/sites/${domain}/funnels/${id}`,
-					undefined,
-					"DELETE"
-				)
-			).funnels;
-		});
+		attempt(
+			async () => {
+				funnels = (
+					await api<{ funnels: Funnel[] }>(
+						`/api/app/sites/${domain}/funnels/${id}`,
+						undefined,
+						"DELETE"
+					)
+				).funnels;
+			},
+			{
+				title: `Delete funnel "${funnels?.find((funnel) => funnel.id === id)?.name ?? ""}"?`,
+				action: "delete funnel"
+			}
+		);
 
 	async function renameGoal() {
 		if (!renaming) return;
@@ -413,23 +409,22 @@
 	}
 
 	const removeGoal = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: `Delete goal "${goals?.find((goal) => goal.id === id)?.name ?? ""}"?`,
-					body: "Its conversions stop showing.",
-					action: "delete goal"
-				}))
-			)
-				return;
-			goals = (
-				await api<{ goals: Goal[] }>(
-					`/api/app/sites/${domain}/goals/${id}`,
-					undefined,
-					"DELETE"
-				)
-			).goals;
-		});
+		attempt(
+			async () => {
+				goals = (
+					await api<{ goals: Goal[] }>(
+						`/api/app/sites/${domain}/goals/${id}`,
+						undefined,
+						"DELETE"
+					)
+				).goals;
+			},
+			{
+				title: `Delete goal "${goals?.find((goal) => goal.id === id)?.name ?? ""}"?`,
+				body: "Its conversions stop showing.",
+				action: "delete goal"
+			}
+		);
 
 	type Analytics = {
 		available: boolean;
@@ -560,42 +555,40 @@
 	}
 
 	const removeSegment = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Delete this segment?",
-					body: "Everyone it's shared with loses it too.",
-					action: "delete segment"
-				}))
-			)
-				return;
-			segments = (
-				await api<{ segments: Segment[] }>(
-					`/api/app/sites/${domain}/segments/${id}`,
-					undefined,
-					"DELETE"
-				)
-			).segments;
-		});
+		attempt(
+			async () => {
+				segments = (
+					await api<{ segments: Segment[] }>(
+						`/api/app/sites/${domain}/segments/${id}`,
+						undefined,
+						"DELETE"
+					)
+				).segments;
+			},
+			{
+				title: "Delete this segment?",
+				body: "Everyone it's shared with loses it too.",
+				action: "delete segment"
+			}
+		);
 
 	const removeImport = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Remove this import?",
-					body: "Its imported stats are deleted.",
-					action: "remove import"
-				}))
-			)
-				return;
-			imports = (
-				await api<{ imports: Import[] }>(
-					`/api/app/sites/${domain}/imports/${id}`,
-					undefined,
-					"DELETE"
-				)
-			).imports;
-		});
+		attempt(
+			async () => {
+				imports = (
+					await api<{ imports: Import[] }>(
+						`/api/app/sites/${domain}/imports/${id}`,
+						undefined,
+						"DELETE"
+					)
+				).imports;
+			},
+			{
+				title: "Remove this import?",
+				body: "Its imported stats are deleted.",
+				action: "remove import"
+			}
+		);
 	const sections = $derived([
 		{ id: "general", label: "general" },
 		{ id: "tracking", label: "tracking" },

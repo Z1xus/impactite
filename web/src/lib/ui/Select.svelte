@@ -37,7 +37,6 @@
 	// "new york" finds "America/New_York"
 	const plain = (text: string) => text.toLowerCase().replaceAll("_", " ");
 
-	// long lists get a search box
 	const searchable = $derived(options.length > 12);
 	const shownOptions = $derived(
 		options.filter((option) => plain(option.label).includes(plain(query.trim())))

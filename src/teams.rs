@@ -9,7 +9,7 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{ROLES, Viewer, Web, fail, internal};
+use crate::accounts::{ROLES, Viewer, Web, broken, fail, internal};
 use crate::app::{App, Site};
 use crate::sites;
 
@@ -95,7 +95,7 @@ async fn destroy(State(web): State<Arc<Web>>, viewer: Viewer, Path(team): Path<i
 	};
 	for site in sites {
 		if !sites::drop_site(&web, site).await {
-			return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
+			return broken();
 		}
 	}
 	match web.app.delete_team(team) {

@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail, internal};
-use crate::app::App;
+use crate::app::{App, Site};
 use crate::shares::Reader;
 use crate::stats::{self, day_number};
 
@@ -36,14 +36,6 @@ pub struct Request {
 	filters: Vec<Value>,
 }
 
-fn site(web: &Web, user: i64, domain: &str, write: bool) -> Option<u64> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	if write && role == "viewer" {
-		return None;
-	}
-	web.app.site(domain).ok().flatten().map(|site| site.id)
-}
-
 async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
 	match web.app.site(&domain) {
 		Ok(Some(site)) if reader.reads(&web, &domain) => respond(&web, site.id),
@@ -57,7 +49,7 @@ async fn add(
 	Path(domain): Path<String>,
 	Json(body): Json<NewFunnel>,
 ) -> Response {
-	let Some(site) = site(&web, viewer.user, &domain, true) else {
+	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change funnels here.");
 	};
 	let goals = web.app.goals(site).unwrap_or_default();
@@ -86,7 +78,7 @@ async fn remove(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 ) -> Response {
-	let Some(site) = site(&web, viewer.user, &domain, true) else {
+	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change funnels here.");
 	};
 	match web.app.remove_funnel(site, id) {

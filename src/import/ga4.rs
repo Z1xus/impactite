@@ -159,7 +159,6 @@ async fn fetch(
 	bail!("Google Analytics kept limiting the import. Try again later.")
 }
 
-// one report row as plausible's column names and values
 fn row_values(
 	table: &str,
 	dimensions: &[&str],

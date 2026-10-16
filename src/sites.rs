@@ -16,7 +16,7 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{self, Viewer, Web, fail};
+use crate::accounts::{self, Viewer, Web, broken, fail};
 use crate::app::{App, Site, token};
 use crate::import;
 use crate::stats::day_number;
@@ -79,7 +79,7 @@ async fn update(
 	Path(domain): Path<String>,
 	Json(body): Json<Update>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return forbidden();
 	};
 	if let Some(timezone) = &body.timezone {
@@ -310,7 +310,7 @@ pub async fn drop_site(web: &Web, site: Site) -> bool {
 }
 
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match editable(&web, viewer.user, &domain) {
+	match web.app.editable(viewer.user, &domain) {
 		Some(site) => respond(&web, &site),
 		None => forbidden(),
 	}
@@ -323,7 +323,7 @@ async fn upload(
 	Query(upload): Query<Upload>,
 	body: Bytes,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return forbidden();
 	};
 	let shared = web.clone();
@@ -365,7 +365,7 @@ async fn remove(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 ) -> Response {
-	let Some(site) = editable(&web, viewer.user, &domain) else {
+	let Some(site) = web.app.editable(viewer.user, &domain) else {
 		return forbidden();
 	};
 	let Ok(Some((first, last))) = web.app.remove_import(site.id, id) else {
@@ -383,12 +383,6 @@ fn days(first: &str, last: &str) -> Option<RangeInclusive<i32>> {
 	Some(day_number(first)..=day_number(last))
 }
 
-fn editable(web: &Web, user: i64, domain: &str) -> Option<Site> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	(role != "viewer").then_some(())?;
-	web.app.site(domain).ok().flatten()
-}
-
 fn respond(web: &Web, site: &Site) -> Response {
 	match web.app.imports(site.id) {
 		Ok(imports) => Json(json!({
@@ -404,10 +398,6 @@ fn respond(web: &Web, site: &Site) -> Response {
 
 fn forbidden() -> Response {
 	fail(StatusCode::FORBIDDEN, "You can't change this site.")
-}
-
-fn broken() -> Response {
-	fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
 }
 
 impl App {

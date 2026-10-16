@@ -123,13 +123,11 @@ impl Mail {
 const MONO: &str = "ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace";
 const SANS: &str = "-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
-// one mail in impactite's look, with a plain text twin
 pub struct Letter<'a> {
 	// the instance address, for the logo and the footer
 	pub base: &'a str,
 	pub title: &'a str,
 	pub lines: &'a [String],
-	// a monospace block, reports put their numbers here
 	pub table: Option<&'a str>,
 	pub button: Option<(&'a str, &'a str)>,
 }

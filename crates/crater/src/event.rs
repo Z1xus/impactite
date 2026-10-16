@@ -76,7 +76,7 @@ impl Dim {
 		Self::NAMES[self as usize]
 	}
 
-	pub fn is_event(self) -> bool {
+	pub(crate) fn is_event(self) -> bool {
 		matches!(self, Dim::Name | Dim::Hostname | Dim::Page)
 	}
 }

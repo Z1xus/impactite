@@ -105,23 +105,19 @@
 		});
 
 	const remove = (key: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: String(key)[0] === "m" ? "Remove this member?" : "Revoke this invite?",
-					body:
-						String(key)[0] === "m"
-							? "They lose access to the team's sites."
-							: undefined,
-					action: String(key)[0] === "m" ? "remove member" : "revoke invite"
-				}))
-			)
-				return;
-			const [kind, value] = [String(key)[0], String(key).slice(1)];
-			const path = kind === "m" ? "members" : "invites";
-			await api(`/api/app/teams/${id}/${path}/${value}`, undefined, "DELETE");
-			await load();
-		});
+		attempt(
+			async () => {
+				const [kind, value] = [String(key)[0], String(key).slice(1)];
+				const path = kind === "m" ? "members" : "invites";
+				await api(`/api/app/teams/${id}/${path}/${value}`, undefined, "DELETE");
+				await load();
+			},
+			{
+				title: String(key)[0] === "m" ? "Remove this member?" : "Revoke this invite?",
+				body: String(key)[0] === "m" ? "They lose access to the team's sites." : undefined,
+				action: String(key)[0] === "m" ? "remove member" : "revoke invite"
+			}
+		);
 
 	const resend = (invite: Invite) =>
 		attempt(async () => {
@@ -131,19 +127,18 @@
 		});
 
 	const leave = () =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: `Leave ${team?.name ?? "this team"}?`,
-					body: "You'll lose access to its sites.",
-					action: "leave team"
-				}))
-			)
-				return;
-			await api(`/api/app/teams/${id}/members/${session.me?.id}`, undefined, "DELETE");
-			await refresh();
-			await goto(resolve("/"));
-		});
+		attempt(
+			async () => {
+				await api(`/api/app/teams/${id}/members/${session.me?.id}`, undefined, "DELETE");
+				await refresh();
+				await goto(resolve("/"));
+			},
+			{
+				title: `Leave ${team?.name ?? "this team"}?`,
+				body: "You'll lose access to its sites.",
+				action: "leave team"
+			}
+		);
 
 	async function destroy() {
 		if (confirm !== team?.name) throw new Error(`Type ${team?.name} to confirm.`);

@@ -10,8 +10,8 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::{Viewer, Web, fail};
-use crate::app::App;
+use crate::accounts::{Viewer, Web, fail, internal};
+use crate::app::{App, Site};
 use crate::shares::Reader;
 
 #[derive(Debug, Clone)]
@@ -95,7 +95,7 @@ async fn add(
 	Path(domain): Path<String>,
 	Json(body): Json<NewGoal>,
 ) -> Response {
-	let Some(site) = allowed(&web, viewer.user, &domain, true) else {
+	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change goals here.");
 	};
 	let value = body.value.trim();
@@ -139,7 +139,7 @@ async fn rename(
 	Path((domain, id)): Path<(String, i64)>,
 	Json(body): Json<Rename>,
 ) -> Response {
-	let Some(site) = allowed(&web, viewer.user, &domain, true) else {
+	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change goals here.");
 	};
 	let name = body.name.trim();
@@ -157,21 +157,13 @@ async fn remove(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 ) -> Response {
-	let Some(site) = allowed(&web, viewer.user, &domain, true) else {
+	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change goals here.");
 	};
 	match web.app.remove_goal(site, id) {
 		Ok(()) => respond(&web, site),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
-}
-
-fn allowed(web: &Web, user: i64, domain: &str, write: bool) -> Option<u64> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	if write && role == "viewer" {
-		return None;
-	}
-	web.app.site(domain).ok().flatten().map(|site| site.id)
 }
 
 fn respond(web: &Web, site: u64) -> Response {
@@ -192,7 +184,7 @@ fn respond(web: &Web, site: u64) -> Response {
 				.collect::<Vec<_>>()
 		}))
 		.into_response(),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
 }
 

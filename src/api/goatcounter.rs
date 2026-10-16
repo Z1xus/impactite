@@ -141,7 +141,6 @@ impl Call {
 	}
 }
 
-// visitors per value of the dimensions
 fn ask(
 	web: &Web,
 	site: &Site,

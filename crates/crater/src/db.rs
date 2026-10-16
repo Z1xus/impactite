@@ -102,7 +102,6 @@ impl Db {
 		self.change(site, Change::Drop)
 	}
 
-	// removes all data but keeps the site collecting
 	pub fn reset_site(&self, site: u64) -> io::Result<()> {
 		self.change(site, Change::Reset)
 	}
@@ -316,20 +315,8 @@ impl Db {
 		let dict = self.shared.dict(site)?;
 		let mut totals = vec![0; steps.len()];
 		for day in days {
-			let live = self
-				.shared
-				.live
-				.read()
-				.unwrap_or_else(PoisonError::into_inner)
-				.get(&(site, day))
-				.map(|live| live.parts.clone());
-			let parts = match live {
-				Some(parts) => parts,
-				None => match Segment::read(&self.shared.path((site, day), "seg")) {
-					Ok(seg) => vec![Arc::new(seg.cols)],
-					Err(err) if err.kind() == ErrorKind::NotFound => continue,
-					Err(err) => return Err(err),
-				},
+			let Some(parts) = self.shared.parts((site, day))? else {
+				continue;
 			};
 			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
 			let matchers = |filters: &[Filter]| -> Vec<Matcher> {
@@ -358,20 +345,8 @@ impl Db {
 	) -> io::Result<()> {
 		let dict = self.shared.dict(site)?;
 		for day in days {
-			let live = self
-				.shared
-				.live
-				.read()
-				.unwrap_or_else(PoisonError::into_inner)
-				.get(&(site, day))
-				.map(|live| live.parts.clone());
-			let parts = match live {
-				Some(parts) => parts,
-				None => match Segment::read(&self.shared.path((site, day), "seg")) {
-					Ok(seg) => vec![Arc::new(seg.cols)],
-					Err(err) if err.kind() == ErrorKind::NotFound => continue,
-					Err(err) => return Err(err),
-				},
+			let Some(parts) = self.shared.parts((site, day))? else {
+				continue;
 			};
 			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
 			let text = |id: u32| dict.get(id).map(|s| s.to_string()).unwrap_or_default();
@@ -421,13 +396,7 @@ impl Db {
 	pub fn prop_keys(&self, site: u64, days: RangeInclusive<i32>) -> io::Result<Vec<Arc<str>>> {
 		let mut counts: HashMap<u32, u64> = HashMap::new();
 		for day in days {
-			let live = self
-				.shared
-				.live
-				.read()
-				.unwrap_or_else(PoisonError::into_inner)
-				.get(&(site, day))
-				.map(|live| live.parts.clone());
+			let live = self.shared.live_parts((site, day));
 			match live {
 				Some(parts) => {
 					for key in parts.iter().flat_map(|part| part.keys.iter()) {
@@ -724,6 +693,22 @@ impl Shared {
 		let dict = Arc::new(RwLock::new(Dict::open(&dir.join("dict"))?));
 		dicts.insert(site, dict.clone());
 		Ok(dict)
+	}
+
+	fn live_parts(&self, key: Key) -> Option<Vec<Arc<Columns>>> {
+		let live = self.live.read().unwrap_or_else(PoisonError::into_inner);
+		live.get(&key).map(|live| live.parts.clone())
+	}
+
+	fn parts(&self, key: Key) -> io::Result<Option<Vec<Arc<Columns>>>> {
+		if let Some(parts) = self.live_parts(key) {
+			return Ok(Some(parts));
+		}
+		match Segment::read(&self.path(key, "seg")) {
+			Ok(seg) => Ok(Some(vec![Arc::new(seg.cols)])),
+			Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
+			Err(err) => Err(err),
+		}
 	}
 
 	fn publish(&self, key: Key, view: Option<LiveView>) {
@@ -1090,7 +1075,6 @@ impl Writer {
 		Ok(())
 	}
 
-	// makes the day's current parts visible to queries
 	fn show(&mut self, key: Key) {
 		let Some(live) = self.memtable.get(&key) else {
 			return;

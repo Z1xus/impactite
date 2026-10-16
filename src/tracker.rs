@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
+
+use crate::app::lock;
 
 #[derive(RustEmbed)]
 #[folder = "tracker/dist"]
@@ -81,7 +83,7 @@ fn javascript(built: &Built, headers: &HeaderMap) -> Response {
 }
 
 fn build(modules: Vec<&'static str>) -> Option<Built> {
-	let mut cache = BUILT.lock().unwrap_or_else(PoisonError::into_inner);
+	let mut cache = lock(&BUILT);
 	if let Some(built) = cache.get(&modules) {
 		return Some(built.clone());
 	}

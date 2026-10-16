@@ -86,7 +86,6 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
 	Serve(Box<Serve>),
-	// replaces this binary with the latest release
 	Update,
 	Site {
 		#[command(subcommand)]
@@ -564,7 +563,6 @@ fn default_team(app: &App) -> anyhow::Result<Option<i64>> {
 	})
 }
 
-// drops days older than each site keeps
 fn prune(app: &App, db: &Db) {
 	let Ok(sites) = app.retentions() else {
 		return;

@@ -1,4 +1,4 @@
-type Question = { title: string; body?: string; action: string };
+export type Question = { title: string; body?: string; action: string };
 
 export const asking = $state<{ question: Question | null; answer: (yes: boolean) => void }>({
 	question: null,

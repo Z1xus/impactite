@@ -2,6 +2,8 @@ use anyhow::{Context, bail};
 use aws_lc_rs::digest::{SHA256, digest};
 use aws_lc_rs::hmac;
 
+use crate::app::hex;
+
 // an s3 compatible bucket written as s3://KEY:SECRET@host/bucket/prefix?region=us-east-1,
 // s3+http:// for a bucket on the local network
 pub struct Bucket {
@@ -50,7 +52,6 @@ impl Bucket {
 		})
 	}
 
-	// where it goes, without the secret
 	pub fn shown(&self) -> String {
 		format!("bucket {}{}", self.host, self.path)
 	}
@@ -118,8 +119,4 @@ impl Bucket {
 		}
 		Ok(())
 	}
-}
-
-fn hex(bytes: &[u8]) -> String {
-	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

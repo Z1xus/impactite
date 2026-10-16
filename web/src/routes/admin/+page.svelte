@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { date } from "#lib/display.svelte.ts";
 	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
@@ -33,13 +34,6 @@
 	};
 
 	let info = $state<Admin | null>(null);
-
-	const date = (seconds: number) =>
-		new Date(seconds * 1000).toLocaleDateString("en-US", {
-			month: "short",
-			day: "numeric",
-			year: "numeric"
-		});
 
 	$effect(() => {
 		api<Admin>("/api/app/admin").then((result) => (info = result));

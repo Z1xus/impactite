@@ -1,7 +1,6 @@
 import { api } from "./api";
 import { applyTheme, type Theme } from "./theme.svelte.ts";
 
-// per user display choices, kept in prefs
 export type Display = {
 	week: "monday" | "sunday";
 	clock: "24" | "12";
@@ -48,6 +47,9 @@ export const number = (value: number, digits = 0) =>
 		minimumFractionDigits: digits,
 		maximumFractionDigits: digits
 	});
+
+const days = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
+export const date = (seconds: number) => days.format(seconds * 1000);
 
 // "14:30" in the chosen clock
 export function clock(time: string) {

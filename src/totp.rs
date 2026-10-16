@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use aws_lc_rs::hmac;
 use axum::extract::State;
@@ -11,8 +11,8 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::{Viewer, Web, fail, internal, now};
-use crate::app::{App, key_hash, token};
+use crate::accounts::{Viewer, Web, broken, fail, internal, now};
+use crate::app::{App, key_hash, lock, token};
 
 // rfc 6238 codes, 6 digits every 30 seconds, one step of clock drift allowed
 const STEP: i64 = 30;
@@ -88,9 +88,8 @@ fn matching(secret: &str, given: &str) -> Option<i64> {
 	(now - 1..=now + 1).find(|&step| code(&secret, step) == given)
 }
 
-// checks a code or a recovery code, counts failures and locks the account for a while
 pub fn verify(app: &App, user: i64, given: &str) -> Result<(), &'static str> {
-	let mut fails = FAILS.lock().unwrap_or_else(PoisonError::into_inner);
+	let mut fails = lock(&FAILS);
 	if fails
 		.get(&user)
 		.is_some_and(|&(count, until)| count >= TRIES && until > now())
@@ -134,7 +133,7 @@ pub fn verify(app: &App, user: i64, given: &str) -> Result<(), &'static str> {
 async fn begin(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 	let mut bytes = [0u8; 20];
 	if getrandom::fill(&mut bytes).is_err() {
-		return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
+		return broken();
 	}
 	let secret = encode(&bytes);
 	let email = web

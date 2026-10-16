@@ -1,4 +1,4 @@
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -11,8 +11,8 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail, signed_in};
-use crate::app::App;
+use crate::accounts::{Viewer, Web, broken, fail, internal, now, signed_in};
+use crate::app::{App, lock};
 use crate::ingest::ua;
 use crate::webauthn::{self, Assertion, Key, Registration};
 
@@ -51,20 +51,14 @@ impl Web {
 	pub(crate) fn begin(&self, purpose: Purpose) -> Option<String> {
 		let challenge = webauthn::challenge()?;
 		let now = now();
-		let mut ceremonies = self
-			.ceremonies
-			.lock()
-			.unwrap_or_else(PoisonError::into_inner);
+		let mut ceremonies = lock(&self.ceremonies);
 		ceremonies.retain(|_, (_, expires)| *expires > now);
 		ceremonies.insert(challenge.clone(), (purpose, now + CEREMONY_SECS));
 		Some(challenge)
 	}
 
 	pub(crate) fn take(&self, challenge: &str) -> Option<Purpose> {
-		let mut ceremonies = self
-			.ceremonies
-			.lock()
-			.unwrap_or_else(PoisonError::into_inner);
+		let mut ceremonies = lock(&self.ceremonies);
 		ceremonies
 			.remove(challenge)
 			.filter(|(_, expires)| *expires > now())
@@ -132,11 +126,7 @@ async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Respon
 			}
 		}
 	} else {
-		let expected = web
-			.setup
-			.lock()
-			.unwrap_or_else(PoisonError::into_inner)
-			.clone();
+		let expected = lock(&web.setup).clone();
 		if expected.as_deref() != Some(body.token.as_str()) {
 			return fail(StatusCode::FORBIDDEN, "This setup link is no longer valid.");
 		}
@@ -144,7 +134,7 @@ async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Respon
 	};
 	let mut handle = [0; 16];
 	if getrandom::fill(&mut handle).is_err() {
-		return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.");
+		return broken();
 	}
 	ceremony(&web, purpose, |challenge| {
 		webauthn::creation_options(&web.rp, challenge, &handle, &email, &body.name, &[])
@@ -157,7 +147,7 @@ async fn new(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 		web.app.passkey_ids(viewer.user),
 	) {
 		(Ok((email, name)), Ok(exclude)) => (email, name, exclude),
-		_ => return fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		_ => return broken(),
 	};
 	let handle = viewer.user.to_be_bytes();
 	ceremony(&web, Purpose::Add(viewer.user), |challenge| {
@@ -187,7 +177,7 @@ async fn add(
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 	match web.app.passkeys(viewer.user) {
 		Ok(passkeys) => Json(json!({ "passkeys": passkeys })).into_response(),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
 }
 
@@ -209,7 +199,7 @@ async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<Stri
 	match web.app.remove_passkey(viewer.user, &id) {
 		Ok(true) => list(State(web), viewer).await,
 		Ok(false) => fail(StatusCode::NOT_FOUND, "Passkey not found."),
-		Err(_) => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		Err(err) => internal(err),
 	}
 }
 
@@ -261,12 +251,8 @@ fn ceremony(web: &Web, purpose: Purpose, options: impl FnOnce(&str) -> Value) ->
 		Some(challenge) => {
 			Json(json!({ "challenge": challenge, "options": options(&challenge) })).into_response()
 		}
-		None => fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong."),
+		None => broken(),
 	}
-}
-
-fn now() -> i64 {
-	jiff::Timestamp::now().as_second()
 }
 
 impl App {

@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::accounts::Web;
+use crate::app::{hex, lock};
 
 const REPO: &str = "z1xus/impactite";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -92,7 +93,7 @@ pub async fn watch(web: Arc<Web>) {
 					})),
 					false => None,
 				};
-				*web.latest.lock().unwrap_or_else(PoisonError::into_inner) = latest;
+				*lock(&web.latest) = latest;
 			}
 			Err(err) => tracing::debug!(%err, "update check"),
 		}
@@ -100,7 +101,6 @@ pub async fn watch(web: Arc<Web>) {
 	}
 }
 
-// swaps this binary for the latest release once its checksum matches
 pub async fn run() -> anyhow::Result<()> {
 	if Path::new("/.dockerenv").exists() || Path::new("/run/.containerenv").exists() {
 		bail!("impactite runs in a container here. Pull ghcr.io/{REPO}:latest and restart it");
@@ -126,12 +126,7 @@ pub async fn run() -> anyhow::Result<()> {
 	let packed = get(base.clone()).await?.bytes().await?;
 	let sums = get(format!("{base}.sha256")).await?.text().await?;
 	let expected = sums.split_whitespace().next().context("empty checksum")?;
-	let actual: String = digest(&SHA256, &packed)
-		.as_ref()
-		.iter()
-		.map(|byte| format!("{byte:02x}"))
-		.collect();
-	if actual != expected {
+	if hex(digest(&SHA256, &packed).as_ref()) != expected {
 		bail!("the download doesn't match its checksum. Nothing changed");
 	}
 
@@ -147,7 +142,6 @@ pub async fn run() -> anyhow::Result<()> {
 	Ok(())
 }
 
-// the impactite file inside the release's tar.gz
 fn binary(packed: &[u8]) -> anyhow::Result<Vec<u8>> {
 	let mut tar = Vec::new();
 	GzDecoder::new(packed).read_to_end(&mut tar)?;

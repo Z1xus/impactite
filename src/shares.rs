@@ -13,7 +13,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail, hash, internal};
-use crate::app::{App, token};
+use crate::app::{App, Site, token};
 
 // a signed in member or a share link token, for read only access
 pub struct Reader {
@@ -47,7 +47,6 @@ impl FromRequestParts<Arc<Web>> for Reader {
 }
 
 impl Reader {
-	// someone signed in, or holding a working share link
 	pub fn anyone(&self, web: &Web) -> bool {
 		self.user.is_some()
 			|| self
@@ -125,16 +124,9 @@ struct Unlock {
 	password: String,
 }
 
-fn editable(web: &Web, user: i64, domain: &str) -> Option<(u64, String)> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	(role != "viewer").then_some(())?;
-	let site = web.app.site(domain).ok().flatten()?;
-	Some((site.id, site.domain))
-}
-
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match editable(&web, viewer.user, &domain) {
-		Some((site, _)) => respond(&web, site),
+	match web.app.editable(viewer.user, &domain) {
+		Some(site) => respond(&web, site.id),
 		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
 	}
 }
@@ -145,7 +137,10 @@ async fn add(
 	Path(domain): Path<String>,
 	Json(body): Json<NewShare>,
 ) -> Response {
-	let Some((site, domain)) = editable(&web, viewer.user, &domain) else {
+	let Some(Site {
+		id: site, domain, ..
+	}) = web.app.editable(viewer.user, &domain)
+	else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let (slug, name, password) = match body.public {
@@ -179,7 +174,7 @@ async fn remove(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 ) -> Response {
-	let Some((site, _)) = editable(&web, viewer.user, &domain) else {
+	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	match web.app.remove_share(site, id) {

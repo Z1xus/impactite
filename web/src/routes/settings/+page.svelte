@@ -2,8 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import qrcode from "qrcode-generator";
-	import { display, saveDisplay } from "#lib/display.svelte.ts";
-	import { ask } from "#lib/ask.svelte.ts";
+	import { date, display, saveDisplay } from "#lib/display.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
@@ -56,13 +55,6 @@
 		code.make();
 		return code.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
 	});
-
-	const date = (seconds: number) =>
-		new Date(seconds * 1000).toLocaleDateString("en-US", {
-			month: "short",
-			day: "numeric",
-			year: "numeric"
-		});
 
 	$effect(() => {
 		api<{ passkeys: Passkey[] }>("/api/app/passkeys").then((r) => (passkeys = r.passkeys));
@@ -129,23 +121,22 @@
 		});
 
 	const removePasskey = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Remove this passkey?",
-					body: "You can't sign in with it anymore.",
-					action: "remove passkey"
-				}))
-			)
-				return;
-			passkeys = (
-				await api<{ passkeys: Passkey[] }>(
-					`/api/app/passkeys/${encodeURIComponent(id)}`,
-					undefined,
-					"DELETE"
-				)
-			).passkeys;
-		});
+		attempt(
+			async () => {
+				passkeys = (
+					await api<{ passkeys: Passkey[] }>(
+						`/api/app/passkeys/${encodeURIComponent(id)}`,
+						undefined,
+						"DELETE"
+					)
+				).passkeys;
+			},
+			{
+				title: "Remove this passkey?",
+				body: "You can't sign in with it anymore.",
+				action: "remove passkey"
+			}
+		);
 
 	const endSession = (id: string | number) =>
 		attempt(async () => {
@@ -173,17 +164,17 @@
 	}
 
 	const removeKey = (id: string | number) =>
-		attempt(async () => {
-			if (
-				!(await ask({
-					title: "Delete this API key?",
-					body: "Anything that uses it stops working.",
-					action: "delete key"
-				}))
-			)
-				return;
-			keys = (await api<{ keys: Key[] }>(`/api/app/keys/${id}`, undefined, "DELETE")).keys;
-		});
+		attempt(
+			async () => {
+				keys = (await api<{ keys: Key[] }>(`/api/app/keys/${id}`, undefined, "DELETE"))
+					.keys;
+			},
+			{
+				title: "Delete this API key?",
+				body: "Anything that uses it stops working.",
+				action: "delete key"
+			}
+		);
 
 	async function deleteAccount() {
 		await api("/api/app/me", { email: confirm }, "DELETE");

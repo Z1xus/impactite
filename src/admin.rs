@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::accounts::{Viewer, Web, fail, internal};
-use crate::app::App;
+use crate::app::{App, lock};
 use crate::profile;
 
 pub fn routes() -> Router<Arc<Web>> {
@@ -47,10 +47,7 @@ async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 			"mail": web.mail.ready(),
 			"users": users,
 			"version": crate::update::VERSION,
-			"latest": web
-				.latest
-				.lock()
-				.unwrap_or_else(std::sync::PoisonError::into_inner)
+			"latest": lock(&web.latest)
 				.clone(),
 		}))
 		.into_response(),

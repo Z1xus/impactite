@@ -13,7 +13,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::accounts::{Viewer, Web, fail, internal};
-use crate::app::App;
+use crate::app::{App, Site};
 use crate::net::Proxies;
 
 const KINDS: [&str; 5] = ["ip", "country", "page", "hostname", "prop"];
@@ -58,7 +58,6 @@ impl Shields {
 				&& !self.hostnames.iter().any(|pattern| glob(pattern, hostname)))
 	}
 
-	// an empty allowlist keeps every prop
 	pub fn keeps(&self, key: &str) -> bool {
 		self.props.is_empty() || self.props.contains(key)
 	}
@@ -77,16 +76,9 @@ struct Rule {
 	value: String,
 }
 
-fn editable(web: &Web, user: i64, domain: &str) -> Option<(u64, String)> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	(role != "viewer").then_some(())?;
-	let site = web.app.site(domain).ok().flatten()?;
-	Some((site.id, site.domain))
-}
-
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match editable(&web, viewer.user, &domain) {
-		Some((site, _)) => respond(&web, site),
+	match web.app.editable(viewer.user, &domain) {
+		Some(site) => respond(&web, site.id),
 		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
 	}
 }
@@ -97,7 +89,10 @@ async fn add(
 	Path(domain): Path<String>,
 	Json(body): Json<Rule>,
 ) -> Response {
-	let Some((site, domain)) = editable(&web, viewer.user, &domain) else {
+	let Some(Site {
+		id: site, domain, ..
+	}) = web.app.editable(viewer.user, &domain)
+	else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let value = body.value.trim();
@@ -127,7 +122,10 @@ async fn remove(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 ) -> Response {
-	let Some((site, domain)) = editable(&web, viewer.user, &domain) else {
+	let Some(Site {
+		id: site, domain, ..
+	}) = web.app.editable(viewer.user, &domain)
+	else {
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	match web.app.remove_shield(site, id) {

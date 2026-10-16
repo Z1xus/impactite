@@ -24,8 +24,6 @@ function explain(error: unknown): never {
 	throw error instanceof Error ? error : new Error("Passkeys are not available here.");
 }
 
-export const supported = () => typeof window !== "undefined" && "PublicKeyCredential" in window;
-
 export async function create(options: Options) {
 	const user = options.user as { id: string };
 	const exclude = (options.excludeCredentials as { id: string }[]) ?? [];
