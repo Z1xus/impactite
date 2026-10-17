@@ -216,9 +216,10 @@ fn entries(web: &Web, site: &Site, range: (Date, Date)) -> Result<Vec<Entry>, Fa
 			let path = dimensions.swap_remove(0);
 			Entry {
 				id: path_id(&path, event),
-				title: match event {
-					true => String::new(),
-					false => titles.get(&path).cloned().unwrap_or_default(),
+				title: if event {
+					String::new()
+				} else {
+					titles.get(&path).cloned().unwrap_or_default()
 				},
 				path,
 				event,
@@ -231,12 +232,13 @@ fn entries(web: &Web, site: &Site, range: (Date, Date)) -> Result<Vec<Entry>, Fa
 }
 
 fn entry_filter(entry: &Entry) -> Value {
-	match entry.event {
-		true => json!([["is", "event:name", [entry.path]]]),
-		false => json!([
+	if entry.event {
+		json!([["is", "event:name", [entry.path]]])
+	} else {
+		json!([
 			["is", "event:name", [VIEWS]],
 			["is", "event:page", [entry.path]]
-		]),
+		])
 	}
 }
 
@@ -324,9 +326,10 @@ async fn count(State(web): State<Arc<Web>>, call: Call) -> Response {
 				IpAddr::from(octets)
 			});
 			// the caller vouches for hits without a user agent through `bot`
-			let ua = match hit.user_agent.is_empty() {
-				true => "goatcounter api, no user agent",
-				false => hit.user_agent.as_str(),
+			let ua = if hit.user_agent.is_empty() {
+				"goatcounter api, no user agent"
+			} else {
+				hit.user_agent.as_str()
 			};
 			let client = Client {
 				ip,
@@ -338,14 +341,16 @@ async fn count(State(web): State<Arc<Web>>, call: Call) -> Response {
 			};
 			let query = hit.query.trim_start_matches('?');
 			let tracked_hit = Hit {
-				name: match event {
-					true => hit.path.clone(),
-					false => VIEWS.into(),
+				name: if event {
+					hit.path.clone()
+				} else {
+					VIEWS.into()
 				},
 				hostname: site.domain.clone(),
-				path: match event {
-					true => String::new(),
-					false => format!("/{}", hit.path.trim_start_matches('/')),
+				path: if event {
+					String::new()
+				} else {
+					format!("/{}", hit.path.trim_start_matches('/'))
 				},
 				params: url::form_urlencoded::parse(query.as_bytes())
 					.into_owned()
@@ -465,9 +470,10 @@ async fn hits(State(web): State<Arc<Web>>, call: Call) -> Response {
 			if names.is_empty() {
 				continue;
 			}
-			let filter = match event {
-				false => json!([["is", "event:name", [VIEWS]], ["is", "event:page", names]]),
-				true => json!([["is", "event:name", names]]),
+			let filter = if event {
+				json!([["is", "event:name", names]])
+			} else {
+				json!([["is", "event:name", [VIEWS]], ["is", "event:page", names]])
 			};
 			for (dimensions, count) in
 				ask(&web, &site, (from, to), &["time:day", dimension], filter)?

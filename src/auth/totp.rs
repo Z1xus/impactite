@@ -4,7 +4,6 @@ use std::sync::{Arc, LazyLock, Mutex};
 use aws_lc_rs::hmac;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
@@ -14,7 +13,7 @@ use serde_json::json;
 use crate::app::now;
 use crate::app::{App, key_hash, lock, token};
 use crate::auth::accounts::Viewer;
-use crate::web::{Web, broken, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 // rfc 6238 codes, 6 digits every 30 seconds, one step of clock drift allowed
 const STEP: i64 = 30;
@@ -132,62 +131,42 @@ pub fn verify(app: &App, user: i64, given: &str) -> Result<(), &'static str> {
 	Err("Wrong code.")
 }
 
-async fn begin(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
+async fn begin(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 	let mut bytes = [0u8; 20];
-	if getrandom::fill(&mut bytes).is_err() {
-		return broken();
-	}
+	getrandom::fill(&mut bytes).map_err(|_| Error::broken())?;
 	let secret = encode(&bytes);
-	let email = web
-		.app
-		.me(viewer.user)
-		.map(|me| me["email"].as_str().unwrap_or_default().to_owned())
-		.unwrap_or_default();
+	let email = web.app.user_email(viewer.user).unwrap_or_default();
 	let label: String =
 		url::form_urlencoded::byte_serialize(format!("Impactite:{email}").as_bytes()).collect();
-	Json(json!({
+	Ok(Json(json!({
 		"secret": secret,
 		"uri": format!("otpauth://totp/{label}?secret={secret}&issuer=Impactite"),
-	}))
-	.into_response()
+	})))
 }
 
-async fn enable(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Enable>) -> Response {
-	let Some(step) = matching(&body.secret, &body.code) else {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Wrong code. Check the time on your phone.",
-		);
-	};
+async fn enable(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Enable>) -> Reply {
+	let step = matching(&body.secret, &body.code)
+		.ok_or_else(|| Error::bad("Wrong code. Check the time on your phone."))?;
 	let mut codes = Vec::new();
 	for _ in 0..8 {
-		match token() {
-			Ok(token) => codes.push(format!("{}-{}", &token[..5], &token[5..10])),
-			Err(err) => return internal(err),
-		}
+		let token = token()?;
+		codes.push(format!("{}-{}", &token[..5], &token[5..10]));
 	}
 	let hashes: Vec<String> = codes.iter().map(|code| key_hash(code)).collect();
-	match web
-		.app
-		.enable_totp(viewer.user, &body.secret, step, &hashes.join(","))
-	{
-		Ok(()) => Json(json!({ "recovery": codes })).into_response(),
-		Err(err) => internal(err),
-	}
+	web.app
+		.enable_totp(viewer.user, &body.secret, step, &hashes.join(","))?;
+	Ok(Json(json!({ "recovery": codes })))
 }
 
 async fn disable(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Json(body): Json<Disable>,
-) -> Response {
-	if let Err(message) = verify(&web.app, viewer.user, &body.code) {
-		return fail(StatusCode::UNAUTHORIZED, message);
-	}
-	match web.app.enable_totp(viewer.user, "", 0, "") {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+) -> Reply<StatusCode> {
+	verify(&web.app, viewer.user, &body.code)
+		.map_err(|message| Error::new(StatusCode::UNAUTHORIZED, message))?;
+	web.app.enable_totp(viewer.user, "", 0, "")?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 impl App {

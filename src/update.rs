@@ -132,13 +132,14 @@ pub async fn check(web: &Web) -> Result<(), CheckError> {
 	}
 	match latest(&web.http).await {
 		Ok(release) => {
-			let latest = match newer(&release.tag_name) {
-				true => Some(json!({
+			let latest = if newer(&release.tag_name) {
+				Some(json!({
 					"version": release.tag_name.trim_start_matches('v'),
 					"url": release.html_url,
 					"changes": changes(&web.http, &release.tag_name).await.unwrap_or_else(|_| json!([])),
-				})),
-				false => None,
+				}))
+			} else {
+				None
 			};
 			let mut status = lock(&web.updates);
 			status.latest = latest;

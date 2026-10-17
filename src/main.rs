@@ -273,9 +273,10 @@ async fn main() -> anyhow::Result<()> {
 async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyhow::Result<()> {
 	let tls = args.acme || args.cert.is_some();
 	let scheme = if tls { "https" } else { "http" };
-	let listen = args.listen.unwrap_or(match tls {
-		true => SocketAddr::from(([0, 0, 0, 0], 443)),
-		false => SocketAddr::from(([127, 0, 0, 1], 8000)),
+	let listen = args.listen.unwrap_or(if tls {
+		SocketAddr::from(([0, 0, 0, 0], 443))
+	} else {
+		SocketAddr::from(([127, 0, 0, 1], 8000))
 	});
 	let url = args
 		.url
@@ -302,9 +303,10 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		db: db.clone(),
 		app: app.clone(),
 	});
-	let setup = match app.users_exist()? {
-		true => None,
-		false => Some(app::token()?),
+	let setup = if app.users_exist()? {
+		None
+	} else {
+		Some(app::token()?)
 	};
 	if let Some(token) = &setup {
 		tracing::info!(
@@ -543,12 +545,13 @@ fn alias(value: &str) -> Result<String, String> {
 			.bytes()
 			.all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 		&& !["api", "js", "count", "counter", "share"].contains(&name);
-	match fine {
-		true => Ok(format!("/{name}")),
-		false => Err(
+	if fine {
+		Ok(format!("/{name}"))
+	} else {
+		Err(
 			"use one word of letters, digits, - or _. api, js, count, counter and share are taken"
 				.into(),
-		),
+		)
 	}
 }
 

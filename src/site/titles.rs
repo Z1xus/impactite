@@ -2,29 +2,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use rusqlite::params;
+use serde_json::json;
 
 use crate::app::App;
 use crate::site::shares::Reader;
-use crate::web::{Web, fail, internal};
+use crate::web::{Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new().route("/api/app/sites/{domain}/titles", get(list))
 }
 
-async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
-	let site = match web.app.site(&domain) {
-		Ok(Some(site)) if reader.reads(&web, &domain) => site,
-		_ => return fail(StatusCode::NOT_FOUND, "Site not found."),
-	};
-	match web.app.titles(site.id) {
-		Ok(titles) => Json(titles).into_response(),
-		Err(err) => internal(err),
-	}
+async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Reply {
+	let site = web.readable(&reader, &domain)?;
+	Ok(Json(json!(web.app.titles(site.id)?)))
 }
 
 impl App {

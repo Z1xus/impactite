@@ -12,8 +12,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::app::{App, key_hash, lock, now, token};
-use crate::auth::passkeys::{Failure, Proof, Purpose, device, registered};
-use crate::web::{Web, fail, internal};
+use crate::auth::passkeys::{Proof, Purpose, device, registered};
+use crate::web::{Error, Reply, Web, fail};
 
 const COOKIE: &str = "impactite_session";
 const SESSION_SECS: i64 = 30 * 86_400;
@@ -70,7 +70,7 @@ struct Setup {
 
 async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 	let user = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
-	let setup = web.app.users_exist().map(|exists| !exists).unwrap_or(false);
+	let setup = web.app.users_exist().is_ok_and(|exists| !exists);
 	let me = user.and_then(|user| web.app.me(user).ok());
 	let update = me.as_ref().filter(|me| me["admin"] == true).and_then(|_| {
 		lock(&web.updates)
@@ -89,29 +89,21 @@ async fn setup(
 	State(web): State<Arc<Web>>,
 	headers: HeaderMap,
 	Json(body): Json<Setup>,
-) -> Response {
+) -> Reply<Response> {
 	let expected = lock(&web.setup).clone();
 	if expected.as_deref() != Some(body.token.as_str()) || web.app.users_exist().unwrap_or(true) {
-		return fail(StatusCode::FORBIDDEN, "This setup link is no longer valid.");
+		return Err(Error::forbidden("This setup link is no longer valid."));
 	}
-	let user = match new_account(
+	let user = new_account(
 		&web,
 		&headers,
 		(&body.name, &body.email),
 		body.password.as_deref(),
 		body.passkey.as_ref(),
 		&Purpose::Setup,
-	) {
-		Ok(user) => user,
-		Err((status, message)) => return fail(status, message),
-	};
-	let adopted = web
-		.app
-		.personal_team(user)
-		.and_then(|team| web.app.adopt_sites(team));
-	if let Err(err) = adopted {
-		return internal(err);
-	}
+	)?;
+	let team = web.app.personal_team(user)?;
+	web.app.adopt_sites(team)?;
 	*lock(&web.setup) = None;
 	signed_in(&web, user, None)
 }
@@ -123,66 +115,53 @@ pub(crate) fn new_account(
 	password: Option<&str>,
 	passkey: Option<&Proof>,
 	purpose: &Purpose,
-) -> Result<i64, Failure> {
-	let broken = |err: rusqlite::Error| match err {
-		rusqlite::Error::SqliteFailure(err, _)
-			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+) -> Reply<i64> {
+	// a unique email that already exists answers as a conflict
+	let created = |err: rusqlite::Error| match err {
+		rusqlite::Error::SqliteFailure(failure, _)
+			if failure.code == rusqlite::ErrorCode::ConstraintViolation =>
 		{
-			(
-				StatusCode::CONFLICT,
-				"This email already has an account. Sign in instead.",
-			)
+			Error::conflict("This email already has an account. Sign in instead.")
 		}
-		err => {
-			tracing::error!(%err, "accounts");
-			(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
-		}
+		err => err.into(),
 	};
-	valid_identity(name, email).map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+	valid_identity(name, email).map_err(Error::bad)?;
 	match (passkey, password) {
 		(Some(proof), _) => {
 			let key = registered(web, proof, purpose)?;
-			let user = web.app.create_user(name, email, None).map_err(broken)?;
+			let user = web.app.create_user(name, email, None).map_err(created)?;
 			web.app
-				.add_passkey(user, &key, &device(headers, "Passkey"))
-				.map_err(broken)?;
+				.add_passkey(user, &key, &device(headers, "Passkey"))?;
 			Ok(user)
 		}
 		(None, Some(password)) if password.chars().count() >= 10 => web
 			.app
 			.create_user(name, email, Some(password))
-			.map_err(broken),
-		(None, Some(_)) => Err((
-			StatusCode::BAD_REQUEST,
-			"Use at least 10 characters for the password.",
-		)),
-		(None, None) => Err((StatusCode::BAD_REQUEST, "Create a passkey to continue.")),
+			.map_err(created),
+		(None, Some(_)) => Err(Error::bad("Use at least 10 characters for the password.")),
+		(None, None) => Err(Error::bad("Create a passkey to continue.")),
 	}
 }
 
-async fn login(State(web): State<Arc<Web>>, Json(body): Json<Credentials>) -> Response {
-	match web.app.verify(&body.email, &body.password) {
-		Ok(Some(user)) => match (web.app.totp(user), &body.code) {
-			(Ok(None), _) => signed_in(&web, user, None),
-			(Ok(Some(_)), None) => (
-				StatusCode::UNAUTHORIZED,
-				Json(
-					json!({ "error": "Enter the code from your authenticator app.", "totp": true }),
-				),
-			)
-				.into_response(),
-			(Ok(Some(_)), Some(code)) => match crate::auth::totp::verify(&web.app, user, code) {
-				Ok(()) => signed_in(&web, user, None),
-				Err(message) => (
-					StatusCode::UNAUTHORIZED,
-					Json(json!({ "error": message, "totp": true })),
-				)
-					.into_response(),
-			},
-			(Err(err), _) => internal(err),
+async fn login(State(web): State<Arc<Web>>, Json(body): Json<Credentials>) -> Reply<Response> {
+	let user = web
+		.app
+		.verify(&body.email, &body.password)?
+		.ok_or_else(|| Error::new(StatusCode::UNAUTHORIZED, "Wrong email or password."))?;
+	let totp_needed = |message: &str| {
+		(
+			StatusCode::UNAUTHORIZED,
+			Json(json!({ "error": message, "totp": true })),
+		)
+			.into_response()
+	};
+	match (web.app.totp(user)?, &body.code) {
+		(None, _) => signed_in(&web, user, None),
+		(Some(_), None) => Ok(totp_needed("Enter the code from your authenticator app.")),
+		(Some(_), Some(code)) => match crate::auth::totp::verify(&web.app, user, code) {
+			Ok(()) => signed_in(&web, user, None),
+			Err(message) => Ok(totp_needed(message)),
 		},
-		Ok(None) => fail(StatusCode::UNAUTHORIZED, "Wrong email or password."),
-		Err(err) => internal(err),
 	}
 }
 
@@ -205,14 +184,12 @@ fn valid_identity(name: &str, email: &str) -> Result<(), &'static str> {
 	Ok(())
 }
 
-pub(crate) fn signed_in(web: &Web, user: i64, team: Option<i64>) -> Response {
-	let (token, me) = match (web.app.start_session(user), web.app.me(user)) {
-		(Ok(token), Ok(me)) => (token, me),
-		(Err(err), _) | (_, Err(err)) => return internal(err),
-	};
+pub(crate) fn signed_in(web: &Web, user: i64, team: Option<i64>) -> Reply<Response> {
+	let token = web.app.start_session(user)?;
+	let me = web.app.me(user)?;
 	let mut response = Json(json!({ "me": me, "team": team })).into_response();
 	set_cookie(&mut response, web, &token, SESSION_SECS);
-	response
+	Ok(response)
 }
 
 pub(crate) fn cookie(headers: &HeaderMap) -> Option<String> {
@@ -250,21 +227,19 @@ pub async fn signup(
 	State(web): State<Arc<Web>>,
 	headers: HeaderMap,
 	Json(body): Json<Signup>,
-) -> Response {
+) -> Reply<Response> {
 	if !web.app.signup_open() {
-		return fail(StatusCode::FORBIDDEN, "Sign-up is closed on this server.");
+		return Err(Error::forbidden("Sign-up is closed on this server."));
 	}
-	match new_account(
+	let user = new_account(
 		&web,
 		&headers,
 		(&body.name, &body.email),
 		body.password.as_deref(),
 		body.passkey.as_ref(),
 		&Purpose::Signup,
-	) {
-		Ok(user) => signed_in(&web, user, None),
-		Err((status, message)) => fail(status, message),
-	}
+	)?;
+	signed_in(&web, user, None)
 }
 
 pub(crate) fn hash(password: &str) -> rusqlite::Result<String> {

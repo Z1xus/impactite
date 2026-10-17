@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use rusqlite::params;
@@ -13,7 +11,7 @@ use crate::app::{App, Site};
 use crate::auth::accounts::Viewer;
 use crate::site::shares::Reader;
 use crate::stats::{self, day_number};
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -37,11 +35,8 @@ pub struct Request {
 	filters: Vec<Value>,
 }
 
-async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
-	match web.app.site(&domain) {
-		Ok(Some(site)) if reader.reads(&web, &domain) => respond(&web, site.id),
-		_ => fail(StatusCode::NOT_FOUND, "Site not found."),
-	}
+async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Reply {
+	respond(&web, web.readable(&reader, &domain)?.id)
 }
 
 async fn add(
@@ -49,110 +44,81 @@ async fn add(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<NewFunnel>,
-) -> Response {
-	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change funnels here.");
-	};
-	let goals = web.app.goals(site).unwrap_or_default();
+) -> Reply {
+	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
+	let goals = web.app.goals(site)?;
 	let known = body
 		.steps
 		.iter()
 		.all(|id| goals.iter().any(|goal| goal.id == *id));
 	let name = body.name.trim();
 	if name.is_empty() || !(2..=8).contains(&body.steps.len()) || !known {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Name the funnel and pick 2 to 8 goals.",
-		);
+		return Err(Error::bad("Name the funnel and pick 2 to 8 goals."));
 	}
-	match web
-		.app
-		.add_funnel(site, name, &json!(body.steps).to_string())
-	{
-		Ok(()) => respond(&web, site),
-		Err(err) => internal(err),
-	}
+	web.app
+		.add_funnel(site, name, &json!(body.steps).to_string())?;
+	respond(&web, site)
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change funnels here.");
-	};
-	match web.app.remove_funnel(site, id) {
-		Ok(()) => respond(&web, site),
-		Err(err) => internal(err),
-	}
+) -> Reply {
+	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
+	web.app.remove_funnel(site, id)?;
+	respond(&web, site)
 }
 
-async fn compute(
-	State(web): State<Arc<Web>>,
-	reader: Reader,
-	Json(body): Json<Request>,
-) -> Response {
+async fn compute(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<Request>) -> Reply {
 	if !reader.reads(&web, &body.site_id) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
+		return Err(Error::not_found("Site not found."));
 	}
-	let result = (|| -> Result<Value, String> {
-		let period = stats::period(&web.stats, &body.site_id, &body.date_range, false)?;
-		let goals = web
-			.app
-			.goals(period.site.id)
-			.map_err(|err| err.to_string())?;
-		let funnel = web
-			.app
-			.funnels(period.site.id)
-			.map_err(|err| err.to_string())?
-			.into_iter()
-			.find(|funnel| funnel["id"] == body.funnel)
-			.ok_or("Funnel not found.")?;
-		let steps: Vec<_> = funnel["steps"]
-			.as_array()
-			.into_iter()
-			.flatten()
-			.filter_map(|id| goals.iter().find(|goal| Some(goal.id) == id.as_i64()))
-			.collect();
-		let mut filters = Vec::new();
-		for raw in &body.filters {
-			for (filter, from_goal) in stats::filters(raw, &goals)? {
-				if !from_goal {
-					filters.push(filter);
-				}
+	let bad = |message: String| Error::bad(message);
+	let period = stats::period(&web.stats, &body.site_id, &body.date_range, false).map_err(bad)?;
+	let goals = web.app.goals(period.site.id)?;
+	let funnel = web
+		.app
+		.funnels(period.site.id)?
+		.into_iter()
+		.find(|funnel| funnel["id"] == body.funnel)
+		.ok_or_else(|| Error::bad("Funnel not found."))?;
+	let steps: Vec<_> = funnel["steps"]
+		.as_array()
+		.into_iter()
+		.flatten()
+		.filter_map(|id| goals.iter().find(|goal| Some(goal.id) == id.as_i64()))
+		.collect();
+	let mut filters = Vec::new();
+	for raw in &body.filters {
+		for (filter, from_goal) in stats::filters(raw, &goals).map_err(bad)? {
+			if !from_goal {
+				filters.push(filter);
 			}
 		}
-		let visitors = web
-			.stats
-			.db
-			.funnel(
-				period.site.id,
-				day_number(period.from)..=day_number(period.to),
-				&filters,
-				&steps.iter().map(|goal| goal.filters()).collect::<Vec<_>>(),
-			)
-			.map_err(|err| err.to_string())?;
-		Ok(json!({
-			"name": funnel["name"],
-			"steps": steps
-				.iter()
-				.zip(visitors)
-				.map(|(goal, visitors)| json!({ "name": goal.name, "visitors": visitors }))
-				.collect::<Vec<_>>()
-		}))
-	})();
-	match result {
-		Ok(value) => Json(value).into_response(),
-		Err(message) => fail(StatusCode::BAD_REQUEST, &message),
 	}
+	let visitors = web
+		.stats
+		.db
+		.funnel(
+			period.site.id,
+			day_number(period.from)..=day_number(period.to),
+			&filters,
+			&steps.iter().map(|goal| goal.filters()).collect::<Vec<_>>(),
+		)
+		.map_err(|err| bad(err.to_string()))?;
+	Ok(Json(json!({
+		"name": funnel["name"],
+		"steps": steps
+			.iter()
+			.zip(visitors)
+			.map(|(goal, visitors)| json!({ "name": goal.name, "visitors": visitors }))
+			.collect::<Vec<_>>()
+	})))
 }
 
-fn respond(web: &Web, site: u64) -> Response {
-	match web.app.funnels(site) {
-		Ok(funnels) => Json(json!({ "funnels": funnels })).into_response(),
-		Err(err) => internal(err),
-	}
+fn respond(web: &Web, site: u64) -> Reply {
+	Ok(Json(json!({ "funnels": web.app.funnels(site)? })))
 }
 
 impl App {

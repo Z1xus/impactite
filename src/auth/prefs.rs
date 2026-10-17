@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
@@ -10,17 +9,16 @@ use serde_json::Value;
 
 use crate::app::App;
 use crate::auth::accounts::Viewer;
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new().route("/api/app/prefs/{key}", get(read).put(write))
 }
 
-async fn read(State(web): State<Arc<Web>>, viewer: Viewer, Path(key): Path<String>) -> Response {
-	match web.app.pref(viewer.user, &key) {
-		Ok(value) => Json(value.unwrap_or(Value::Null)).into_response(),
-		Err(err) => internal(err),
-	}
+async fn read(State(web): State<Arc<Web>>, viewer: Viewer, Path(key): Path<String>) -> Reply {
+	Ok(Json(
+		web.app.pref(viewer.user, &key)?.unwrap_or(Value::Null),
+	))
 }
 
 async fn write(
@@ -28,18 +26,16 @@ async fn write(
 	viewer: Viewer,
 	Path(key): Path<String>,
 	Json(value): Json<Value>,
-) -> Response {
+) -> Reply<StatusCode> {
 	let text = value.to_string();
 	if key.len() > 200 || text.len() > 16_384 {
-		return fail(
+		return Err(Error::new(
 			StatusCode::PAYLOAD_TOO_LARGE,
 			"This preference is too large.",
-		);
+		));
 	}
-	match web.app.set_pref(viewer.user, &key, &text) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.set_pref(viewer.user, &key, &text)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 impl App {

@@ -71,29 +71,28 @@ pub async fn counter(
 		.get(&key)
 		.filter(|(at, _)| at.elapsed() < FRESH)
 		.map(|&(_, count)| count);
-	let count = match cached {
-		Some(count) => count,
-		None => {
-			let result = run(
-				&web.stats,
-				json!({
-					"site_id": site.domain,
-					"metrics": ["visitors"],
-					"date_range": range,
-					"filters": filters,
-				}),
-			);
-			let count = match result {
-				Ok(result) => result["results"][0]["metrics"][0]
-					.as_u64()
-					.unwrap_or_default(),
-				Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
-			};
-			let mut counts = lock(&COUNTS);
-			counts.retain(|_, (at, _)| at.elapsed() < FRESH);
-			counts.insert(key, (Instant::now(), count));
-			count
-		}
+	let count = if let Some(count) = cached {
+		count
+	} else {
+		let result = run(
+			&web.stats,
+			json!({
+				"site_id": site.domain,
+				"metrics": ["visitors"],
+				"date_range": range,
+				"filters": filters,
+			}),
+		);
+		let count = match result {
+			Ok(result) => result["results"][0]["metrics"][0]
+				.as_u64()
+				.unwrap_or_default(),
+			Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
+		};
+		let mut counts = lock(&COUNTS);
+		counts.retain(|_, (at, _)| at.elapsed() < FRESH);
+		counts.insert(key, (Instant::now(), count));
+		count
 	};
 
 	let shown = grouped(count);
@@ -139,9 +138,10 @@ fn grouped(count: u64) -> String {
 
 fn svg(count: &str, branding: bool) -> String {
 	let height = if branding { 66 } else { 48 };
-	let by = match branding {
-		true => r##"<text x="100" y="58" font-size="10" fill="#8a96a3">stats by impactite</text>"##,
-		false => "",
+	let by = if branding {
+		r##"<text x="100" y="58" font-size="10" fill="#8a96a3">stats by impactite</text>"##
+	} else {
+		""
 	};
 	format!(
 		r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="{height}" font-family="ui-monospace,monospace" text-anchor="middle"><rect x="0.5" y="0.5" width="199" height="{}" rx="2" fill="#0b0f13" stroke="#1d262e"/><text x="100" y="18" font-size="11" fill="#8a96a3">Views for this page</text><text x="100" y="40" font-size="20" fill="#e6edf3">{count}</text>{by}</svg>"##,
@@ -150,11 +150,10 @@ fn svg(count: &str, branding: bool) -> String {
 }
 
 fn html(count: &str, branding: bool, style: &str) -> String {
-	let by = match branding {
-		true => {
-			r#"<div id="gcvc-by">stats by <a href="https://impactite.dev" target="_blank" rel="noopener">impactite</a></div>"#
-		}
-		false => "",
+	let by = if branding {
+		r#"<div id="gcvc-by">stats by <a href="https://impactite.dev" target="_blank" rel="noopener">impactite</a></div>"#
+	} else {
+		""
 	};
 	// ids match goatcounter so existing counter css keeps working
 	format!(

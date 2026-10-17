@@ -21,12 +21,13 @@ impl Mail {
 		let transport = match url {
 			None => Transport::Log,
 			Some(url) if url.starts_with("smtp://") || url.starts_with("smtps://") => {
-				let url = match url.starts_with("smtp://") && !url.contains("tls=") {
-					true => format!(
+				let url = if url.starts_with("smtp://") && !url.contains("tls=") {
+					format!(
 						"{url}{}tls=required",
 						if url.contains('?') { '&' } else { '?' }
-					),
-					false => url.to_owned(),
+					)
+				} else {
+					url.to_owned()
 				};
 				Transport::Smtp(
 					AsyncSmtpTransport::<Tokio1Executor>::from_url(&url)
@@ -174,11 +175,12 @@ impl Letter<'_> {
 		}
 		let base = escape(self.base.trim_end_matches('/'));
 		// the logo comes from the server, a mail sent without one goes without it
-		let logo = match base.is_empty() {
-			true => String::new(),
-			false => format!(
+		let logo = if base.is_empty() {
+			String::new()
+		} else {
+			format!(
 				"<img src=\"{base}/apple-touch-icon.png\" width=\"22\" height=\"22\" alt=\"\" style=\"vertical-align:middle;border-radius:2px\">"
-			),
+			)
 		};
 		format!(
 			"<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><meta name=\"color-scheme\" content=\"dark\"><meta name=\"supported-color-schemes\" content=\"dark\"></head>\

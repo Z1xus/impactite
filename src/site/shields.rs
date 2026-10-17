@@ -3,19 +3,18 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::extract::{ConnectInfo, Path, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::http::HeaderMap;
 use axum::routing::{delete, get};
 use axum::{Json, Router};
 use crater::glob;
 use rusqlite::params;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::app::{App, Site};
 use crate::auth::accounts::Viewer;
 use crate::net::Proxies;
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 const KINDS: [&str; 5] = ["ip", "country", "page", "hostname", "prop"];
 
@@ -77,11 +76,8 @@ struct Rule {
 	value: String,
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match web.app.editable(viewer.user, &domain) {
-		Some(site) => respond(&web, site.id),
-		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
-	}
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	respond(&web, web.editable(viewer.user, &domain)?.id)
 }
 
 async fn add(
@@ -89,13 +85,10 @@ async fn add(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Rule>,
-) -> Response {
-	let Some(Site {
+) -> Reply {
+	let Site {
 		id: site, domain, ..
-	}) = web.app.editable(viewer.user, &domain)
-	else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
+	} = web.editable(viewer.user, &domain)?;
 	let value = body.value.trim();
 	let valid = match body.kind.as_str() {
 		"ip" => Proxies::parse(Some(value)).is_ok(),
@@ -103,39 +96,28 @@ async fn add(
 		kind => KINDS.contains(&kind) && !value.is_empty() && value.len() <= 300,
 	};
 	if !valid || value.is_empty() {
-		return fail(StatusCode::BAD_REQUEST, "This rule is not valid.");
+		return Err(Error::bad("This rule is not valid."));
 	}
 	let value = match body.kind.as_str() {
 		"country" => value.to_uppercase(),
 		_ => value.to_owned(),
 	};
-	match web.app.add_shield(site, &body.kind, &value) {
-		Ok(()) => {
-			web.ingest.forget(&domain);
-			respond(&web, site)
-		}
-		Err(err) => internal(err),
-	}
+	web.app.add_shield(site, &body.kind, &value)?;
+	web.ingest.forget(&domain);
+	respond(&web, site)
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(Site {
+) -> Reply {
+	let Site {
 		id: site, domain, ..
-	}) = web.app.editable(viewer.user, &domain)
-	else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	match web.app.remove_shield(site, id) {
-		Ok(()) => {
-			web.ingest.forget(&domain);
-			respond(&web, site)
-		}
-		Err(err) => internal(err),
-	}
+	} = web.editable(viewer.user, &domain)?;
+	web.app.remove_shield(site, id)?;
+	web.ingest.forget(&domain);
+	respond(&web, site)
 }
 
 async fn ip(
@@ -143,21 +125,19 @@ async fn ip(
 	_viewer: Viewer,
 	ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
 	headers: HeaderMap,
-) -> Response {
-	Json(json!({ "ip": web.ingest.proxies.visitor(peer, &headers).ip.to_string() })).into_response()
+) -> Json<Value> {
+	Json(json!({ "ip": web.ingest.proxies.visitor(peer, &headers).ip.to_string() }))
 }
 
-fn respond(web: &Web, site: u64) -> Response {
-	match web.app.shields(site) {
-		Ok(rules) => Json(json!({
-			"shields": rules
-				.iter()
-				.map(|(id, kind, value)| json!({ "id": id, "kind": kind, "value": value }))
-				.collect::<Vec<_>>()
-		}))
-		.into_response(),
-		Err(err) => internal(err),
-	}
+fn respond(web: &Web, site: u64) -> Reply {
+	Ok(Json(json!({
+		"shields": web
+			.app
+			.shields(site)?
+			.iter()
+			.map(|(id, kind, value)| json!({ "id": id, "kind": kind, "value": value }))
+			.collect::<Vec<_>>()
+	})))
 }
 
 impl App {

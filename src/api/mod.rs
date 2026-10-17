@@ -91,16 +91,15 @@ impl FromRequest<Arc<Web>> for Call {
 			let body = axum::body::to_bytes(request.into_body(), 1 << 16)
 				.await
 				.map_err(|_| error(StatusCode::PAYLOAD_TOO_LARGE, "Body too large"))?;
-			match kind.starts_with("application/json") {
-				true => {
-					if let Ok(Value::Object(fields)) = serde_json::from_slice(&body) {
-						params.extend(fields.into_iter().map(|(name, value)| match value {
-							Value::String(text) => (name, text),
-							value => (name, value.to_string()),
-						}));
-					}
+			if kind.starts_with("application/json") {
+				if let Ok(Value::Object(fields)) = serde_json::from_slice(&body) {
+					params.extend(fields.into_iter().map(|(name, value)| match value {
+						Value::String(text) => (name, text),
+						value => (name, value.to_string()),
+					}));
 				}
-				false => params.extend(url::form_urlencoded::parse(&body).into_owned()),
+			} else {
+				params.extend(url::form_urlencoded::parse(&body).into_owned())
 			}
 		}
 		Ok(Call { host, user, params })

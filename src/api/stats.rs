@@ -253,17 +253,16 @@ fn range(web: &Web, params: &Params) -> Result<(Date, Date), String> {
 			.ok_or("The `date` parameter must be `start,end` for a custom period")?;
 		return Ok((parse(from)?, parse(to)?));
 	}
-	let today = match date {
-		Some(date) => parse(date)?,
-		None => {
-			let site = web
-				.app
-				.site(site_id(params))
-				.map_err(|err| err.to_string())?
-				.ok_or("Site not found")?;
-			let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
-			Timestamp::now().to_zoned(tz).date()
-		}
+	let today = if let Some(date) = date {
+		parse(date)?
+	} else {
+		let site = web
+			.app
+			.site(site_id(params))
+			.map_err(|err| err.to_string())?
+			.ok_or("Site not found")?;
+		let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
+		Timestamp::now().to_zoned(tz).date()
 	};
 	let back = |span: jiff::Span| today.checked_sub(span).map_err(|err| err.to_string());
 	Ok(match period {

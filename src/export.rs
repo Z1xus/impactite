@@ -21,7 +21,7 @@ use crate::app::Site;
 use crate::auth::accounts::Viewer;
 use crate::site::goals::Goal;
 use crate::stats::{self, day_number};
-use crate::web::{Web, fail};
+use crate::web::{Error, Reply, Web};
 
 #[derive(Deserialize)]
 pub struct ExportRequest {
@@ -46,31 +46,23 @@ pub async fn export(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Json(body): Json<ExportRequest>,
-) -> Response {
-	if !matches!(web.app.site_role(viewer.user, &body.site_id), Ok(Some(_))) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
+) -> Reply<Response> {
+	if web.app.site_role(viewer.user, &body.site_id)?.is_none() {
+		return Err(Error::not_found("Site not found."));
 	}
-	let prepared =
-		stats::period(&web.stats, &body.site_id, &body.date_range, false).and_then(|period| {
-			let goals = web
-				.app
-				.goals(period.site.id)
-				.map_err(|err| err.to_string())?;
-			let filters = body
-				.filters
-				.iter()
-				.map(|raw| stats::filters(raw, &goals))
-				.collect::<Result<Vec<_>, _>>()?
-				.into_iter()
-				.flatten()
-				.map(|(filter, _)| filter)
-				.collect::<Vec<_>>();
-			Ok((period, filters))
-		});
-	let (period, filters) = match prepared {
-		Ok(prepared) => prepared,
-		Err(message) => return fail(StatusCode::BAD_REQUEST, &message),
-	};
+	let period =
+		stats::period(&web.stats, &body.site_id, &body.date_range, false).map_err(Error::bad)?;
+	let goals = web.app.goals(period.site.id)?;
+	let filters = body
+		.filters
+		.iter()
+		.map(|raw| stats::filters(raw, &goals))
+		.collect::<Result<Vec<_>, _>>()
+		.map_err(Error::bad)?
+		.into_iter()
+		.flatten()
+		.map(|(filter, _)| filter)
+		.collect::<Vec<_>>();
 	let stem = format!("{}_{}_{}", period.site.domain, period.from, period.to);
 	let (name, kind) = match body.format {
 		Format::Goatcounter => (format!("{stem}.goatcounter.csv.gz"), "application/gzip"),
@@ -78,27 +70,25 @@ pub async fn export(
 		Format::Impactite => (format!("{stem}.impactite.zip"), "application/zip"),
 	};
 	let db = web.stats.db.clone();
-	let goals = web.app.goals(period.site.id).unwrap_or_default();
 	let titles = web.app.titles(period.site.id).unwrap_or_default();
 	let format = body.format;
-	let built = tokio::task::spawn_blocking(move || match format {
+	let bytes = tokio::task::spawn_blocking(move || match format {
 		Format::Plausible => build(&db, period.site.id, period.from, period.to, filters),
 		Format::Impactite => native(&db, &period.site, &goals, &titles, period.from, period.to),
 		Format::Goatcounter => goatcounter(&db, &period.site, &titles, period.from, period.to),
 	})
-	.await;
-	match built {
-		Ok(Ok(bytes)) => {
-			let mut response = bytes.into_response();
-			let headers = response.headers_mut();
-			headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(kind));
-			if let Ok(value) = HeaderValue::from_str(&format!("attachment; filename=\"{name}\"")) {
-				headers.insert(header::CONTENT_DISPOSITION, value);
-			}
-			response
-		}
-		_ => fail(StatusCode::INTERNAL_SERVER_ERROR, "The export failed."),
+	.await?
+	.map_err(|err| {
+		tracing::error!(%err, "export");
+		Error::new(StatusCode::INTERNAL_SERVER_ERROR, "The export failed.")
+	})?;
+	let mut response = bytes.into_response();
+	let headers = response.headers_mut();
+	headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(kind));
+	if let Ok(value) = HeaderValue::from_str(&format!("attachment; filename=\"{name}\"")) {
+		headers.insert(header::CONTENT_DISPOSITION, value);
 	}
+	Ok(response)
 }
 
 fn build(
@@ -506,9 +496,10 @@ pub(crate) fn goatcounter(
 			"Desktop" | "Laptop" => "1920",
 			_ => "0",
 		};
-		let location = match event.dims[Dim::Region].is_empty() {
-			true => event.dims[Dim::Country].clone(),
-			false => event.dims[Dim::Region].clone(),
+		let location = if event.dims[Dim::Region].is_empty() {
+			event.dims[Dim::Country].clone()
+		} else {
+			event.dims[Dim::Region].clone()
 		};
 		let date = utc(event.ts, &tz)
 			.map(|ts| ts.to_string())
@@ -519,12 +510,13 @@ pub(crate) fn goatcounter(
 			} else {
 				event.dims[Dim::Page].clone()
 			},
-			match custom {
-				true => String::new(),
-				false => titles
+			if custom {
+				String::new()
+			} else {
+				titles
 					.get(&event.dims[Dim::Page])
 					.cloned()
-					.unwrap_or_default(),
+					.unwrap_or_default()
 			},
 			custom.to_string(),
 			String::new(),
@@ -546,5 +538,8 @@ pub(crate) fn goatcounter(
 	if let Some(err) = failed {
 		return Err(err.into());
 	}
-	Ok(csv.into_inner().map_err(|err| err.into_error())?.finish()?)
+	Ok(csv
+		.into_inner()
+		.map_err(csv::IntoInnerError::into_error)?
+		.finish()?)
 }

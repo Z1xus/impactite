@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get};
 use axum::{Json, Router};
 use crater::{Dim, Field, Filter, Op};
@@ -14,7 +13,7 @@ use crate::app::{App, Site};
 use crate::auth::accounts::Viewer;
 use crate::site::shares::Reader;
 use crate::stats::day_number;
-use crate::web::{Web, broken, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 #[derive(Debug, Clone)]
 pub struct Goal {
@@ -81,11 +80,8 @@ async fn suggestions(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
-	match web.app.editable(viewer.user, &domain) {
-		Some(site) => suggested(&web, &site),
-		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
-	}
+) -> Reply {
+	suggested(&web, &web.editable(viewer.user, &domain)?)
 }
 
 async fn ignore(
@@ -93,22 +89,16 @@ async fn ignore(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Ignore>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	match web.app.ignore_event(site.id, &body.name) {
-		Ok(()) => suggested(&web, &site),
-		Err(err) => internal(err),
-	}
+) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
+	web.app.ignore_event(site.id, &body.name)?;
+	suggested(&web, &site)
 }
 
 // event names from the last 30 days that are neither goals nor ignored
-fn suggested(web: &Web, site: &Site) -> Response {
-	let (goals, ignored) = match (web.app.goals(site.id), web.app.ignored_events(site.id)) {
-		(Ok(goals), Ok(ignored)) => (goals, ignored),
-		(Err(err), _) | (_, Err(err)) => return internal(err),
-	};
+fn suggested(web: &Web, site: &Site) -> Reply {
+	let goals = web.app.goals(site.id)?;
+	let ignored = web.app.ignored_events(site.id)?;
 	let tz = jiff::tz::TimeZone::get(&site.timezone).unwrap_or(jiff::tz::TimeZone::UTC);
 	let today = day_number(jiff::Timestamp::now().to_zoned(tz).date());
 	let report = web.stats.db.query(&crater::Query {
@@ -121,13 +111,12 @@ fn suggested(web: &Web, site: &Site) -> Response {
 		imports: false,
 		since: None,
 	});
-	let rows = match report {
-		Ok(report) => report.rows,
-		Err(err) => {
+	let rows = report
+		.map_err(|err| {
 			tracing::error!(%err, "goal suggestions");
-			return broken();
-		}
-	};
+			Error::new(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
+		})?
+		.rows;
 	let events: Vec<_> = rows
 		.iter()
 		.filter(|(name, _)| {
@@ -138,7 +127,7 @@ fn suggested(web: &Web, site: &Site) -> Response {
 		.take(20)
 		.map(|(name, metrics)| json!({ "name": &**name, "count": metrics.events, "revenue": metrics.revenue > 0 }))
 		.collect();
-	Json(json!({ "events": events })).into_response()
+	Ok(Json(json!({ "events": events })))
 }
 
 #[derive(Deserialize)]
@@ -157,11 +146,8 @@ struct Rename {
 	name: String,
 }
 
-async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
-	match web.app.site(&domain) {
-		Ok(Some(site)) if reader.reads(&web, &domain) => respond(&web, site.id),
-		_ => fail(StatusCode::NOT_FOUND, "Site not found."),
-	}
+async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Reply {
+	respond(&web, web.readable(&reader, &domain)?.id)
 }
 
 async fn add(
@@ -169,25 +155,19 @@ async fn add(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<NewGoal>,
-) -> Response {
-	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change goals here.");
-	};
+) -> Reply {
+	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
 	let value = body.value.trim();
 	if value.is_empty() || value.len() > 300 || (body.page && !value.starts_with('/')) {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Use an event name or a path like /pricing.",
-		);
+		return Err(Error::bad("Use an event name or a path like /pricing."));
 	}
 	let scroll = if body.page { body.scroll.min(100) } else { 0 };
 	let currency = body.currency.trim().to_uppercase();
 	let lettered = currency.len() == 3 && currency.bytes().all(|b| b.is_ascii_alphabetic());
 	if (!currency.is_empty() && !lettered) || (body.page && !currency.is_empty()) {
-		return fail(
-			StatusCode::BAD_REQUEST,
+		return Err(Error::bad(
 			"Revenue goals use an event and a 3 letter currency.",
-		);
+		));
 	}
 	let name = match body
 		.name
@@ -200,13 +180,10 @@ async fn add(
 		None if body.page => format!("Visit {value}"),
 		None => value.to_owned(),
 	};
-	match web
-		.app
+	web.app
 		.add_goal(site, body.page, value, &name, scroll, &currency)
-	{
-		Ok(()) => respond(&web, site),
-		Err(_) => fail(StatusCode::CONFLICT, "This goal already exists."),
-	}
+		.map_err(|_| Error::conflict("This goal already exists."))?;
+	respond(&web, site)
 }
 
 async fn rename(
@@ -214,54 +191,46 @@ async fn rename(
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
 	Json(body): Json<Rename>,
-) -> Response {
-	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change goals here.");
-	};
+) -> Reply {
+	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 120 {
-		return fail(StatusCode::BAD_REQUEST, "Name the goal.");
+		return Err(Error::bad("Name the goal."));
 	}
-	match web.app.rename_goal(site, id, name) {
-		Ok(()) => respond(&web, site),
-		Err(_) => fail(StatusCode::CONFLICT, "Another goal has this name."),
-	}
+	web.app
+		.rename_goal(site, id, name)
+		.map_err(|_| Error::conflict("Another goal has this name."))?;
+	respond(&web, site)
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change goals here.");
-	};
-	match web.app.remove_goal(site, id) {
-		Ok(()) => respond(&web, site),
-		Err(err) => internal(err),
-	}
+) -> Reply {
+	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
+	web.app.remove_goal(site, id)?;
+	respond(&web, site)
 }
 
-fn respond(web: &Web, site: u64) -> Response {
-	match web.app.goals(site) {
-		Ok(goals) => Json(json!({
-			"goals": goals
-				.iter()
-				.map(|goal| {
-					json!({
-						"id": goal.id,
-						"page": goal.page,
-						"value": goal.value,
-						"name": goal.name,
-						"scroll": goal.scroll,
-						"currency": goal.currency,
-					})
+fn respond(web: &Web, site: u64) -> Reply {
+	Ok(Json(json!({
+		"goals": web
+			.app
+			.goals(site)?
+			.iter()
+			.map(|goal| {
+				json!({
+					"id": goal.id,
+					"page": goal.page,
+					"value": goal.value,
+					"name": goal.name,
+					"scroll": goal.scroll,
+					"currency": goal.currency,
 				})
-				.collect::<Vec<_>>()
-		}))
-		.into_response(),
-		Err(err) => internal(err),
-	}
+			})
+			.collect::<Vec<_>>()
+	})))
 }
 
 impl App {

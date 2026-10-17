@@ -2,9 +2,12 @@ use std::io::IsTerminal;
 
 pub fn say(symbol: char, text: &str) {
 	let color = std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none();
-	let paint = |text: &str, code: &str| match color {
-		true => format!("\x1b[{code}m{text}\x1b[0m"),
-		false => text.to_owned(),
+	let paint = |text: &str, code: &str| {
+		if color {
+			format!("\x1b[{code}m{text}\x1b[0m")
+		} else {
+			text.to_owned()
+		}
 	};
 	let code = match symbol {
 		'+' => "1;92",

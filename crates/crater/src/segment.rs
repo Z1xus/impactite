@@ -374,20 +374,18 @@ impl Checkpoint {
 		let mut all = Vec::new();
 		let mut bad = false;
 		frame::open_log(path, CHECKPOINT, |payload| {
-			match decode_checkpoint(payload) {
-				Some(checkpoint) => {
-					all.push(checkpoint);
-					true
-				}
-				None => {
-					bad = true;
-					false
-				}
+			if let Some(checkpoint) = decode_checkpoint(payload) {
+				all.push(checkpoint);
+				true
+			} else {
+				bad = true;
+				false
 			}
 		})?;
-		match bad {
-			true => Err(invalid("bad checkpoint")),
-			false => Ok(all),
+		if bad {
+			Err(invalid("bad checkpoint"))
+		} else {
+			Ok(all)
 		}
 	}
 
@@ -571,21 +569,19 @@ fn decode(buf: &[u8], seq: u64, rows: usize) -> Option<Segment> {
 		currency: Vec::new(),
 	};
 	// segments written before revenue end here
-	match r.is_empty() {
-		true => {
-			cols.revenue = vec![0; cols.rows()];
-			cols.currency = vec![MISSING; cols.rows()];
-		}
-		false => {
-			cols.revenue = r.packed()?;
-			cols.currency = r.packed()?;
-		}
+	if r.is_empty() {
+		cols.revenue = vec![0; cols.rows()];
+		cols.currency = vec![MISSING; cols.rows()];
+	} else {
+		cols.revenue = r.packed()?;
+		cols.currency = r.packed()?;
 	}
 	// dims added later follow, older segments lack them
 	for _ in LEGACY_DIMS..Dim::COUNT {
-		let column = match r.is_empty() {
-			true => vec![MISSING; cols.rows()],
-			false => strings(&mut r)?,
+		let column = if r.is_empty() {
+			vec![MISSING; cols.rows()]
+		} else {
+			strings(&mut r)?
 		};
 		cols.dims.push(column);
 	}

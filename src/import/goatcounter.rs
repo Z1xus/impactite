@@ -21,9 +21,10 @@ pub fn import(
 	titles: &mut HashMap<String, String>,
 ) -> anyhow::Result<(u64, Option<i64>)> {
 	let file = BufReader::new(File::open(path).context("open export")?);
-	let reader: Box<dyn Read> = match path.extension().is_some_and(|ext| ext == "gz") {
-		true => Box::new(MultiGzDecoder::new(file)),
-		false => Box::new(file),
+	let reader: Box<dyn Read> = if path.extension().is_some_and(|ext| ext == "gz") {
+		Box::new(MultiGzDecoder::new(file))
+	} else {
+		Box::new(file)
 	};
 	let mut csv = csv::Reader::from_reader(reader);
 	if !csv
@@ -87,9 +88,10 @@ pub fn import(
 		let (browser, browser_version) = split(field(4));
 		let (os, os_version) = split(field(5));
 		let location = field(11);
-		let (name, page) = match matches!(field(2), "true" | "1") {
-			true => (field(0), ""),
-			false => ("pageview", field(0)),
+		let (name, page) = if matches!(field(2), "true" | "1") {
+			(field(0), "")
+		} else {
+			("pageview", field(0))
 		};
 		if !page.is_empty() && !field(1).is_empty() {
 			titles.insert(page.to_owned(), field(1).to_owned());

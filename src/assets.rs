@@ -13,9 +13,10 @@ pub async fn serve(uri: Uri, headers: HeaderMap) -> Response {
 	if requested.starts_with("api/") {
 		return StatusCode::NOT_FOUND.into_response();
 	}
-	let path = match Assets::get(requested).is_some() && !requested.is_empty() {
-		true => requested,
-		false => "index.html",
+	let path = if Assets::get(requested).is_some() && !requested.is_empty() {
+		requested
+	} else {
+		"index.html"
 	};
 	let Some(file) = Assets::get(path) else {
 		return (StatusCode::NOT_FOUND, "dashboard not built").into_response();
@@ -27,9 +28,10 @@ pub async fn serve(uri: Uri, headers: HeaderMap) -> Response {
 		.is_some_and(|value| value.contains("br"))
 		.then(|| Assets::get(&format!("{path}.br")))
 		.flatten();
-	let cache = match path.starts_with("_app/immutable/") {
-		true => "public, max-age=31536000, immutable",
-		false => "no-cache",
+	let cache = if path.starts_with("_app/immutable/") {
+		"public, max-age=31536000, immutable"
+	} else {
+		"no-cache"
 	};
 
 	let mut response = match brotli {

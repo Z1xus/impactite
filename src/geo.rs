@@ -54,9 +54,10 @@ impl Geo {
 			PathElement::Key("iso_code"),
 		]);
 		Location {
-			region: match region.is_empty() {
-				true => region,
-				false => format!("{country}-{region}"),
+			region: if region.is_empty() {
+				region
+			} else {
+				format!("{country}-{region}")
 			},
 			city: text(&[
 				PathElement::Key("city"),

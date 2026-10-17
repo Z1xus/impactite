@@ -232,16 +232,17 @@ impl Db {
 		sort_rows(&mut rows);
 		rows.truncate(query.limit);
 
-		let daily = match query.daily {
-			true => query
+		let daily = if query.daily {
+			query
 				.days
 				.clone()
 				.map(|day| {
 					let counts = self.day((site, day), &plan)?;
 					Ok(plan.rows(&counts).take(query.limit).copied().collect())
 				})
-				.collect::<io::Result<Vec<Vec<(u32, Metrics)>>>>()?,
-			false => Vec::new(),
+				.collect::<io::Result<Vec<Vec<(u32, Metrics)>>>>()?
+		} else {
+			Vec::new()
 		};
 
 		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
@@ -349,7 +350,7 @@ impl Db {
 				continue;
 			};
 			let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
-			let text = |id: u32| dict.get(id).map(|s| s.to_string()).unwrap_or_default();
+			let text = |id: u32| dict.get(id).map(ToString::to_string).unwrap_or_default();
 			let id = |dense: u32| (u64::from(day as u32) << 32) | u64::from(dense);
 			for part in &parts {
 				let mut prop = 0;
@@ -397,24 +398,21 @@ impl Db {
 		let mut counts: HashMap<u32, u64> = HashMap::new();
 		for day in days {
 			let live = self.shared.live_parts((site, day));
-			match live {
-				Some(parts) => {
-					for key in parts.iter().flat_map(|part| part.keys.iter()) {
-						*counts.entry(key).or_default() += 1;
-					}
+			if let Some(parts) = live {
+				for key in parts.iter().flat_map(|part| part.keys.iter()) {
+					*counts.entry(key).or_default() += 1;
 				}
-				None => {
-					let rollup = self.rollup((site, day))?;
-					let imported = self.imported((site, day))?;
-					for (slot, rows) in rollup
-						.fields
-						.iter()
-						.chain(imported.iter().flat_map(|i| &i.fields))
-					{
-						if let Slot::Prop(key) = slot {
-							*counts.entry(*key).or_default() +=
-								rows.iter().map(|row| row.1.events).sum::<u64>();
-						}
+			} else {
+				let rollup = self.rollup((site, day))?;
+				let imported = self.imported((site, day))?;
+				for (slot, rows) in rollup
+					.fields
+					.iter()
+					.chain(imported.iter().flat_map(|i| &i.fields))
+				{
+					if let Slot::Prop(key) = slot {
+						*counts.entry(*key).or_default() +=
+							rows.iter().map(|row| row.1.events).sum::<u64>();
 					}
 				}
 			}
@@ -925,9 +923,10 @@ impl Writer {
 		live.pending.push(event);
 		live.touched = Instant::now();
 		// unpacked events are big, so a busy day packs them often instead of once a tick
-		match live.pending.len() >= PACK_ROWS {
-			true => self.flush(key),
-			false => Ok(()),
+		if live.pending.len() >= PACK_ROWS {
+			self.flush(key)
+		} else {
+			Ok(())
 		}
 	}
 
@@ -1009,17 +1008,16 @@ impl Writer {
 	// the last wal seq whose events for the day are on disk outside the wal
 	fn covered(&mut self, key: Key) -> io::Result<Option<u64>> {
 		let sealed = self.sealed_seq(key)?;
-		let checkpointed = match self.checkpointed.get(&key) {
-			Some(&seq) => Some(seq),
-			None => {
-				let last = Checkpoint::read_all(&self.shared.path(key, "part"))?
-					.last()
-					.map(|checkpoint| checkpoint.seq);
-				if let Some(seq) = last {
-					self.checkpointed.insert(key, seq);
-				}
-				last
+		let checkpointed = if let Some(&seq) = self.checkpointed.get(&key) {
+			Some(seq)
+		} else {
+			let last = Checkpoint::read_all(&self.shared.path(key, "part"))?
+				.last()
+				.map(|checkpoint| checkpoint.seq);
+			if let Some(seq) = last {
+				self.checkpointed.insert(key, seq);
 			}
+			last
 		};
 		Ok(sealed.max(checkpointed))
 	}

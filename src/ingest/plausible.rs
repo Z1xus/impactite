@@ -129,17 +129,14 @@ pub async fn event(
 	let domains = payload.d.unwrap_or_else(|| hostname.clone());
 	let mut dropped = 0;
 	for domain in domains.split(',').map(str::trim).filter(|d| !d.is_empty()) {
-		let tracked = match ingest.site(domain) {
-			Some(site) => {
-				let keyed = reported
-					.as_ref()
-					.filter(|_| stats::keyed(&ingest.app, &headers, domain));
-				ingest.track(&site, hit(), keyed.unwrap_or(&client))
-			}
-			None => {
-				ingest.stray(domain);
-				Err(super::Rejected::Failed)
-			}
+		let tracked = if let Some(site) = ingest.site(domain) {
+			let keyed = reported
+				.as_ref()
+				.filter(|_| stats::keyed(&ingest.app, &headers, domain));
+			ingest.track(&site, hit(), keyed.unwrap_or(&client))
+		} else {
+			ingest.stray(domain);
+			Err(super::Rejected::Failed)
 		};
 		dropped += usize::from(tracked.is_err());
 	}

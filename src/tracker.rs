@@ -63,9 +63,10 @@ fn javascript(built: &Built, headers: &HeaderMap) -> Response {
 		.get(header::ACCEPT_ENCODING)
 		.and_then(|value| value.to_str().ok())
 		.is_some_and(|value| value.contains("br"));
-	let mut response = match brotli {
-		true => built.1.clone().into_response(),
-		false => built.0.clone().into_response(),
+	let mut response = if brotli {
+		built.1.clone().into_response()
+	} else {
+		built.0.clone().into_response()
 	};
 	let headers = response.headers_mut();
 	if brotli {

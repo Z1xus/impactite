@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get};
 use axum::{Json, Router};
 use rusqlite::params;
@@ -11,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::app::App;
 use crate::auth::accounts::Viewer;
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -26,17 +24,18 @@ struct NewSegment {
 	shared: bool,
 }
 
-fn access(web: &Web, user: i64, domain: &str) -> Option<(u64, String)> {
-	let role = web.app.site_role(user, domain).ok().flatten()?;
-	let site = web.app.site(domain).ok().flatten()?;
-	Some((site.id, role))
+// the site and the person's role on it, for anyone who can see it
+fn access(web: &Web, user: i64, domain: &str) -> Reply<(u64, String)> {
+	let role = web.app.site_role(user, domain)?;
+	let site = web.app.site(domain)?;
+	role.zip(site)
+		.map(|(role, site)| (site.id, role))
+		.ok_or_else(|| Error::not_found("Site not found."))
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match access(&web, viewer.user, &domain) {
-		Some((site, _)) => respond(&web, site, viewer.user),
-		None => fail(StatusCode::NOT_FOUND, "Site not found."),
-	}
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	let (site, _) = access(&web, viewer.user, &domain)?;
+	respond(&web, site, viewer.user)
 }
 
 async fn add(
@@ -44,53 +43,34 @@ async fn add(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<NewSegment>,
-) -> Response {
-	let Some((site, role)) = access(&web, viewer.user, &domain) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
+) -> Reply {
+	let (site, role) = access(&web, viewer.user, &domain)?;
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 80 || body.filters.is_empty() {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Name the segment and add a filter.",
-		);
+		return Err(Error::bad("Name the segment and add a filter."));
 	}
 	if body.shared && role == "viewer" {
-		return fail(
-			StatusCode::FORBIDDEN,
-			"Viewers can only save personal segments.",
-		);
+		return Err(Error::forbidden("Viewers can only save personal segments."));
 	}
 	let filters = json!(body.filters).to_string();
-	match web
-		.app
-		.add_segment(site, viewer.user, name, &filters, body.shared)
-	{
-		Ok(()) => respond(&web, site, viewer.user),
-		Err(err) => internal(err),
-	}
+	web.app
+		.add_segment(site, viewer.user, name, &filters, body.shared)?;
+	respond(&web, site, viewer.user)
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some((site, role)) = access(&web, viewer.user, &domain) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
+) -> Reply {
+	let (site, role) = access(&web, viewer.user, &domain)?;
 	let manager = matches!(role.as_str(), "owner" | "admin");
-	match web.app.remove_segment(site, id, viewer.user, manager) {
-		Ok(()) => respond(&web, site, viewer.user),
-		Err(err) => internal(err),
-	}
+	web.app.remove_segment(site, id, viewer.user, manager)?;
+	respond(&web, site, viewer.user)
 }
 
-fn respond(web: &Web, site: u64, user: i64) -> Response {
-	match web.app.segments(site, user) {
-		Ok(segments) => Json(json!({ "segments": segments })).into_response(),
-		Err(err) => internal(err),
-	}
+fn respond(web: &Web, site: u64, user: i64) -> Reply {
+	Ok(Json(json!({ "segments": web.app.segments(site, user)? })))
 }
 
 impl App {

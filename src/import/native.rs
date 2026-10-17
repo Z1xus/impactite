@@ -21,9 +21,10 @@ pub fn import(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<(u
 	for goal in meta["goals"].as_array().into_iter().flatten() {
 		let page = goal["page"].as_bool().unwrap_or(false);
 		let value = goal["value"].as_str().unwrap_or_default();
-		let name = match page {
-			true => format!("Visit {value}"),
-			false => value.to_owned(),
+		let name = if page {
+			format!("Visit {value}")
+		} else {
+			value.to_owned()
 		};
 		// goals that already exist are kept as they are
 		let scroll = goal["scroll"].as_u64().unwrap_or(0) as u32;

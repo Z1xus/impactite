@@ -155,7 +155,9 @@ async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) ->
 		}
 	};
 	let mut response = Redirect::to("/").into_response();
-	let session = signed_in(&web, user, None);
+	let Ok(session) = signed_in(&web, user, None) else {
+		return failed("provider");
+	};
 	if let Some(cookie) = session.headers().get(axum::http::header::SET_COOKIE) {
 		response
 			.headers_mut()

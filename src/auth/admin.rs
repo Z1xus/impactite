@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
@@ -12,7 +11,8 @@ use serde_json::{Value, json};
 use crate::app::{App, lock};
 use crate::auth::accounts::Viewer;
 use crate::auth::profile;
-use crate::web::{Web, fail, internal};
+use crate::update::CheckError;
+use crate::web::{Error, Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -35,65 +35,49 @@ struct Admin {
 	admin: bool,
 }
 
-fn denied() -> Response {
-	fail(StatusCode::FORBIDDEN, "Only instance admins can do this.")
-}
-
-async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	if !web.app.is_admin(viewer.user) {
-		return denied();
-	}
-	match web.app.users() {
-		Ok(users) => Json(json!({
-			"signup": web.app.signup_open(),
-			"mail": web.mail.ready(),
-			"users": users,
-			"version": crate::update::VERSION,
-			"update": lock(&web.updates).clone(),
-		}))
-		.into_response(),
-		Err(err) => internal(err),
+// only instance admins pass, and never to act on themselves when `other` is given
+fn admin(web: &Web, user: i64, other: Option<i64>) -> Reply<()> {
+	if web.app.is_admin(user) && other != Some(user) {
+		Ok(())
+	} else {
+		Err(Error::forbidden("Only instance admins can do this."))
 	}
 }
 
-async fn check_update(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	if !web.app.is_admin(viewer.user) {
-		return denied();
-	}
-	match crate::update::check(&web).await {
-		Ok(()) => show(State(web), viewer).await,
-		Err(crate::update::CheckError::Disabled) => {
-			fail(StatusCode::FORBIDDEN, "Update checks are disabled.")
-		}
-		Err(crate::update::CheckError::Busy) => {
-			fail(StatusCode::CONFLICT, "An update check is already running.")
-		}
-		Err(crate::update::CheckError::Recent) => fail(
+async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	admin(&web, viewer.user, None)?;
+	Ok(Json(json!({
+		"signup": web.app.signup_open(),
+		"mail": web.mail.ready(),
+		"users": web.app.users()?,
+		"version": crate::update::VERSION,
+		"update": lock(&web.updates).clone(),
+	})))
+}
+
+async fn check_update(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	admin(&web, viewer.user, None)?;
+	crate::update::check(&web).await.map_err(|err| match err {
+		CheckError::Disabled => Error::forbidden("Update checks are disabled."),
+		CheckError::Busy => Error::conflict("An update check is already running."),
+		CheckError::Recent => Error::new(
 			StatusCode::TOO_MANY_REQUESTS,
 			"Wait a minute before checking again.",
 		),
-	}
+	})?;
+	show(State(web), viewer).await
 }
 
-async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Update>) -> Response {
-	if !web.app.is_admin(viewer.user) {
-		return denied();
-	}
+async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Update>) -> Reply {
+	admin(&web, viewer.user, None)?;
 	let value = if body.signup { "open" } else { "invite" };
-	match web.app.set_setting("signup", value) {
-		Ok(()) => show(State(web), viewer).await,
-		Err(err) => internal(err),
-	}
+	web.app.set_setting("signup", value)?;
+	show(State(web), viewer).await
 }
 
-async fn test_mail(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	if !web.app.is_admin(viewer.user) {
-		return denied();
-	}
-	let email = match web.app.me(viewer.user) {
-		Ok(me) => me["email"].as_str().unwrap_or_default().to_owned(),
-		Err(err) => return internal(err),
-	};
+async fn test_mail(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	admin(&web, viewer.user, None)?;
+	let email = web.app.user_email(viewer.user)?;
 	let lines = ["impactite can send mail from this server.".to_owned()];
 	let letter = crate::mail::Letter {
 		base: &web.url,
@@ -102,8 +86,7 @@ async fn test_mail(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 		table: None,
 		button: None,
 	};
-	match web
-		.mail
+	web.mail
 		.send(
 			&email,
 			"impactite test mail",
@@ -111,14 +94,13 @@ async fn test_mail(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
 			&letter.html(),
 		)
 		.await
-	{
-		Ok(()) if web.mail.ready() => Json(json!({ "sent": email })).into_response(),
-		Ok(()) => fail(
-			StatusCode::BAD_REQUEST,
+		.map_err(|err| Error::new(StatusCode::BAD_GATEWAY, err.to_string()))?;
+	if !web.mail.ready() {
+		return Err(Error::bad(
 			"Mail is not set up. Start the server with --mail.",
-		),
-		Err(err) => fail(StatusCode::BAD_GATEWAY, &err.to_string()),
+		));
 	}
+	Ok(Json(json!({ "sent": email })))
 }
 
 async fn set_admin(
@@ -126,24 +108,16 @@ async fn set_admin(
 	viewer: Viewer,
 	Path(user): Path<i64>,
 	Json(body): Json<Admin>,
-) -> Response {
-	if !web.app.is_admin(viewer.user) || user == viewer.user {
-		return denied();
-	}
-	match web.app.set_admin(user, body.admin) {
-		Ok(()) => show(State(web), viewer).await,
-		Err(err) => internal(err),
-	}
+) -> Reply {
+	admin(&web, viewer.user, Some(user))?;
+	web.app.set_admin(user, body.admin)?;
+	show(State(web), viewer).await
 }
 
-async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(user): Path<i64>) -> Response {
-	if !web.app.is_admin(viewer.user) || user == viewer.user {
-		return denied();
-	}
-	match profile::remove_account(&web, user).await {
-		Ok(()) => show(State(web), viewer).await,
-		Err((status, message)) => fail(status, &message),
-	}
+async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(user): Path<i64>) -> Reply {
+	admin(&web, viewer.user, Some(user))?;
+	profile::remove_account(&web, user).await?;
+	show(State(web), viewer).await
 }
 
 impl App {

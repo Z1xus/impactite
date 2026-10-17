@@ -419,33 +419,32 @@ impl Counts {
 
 		let mut fields = HashMap::new();
 		for &slot in slots {
-			let mut entries = match slot.is_event() {
-				true => {
-					// value and session packed in one word keeps this small on big days
-					let mut pairs = Vec::new();
-					let mut sums: HashMap<u32, Metrics> = HashMap::new();
-					for (p, row) in scan.rows().filter(|&(p, row)| is_hit(&visits, p, row)) {
-						let value = scan.event_value(slot, p, row);
-						if value == MISSING {
-							continue;
-						}
-						let session = parts[p].session.get(row);
-						pairs.push(u64::from(value) << 32 | u64::from(session));
-						let sum = sums.entry(value).or_default();
-						sum.events += 1;
-						sum.pageviews += u64::from(scan.is_pageview(p, row));
-						sum.revenue += u64::from(parts[p].revenue.get(row));
+			let mut entries = if slot.is_event() {
+				// value and session packed in one word keeps this small on big days
+				let mut pairs = Vec::new();
+				let mut sums: HashMap<u32, Metrics> = HashMap::new();
+				for (p, row) in scan.rows().filter(|&(p, row)| is_hit(&visits, p, row)) {
+					let value = scan.event_value(slot, p, row);
+					if value == MISSING {
+						continue;
 					}
-					event_breakdown(pairs, &sums, &visits)
+					let session = parts[p].session.get(row);
+					pairs.push(u64::from(value) << 32 | u64::from(session));
+					let sum = sums.entry(value).or_default();
+					sum.events += 1;
+					sum.pageviews += u64::from(scan.is_pageview(p, row));
+					sum.revenue += u64::from(parts[p].revenue.get(row));
 				}
-				false => visit_breakdown(
+				event_breakdown(pairs, &sums, &visits)
+			} else {
+				visit_breakdown(
 					visits
 						.iter()
 						.filter(|visit| visit.selected)
 						.map(|visit| (scan.visit_value(slot, visit), visit))
 						.filter(|pair| pair.0 != MISSING)
 						.collect(),
-				),
+				)
 			};
 			if slot == Slot::Dim(Dim::Page) {
 				let index: HashMap<u32, usize> = entries

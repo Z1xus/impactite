@@ -16,8 +16,8 @@ use anyhow::bail;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use crater::Dim;
@@ -33,7 +33,7 @@ use crate::auth::teams::{self, manager};
 use crate::import;
 use crate::site::shares::Reader;
 use crate::stats::day_number;
-use crate::web::{Web, broken, fail, internal};
+use crate::web::{Error, Reply, Web, blocking};
 
 const UPLOAD: usize = 1 << 30;
 
@@ -95,23 +95,33 @@ async fn update(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Update>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return forbidden();
-	};
-	if let Some(timezone) = &body.timezone {
-		if TimeZone::get(timezone).is_err() {
-			return fail(StatusCode::BAD_REQUEST, "Use a valid timezone.");
-		}
-		if web.app.set_timezone(site.id, timezone).is_err() {
-			return broken();
-		}
-		web.ingest.forget(&site.domain);
-	}
-	if let Some(days) = body.retention
-		&& web.app.set_retention(site.id, days).is_err()
+) -> Reply<StatusCode> {
+	let site = web.editable(viewer.user, &domain)?;
+	// everything is checked before anything changes
+	if let Some(timezone) = &body.timezone
+		&& TimeZone::get(timezone).is_err()
 	{
-		return broken();
+		return Err(Error::bad("Use a valid timezone."));
+	}
+	let renamed = match &body.domain {
+		Some(raw) => {
+			Some(clean_domain(raw).ok_or_else(|| Error::bad("Use a domain like example.com."))?)
+		}
+		None => None,
+	};
+	if let Some(team) = body.team
+		&& (!manages(&web, viewer.user, &site) || !manager(&web, viewer.user, team))
+	{
+		return Err(Error::forbidden(
+			"You need to manage both teams to move a site.",
+		));
+	}
+
+	if let Some(timezone) = &body.timezone {
+		web.app.set_timezone(site.id, timezone)?;
+	}
+	if let Some(days) = body.retention {
+		web.app.set_retention(site.id, days)?;
 	}
 	if let Some(skip) = &body.skip {
 		const KNOWN: [&str; 7] = [
@@ -121,69 +131,48 @@ async fn update(
 			.into_iter()
 			.filter(|name| skip.iter().any(|item| item == name))
 			.collect();
-		if web.app.set_skip(site.id, &skip.join(",")).is_err() {
-			return broken();
-		}
-		web.ingest.forget(&site.domain);
+		web.app.set_skip(site.id, &skip.join(","))?;
 	}
-	if let Some(counter) = body.counter
-		&& web.app.set_counter(site.id, counter).is_err()
-	{
-		return broken();
+	if let Some(counter) = body.counter {
+		web.app.set_counter(site.id, counter)?;
 	}
-	if let Some(raw) = &body.domain {
-		let Some(domain) = clean_domain(raw) else {
-			return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
-		};
-		if domain != site.domain {
-			match web.app.rename_site(site.id, &domain) {
-				Err(rusqlite::Error::SqliteFailure(err, _))
-					if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-				{
-					return fail(StatusCode::CONFLICT, "This domain is already tracked.");
-				}
-				Err(_) => return broken(),
-				Ok(()) => web.ingest.forget(&site.domain),
-			}
-		}
+	if let Some(domain) = renamed.filter(|domain| *domain != site.domain) {
+		web.app.rename_site(site.id, &domain).map_err(taken)?;
 	}
 	if let Some(team) = body.team {
-		if !manages(&web, viewer.user, &site) || !manager(&web, viewer.user, team) {
-			return fail(
-				StatusCode::FORBIDDEN,
-				"You need to manage both teams to move a site.",
-			);
-		}
-		if web.app.move_site(site.id, team).is_err() {
-			return broken();
-		}
+		web.app.move_site(site.id, team)?;
 	}
-	StatusCode::NO_CONTENT.into_response()
+	web.ingest.forget(&site.domain);
+	Ok(StatusCode::NO_CONTENT)
+}
+
+// a unique domain that already exists answers as a conflict
+fn taken(err: rusqlite::Error) -> Error {
+	match err {
+		rusqlite::Error::SqliteFailure(failure, _)
+			if failure.code == rusqlite::ErrorCode::ConstraintViolation =>
+		{
+			Error::conflict("This domain is already tracked.")
+		}
+		err => err.into(),
+	}
 }
 
 async fn reset(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
-	let Some(site) = managed(&web, viewer.user, &domain) else {
-		return fail(
-			StatusCode::FORBIDDEN,
-			"Only owners and admins can reset stats.",
-		);
-	};
+) -> Reply<StatusCode> {
+	let site = managed(
+		&web,
+		viewer.user,
+		&domain,
+		"Only owners and admins can reset stats.",
+	)?;
 	let db = web.stats.db.clone();
-	let id = site.id;
-	if !matches!(
-		tokio::task::spawn_blocking(move || db.reset_site(id)).await,
-		Ok(Ok(()))
-	) {
-		return broken();
-	}
-	match web.app.clear_imports(site.id) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(_) => broken(),
-	}
+	blocking(move || db.reset_site(site.id)).await?;
+	web.app.clear_imports(site.id)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn purge(
@@ -191,33 +180,25 @@ async fn purge(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Purge>,
-) -> Response {
-	let Some(site) = managed(&web, viewer.user, &domain) else {
-		return fail(
-			StatusCode::FORBIDDEN,
-			"Only owners and admins can purge pages.",
-		);
-	};
+) -> Reply<StatusCode> {
+	let site = managed(
+		&web,
+		viewer.user,
+		&domain,
+		"Only owners and admins can purge pages.",
+	)?;
 	let page = body.page.trim().to_owned();
 	if !page.starts_with('/') {
-		return fail(StatusCode::BAD_REQUEST, "Use a path like /old-page.");
+		return Err(Error::bad("Use a path like /old-page."));
 	}
 	let db = web.stats.db.clone();
-	match tokio::task::spawn_blocking(move || db.purge(site.id, Dim::Page, &page)).await {
-		Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
-		_ => broken(),
-	}
+	blocking(move || db.purge(site.id, Dim::Page, &page)).await?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn guests(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Path(domain): Path<String>,
-) -> Response {
-	match managed(&web, viewer.user, &domain) {
-		Some(site) => respond_guests(&web, &site),
-		None => forbidden(),
-	}
+async fn guests(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	let site = managed(&web, viewer.user, &domain, CHANGE)?;
+	respond_guests(&web, &site)
 }
 
 async fn invite_guest(
@@ -225,57 +206,43 @@ async fn invite_guest(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Guest>,
-) -> Response {
-	let Some(site) = managed(&web, viewer.user, &domain) else {
-		return forbidden();
-	};
+) -> Reply {
+	let site = managed(&web, viewer.user, &domain, CHANGE)?;
 	if !matches!(body.role.as_str(), "viewer" | "editor") || !body.email.contains('@') {
-		return fail(StatusCode::BAD_REQUEST, "Use a valid email and role.");
+		return Err(Error::bad("Use a valid email and role."));
 	}
+	let team = web.app.site_team(site.id)?;
 	let token = web
 		.app
-		.site_team(site.id)
-		.and_then(|team| web.app.invite(team, Some(site.id), &body.email, &body.role));
-	match token {
-		Ok(token) => teams::send_invite(&web, viewer.user, &site.domain, &body.email, &token).await,
-		Err(_) => broken(),
-	}
+		.invite(team, Some(site.id), &body.email, &body.role)?;
+	teams::send_invite(&web, viewer.user, &site.domain, &body.email, &token).await
 }
 
 async fn remove_guest(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, user)): Path<(String, i64)>,
-) -> Response {
-	let Some(site) = managed(&web, viewer.user, &domain) else {
-		return forbidden();
-	};
-	match web.app.remove_guest(site.id, user) {
-		Ok(()) => respond_guests(&web, &site),
-		Err(_) => broken(),
-	}
+) -> Reply {
+	let site = managed(&web, viewer.user, &domain, CHANGE)?;
+	web.app.remove_guest(site.id, user)?;
+	respond_guests(&web, &site)
 }
 
 async fn revoke_guest(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(site) = managed(&web, viewer.user, &domain) else {
-		return forbidden();
-	};
-	match web.app.revoke_guest_invite(site.id, id) {
-		Ok(()) => respond_guests(&web, &site),
-		Err(_) => broken(),
-	}
+) -> Reply {
+	let site = managed(&web, viewer.user, &domain, CHANGE)?;
+	web.app.revoke_guest_invite(site.id, id)?;
+	respond_guests(&web, &site)
 }
 
-fn respond_guests(web: &Web, site: &Site) -> Response {
-	match web.app.guests(site.id) {
-		Ok(guests) => Json(guests).into_response(),
-		Err(_) => broken(),
-	}
+fn respond_guests(web: &Web, site: &Site) -> Reply {
+	Ok(Json(web.app.guests(site.id)?))
 }
+
+const CHANGE: &str = "You can't change this site.";
 
 fn manages(web: &Web, user: i64, site: &Site) -> bool {
 	web.app
@@ -283,56 +250,44 @@ fn manages(web: &Web, user: i64, site: &Site) -> bool {
 		.is_ok_and(|team| manager(web, user, team))
 }
 
-fn managed(web: &Web, user: i64, domain: &str) -> Option<Site> {
-	let site = web.app.site(domain).ok().flatten()?;
-	manages(web, user, &site).then_some(site)
+// the site, when this person manages its team
+fn managed(web: &Web, user: i64, domain: &str, message: &str) -> Reply<Site> {
+	web.app
+		.site(domain)?
+		.filter(|site| manages(web, user, site))
+		.ok_or_else(|| Error::forbidden(message))
 }
 
-async fn strays(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Path(domain): Path<String>,
-) -> Response {
-	match web.app.editable(viewer.user, &domain) {
-		Some(site) => Json(json!({ "domains": web.ingest.strays(&site.domain) })).into_response(),
-		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
-	}
+async fn strays(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
+	Ok(Json(json!({ "domains": web.ingest.strays(&site.domain) })))
 }
 
 async fn destroy(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
-	let role = web.app.site_role(viewer.user, &domain).ok().flatten();
-	let site = web.app.site(&domain).ok().flatten();
-	let (Some("owner" | "admin"), Some(site)) = (role.as_deref(), site) else {
-		return fail(
-			StatusCode::FORBIDDEN,
-			"Only owners and admins can delete sites.",
-		);
-	};
-	match drop_site(&web, site).await {
-		true => StatusCode::NO_CONTENT.into_response(),
-		false => broken(),
-	}
+) -> Reply<StatusCode> {
+	let site = managed(
+		&web,
+		viewer.user,
+		&domain,
+		"Only owners and admins can delete sites.",
+	)?;
+	drop_site(&web, site).await?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn drop_site(web: &Web, site: Site) -> bool {
+pub async fn drop_site(web: &Web, site: Site) -> Reply<()> {
 	let db = web.stats.db.clone();
-	let dropped = tokio::task::spawn_blocking(move || db.drop_site(site.id)).await;
-	if !matches!(dropped, Ok(Ok(()))) {
-		return false;
-	}
+	blocking(move || db.drop_site(site.id)).await?;
 	web.ingest.forget(&site.domain);
-	web.app.delete_site(site.id).is_ok()
+	web.app.delete_site(site.id)?;
+	Ok(())
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match web.app.editable(viewer.user, &domain) {
-		Some(site) => respond(&web, &site),
-		None => forbidden(),
-	}
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	respond(&web, &web.editable(viewer.user, &domain)?)
 }
 
 async fn upload(
@@ -341,10 +296,8 @@ async fn upload(
 	Path(domain): Path<String>,
 	Query(upload): Query<Upload>,
 	body: Bytes,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return forbidden();
-	};
+) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
 	let shared = web.clone();
 	let done = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
 		let dir = shared.data.join("uploads");
@@ -371,29 +324,24 @@ async fn upload(
 		let _ = fs::remove_file(&path);
 		done
 	})
-	.await;
-	match done {
-		Ok(Ok(done)) => Json(json!({ "imported": done })).into_response(),
-		Ok(Err(err)) => fail(StatusCode::BAD_REQUEST, &err.to_string()),
-		Err(_) => broken(),
-	}
+	.await?
+	.map_err(|err| Error::bad(err.to_string()))?;
+	Ok(Json(json!({ "imported": done })))
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return forbidden();
-	};
-	let Ok(Some((first, last))) = web.app.remove_import(site.id, id) else {
-		return fail(StatusCode::NOT_FOUND, "Import not found.");
-	};
-	match days(&first, &last).map(|days| web.stats.db.drop_imports(site.id, days)) {
-		Some(Ok(())) => respond(&web, &site),
-		_ => broken(),
-	}
+) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
+	let (first, last) = web
+		.app
+		.remove_import(site.id, id)?
+		.ok_or_else(|| Error::not_found("Import not found."))?;
+	let days = days(&first, &last).ok_or_else(Error::broken)?;
+	web.stats.db.drop_imports(site.id, days)?;
+	respond(&web, &site)
 }
 
 fn days(first: &str, last: &str) -> Option<RangeInclusive<i32>> {
@@ -402,21 +350,15 @@ fn days(first: &str, last: &str) -> Option<RangeInclusive<i32>> {
 	Some(day_number(first)..=day_number(last))
 }
 
-fn respond(web: &Web, site: &Site) -> Response {
-	match web.app.imports(site.id) {
-		Ok(imports) => Json(json!({
-			"imports": imports
-				.iter()
-				.map(|(id, source, first, last)| json!({ "id": id, "source": source, "first": first, "last": last }))
-				.collect::<Vec<_>>()
-		}))
-		.into_response(),
-		Err(_) => broken(),
-	}
-}
-
-fn forbidden() -> Response {
-	fail(StatusCode::FORBIDDEN, "You can't change this site.")
+fn respond(web: &Web, site: &Site) -> Reply {
+	Ok(Json(json!({
+		"imports": web
+			.app
+			.imports(site.id)?
+			.iter()
+			.map(|(id, source, first, last)| json!({ "id": id, "source": source, "first": first, "last": last }))
+			.collect::<Vec<_>>()
+	})))
 }
 
 impl App {
@@ -572,38 +514,28 @@ struct NewSite {
 	timezone: String,
 }
 
-async fn add_site(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Json(body): Json<NewSite>,
-) -> Response {
-	if !matches!(web.app.role(viewer.user, body.team), Ok(Some(role)) if role != "viewer") {
-		return fail(StatusCode::FORBIDDEN, "You can't add sites to this team.");
+async fn add_site(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<NewSite>) -> Reply {
+	if !matches!(web.app.role(viewer.user, body.team)?.as_deref(), Some(role) if role != "viewer") {
+		return Err(Error::forbidden("You can't add sites to this team."));
 	}
-	let Some(domain) = clean_domain(&body.domain) else {
-		return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
-	};
+	let domain =
+		clean_domain(&body.domain).ok_or_else(|| Error::bad("Use a domain like example.com."))?;
 	if TimeZone::get(&body.timezone).is_err() {
-		return fail(StatusCode::BAD_REQUEST, "Pick a timezone from the list.");
+		return Err(Error::bad("Pick a timezone from the list."));
 	}
-	match web.app.add_site(&domain, &body.timezone, Some(body.team)) {
-		Ok(site) => Json(json!({ "id": site.id, "domain": site.domain })).into_response(),
-		Err(rusqlite::Error::SqliteFailure(err, _))
-			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-		{
-			fail(StatusCode::CONFLICT, "This domain is already tracked.")
-		}
-		Err(err) => internal(err),
-	}
+	let site = web
+		.app
+		.add_site(&domain, &body.timezone, Some(body.team))
+		.map_err(taken)?;
+	Ok(Json(json!({ "id": site.id, "domain": site.domain })))
 }
 
-async fn live(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
-	if !reader.reads(&web, &domain) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	}
-	let Ok(Some(site)) = web.app.site(&domain) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
+async fn live(
+	State(web): State<Arc<Web>>,
+	reader: Reader,
+	Path(domain): Path<String>,
+) -> Reply<impl IntoResponse> {
+	let site = web.readable(&reader, &domain)?;
 	let ticks = futures_util::stream::unfold(
 		(
 			web.ingest.clone(),
@@ -616,9 +548,7 @@ async fn live(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<St
 			Some((Ok::<_, std::convert::Infallible>(event), (ingest, interval)))
 		},
 	);
-	Sse::new(ticks)
-		.keep_alive(KeepAlive::default())
-		.into_response()
+	Ok(Sse::new(ticks).keep_alive(KeepAlive::default()))
 }
 
 pub fn clean_domain(raw: &str) -> Option<String> {

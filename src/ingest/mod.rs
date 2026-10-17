@@ -187,22 +187,18 @@ impl Ingest {
 		let ts = now.as_second();
 		let offset = site.tz.to_offset(now).seconds();
 		let day = (ts + i64::from(offset)).div_euclid(86_400) as i32;
-		let (visitor, session) = match site.skip.contains("session") {
-			// without sessions every hit stands alone
-			true => {
-				let mut id = [0; 8];
-				getrandom::fill(&mut id).map_err(|_| Rejected::Failed)?;
-				let id = u64::from_le_bytes(id);
-				(id, id)
-			}
-			false => {
-				let visitor = self.visitor(site, day, client)?;
-				let previous = self.visitor(site, day - 1, client)?;
-				(
-					visitor,
-					self.session(site.site.id, visitor, previous, ts, &hit.name)?,
-				)
-			}
+		let (visitor, session) = if site.skip.contains("session") {
+			let mut id = [0; 8];
+			getrandom::fill(&mut id).map_err(|_| Rejected::Failed)?;
+			let id = u64::from_le_bytes(id);
+			(id, id)
+		} else {
+			let visitor = self.visitor(site, day, client)?;
+			let previous = self.visitor(site, day - 1, client)?;
+			(
+				visitor,
+				self.session(site.site.id, visitor, previous, ts, &hit.name)?,
+			)
 		};
 
 		let param = |key: &str| {
@@ -215,9 +211,10 @@ impl Ingest {
 			.into_iter()
 			.find(|value| !value.is_empty())
 			.unwrap_or_default();
-		let (referrer_host, referrer) = match site.skip.contains("referrer") {
-			true => Default::default(),
-			false => referrer_parts(&hit.referrer, &hit.hostname),
+		let (referrer_host, referrer) = if site.skip.contains("referrer") {
+			Default::default()
+		} else {
+			referrer_parts(&hit.referrer, &hit.hostname)
 		};
 		let click_id = CLICK_IDS.iter().find(|&&id| !param(id).is_empty());
 		let source = referrer::source(&referrer_host, tagged);

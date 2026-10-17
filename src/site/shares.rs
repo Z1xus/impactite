@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 
 use crate::app::{App, Site, token};
 use crate::auth::accounts::{Viewer, hash};
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 // a signed in member or a share link token, for read only access
 pub struct Reader {
@@ -94,11 +94,11 @@ pub struct Share {
 impl Share {
 	// changes with the password, so a new password locks out old links
 	fn grant(&self) -> String {
-		match self.password.is_empty() {
-			true => String::new(),
-			false => blake3::hash(format!("{}:{}", self.slug, self.password).as_bytes()).to_hex()
-				[..32]
-				.to_owned(),
+		if self.password.is_empty() {
+			String::new()
+		} else {
+			blake3::hash(format!("{}:{}", self.slug, self.password).as_bytes()).to_hex()[..32]
+				.to_owned()
 		}
 	}
 }
@@ -240,11 +240,8 @@ struct Unlock {
 	password: String,
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match web.app.editable(viewer.user, &domain) {
-		Some(site) => respond(&web, site.id),
-		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
-	}
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	respond(&web, web.editable(viewer.user, &domain)?.id)
 }
 
 async fn add(
@@ -252,61 +249,47 @@ async fn add(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<NewShare>,
-) -> Response {
-	let Some(Site {
+) -> Reply {
+	let Site {
 		id: site, domain, ..
-	}) = web.app.editable(viewer.user, &domain)
-	else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	let (slug, name, password) = match body.public {
-		true => (domain.clone(), "public".to_owned(), String::new()),
-		false => {
-			let name = body.name.trim();
-			if name.is_empty() || name.len() > 80 {
-				return fail(StatusCode::BAD_REQUEST, "Name the link.");
-			}
-			let password = match body.password.is_empty() {
-				true => String::new(),
-				false => match hash(&body.password) {
-					Ok(hash) => hash,
-					Err(err) => return internal(err),
-				},
-			};
-			match token() {
-				Ok(token) => (token[..20].to_owned(), name.to_owned(), password),
-				Err(err) => return internal(err),
-			}
+	} = web.editable(viewer.user, &domain)?;
+	let (slug, name, password) = if body.public {
+		(domain, "public".to_owned(), String::new())
+	} else {
+		let name = body.name.trim();
+		if name.is_empty() || name.len() > 80 {
+			return Err(Error::bad("Name the link."));
 		}
+		let password = if body.password.is_empty() {
+			String::new()
+		} else {
+			hash(&body.password)?
+		};
+		(token()?[..20].to_owned(), name.to_owned(), password)
 	};
-	match web.app.add_share(site, &slug, &name, &password) {
-		Ok(()) => respond(&web, site),
-		Err(err) => internal(err),
-	}
+	web.app.add_share(site, &slug, &name, &password)?;
+	respond(&web, site)
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(Site { id: site, .. }) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	match web.app.remove_share(site, id) {
-		Ok(()) => respond(&web, site),
-		Err(err) => internal(err),
-	}
+) -> Reply {
+	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
+	web.app.remove_share(site, id)?;
+	respond(&web, site)
 }
 
 async fn open(
 	State(web): State<Arc<Web>>,
 	Path(slug): Path<String>,
 	Json(body): Json<Unlock>,
-) -> Response {
-	let Ok(Some(share)) = web.app.share(&slug) else {
-		return fail(StatusCode::NOT_FOUND, "This link does not exist.");
-	};
+) -> Reply<Response> {
+	let share = web
+		.app
+		.share(&slug)?
+		.ok_or_else(|| Error::not_found("This link does not exist."))?;
 	if !share.password.is_empty() {
 		let valid = !body.password.is_empty()
 			&& argon2::PasswordHash::new(&share.password).is_ok_and(|parsed| {
@@ -315,27 +298,24 @@ async fn open(
 					.is_ok()
 			});
 		if !valid {
-			return (
+			return Ok((
 				StatusCode::UNAUTHORIZED,
 				Json(json!({ "error": "Enter the password for this link.", "locked": true })),
 			)
-				.into_response();
+				.into_response());
 		}
 	}
-	Json(json!({
+	Ok(Json(json!({
 		"domain": share.domain,
 		"timezone": share.timezone,
 		"name": share.name,
 		"token": format!("{}.{}", share.slug, share.grant()),
 	}))
-	.into_response()
+	.into_response())
 }
 
-fn respond(web: &Web, site: u64) -> Response {
-	match web.app.shares(site) {
-		Ok(shares) => Json(json!({ "shares": shares })).into_response(),
-		Err(err) => internal(err),
-	}
+fn respond(web: &Web, site: u64) -> Reply {
+	Ok(Json(json!({ "shares": web.app.shares(site)? })))
 }
 
 impl App {

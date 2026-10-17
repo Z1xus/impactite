@@ -65,21 +65,22 @@ pub async fn count(
 	let event = flag("e");
 	let query = param("q").trim_start_matches('?');
 	let hit = Hit {
-		name: match event {
-			true => path.to_owned(),
-			false => "pageview".into(),
+		name: if event {
+			path.to_owned()
+		} else {
+			"pageview".into()
 		},
 		hostname: site.site.domain.clone(),
-		path: match event {
-			true => String::new(),
-			// count.js sends the query in the path too, it arrives apart in `q`
-			false => format!(
+		path: if event {
+			String::new()
+		} else {
+			format!(
 				"/{}",
 				path.split('?')
 					.next()
 					.unwrap_or(path)
 					.trim_start_matches('/')
-			),
+			)
 		},
 		params: url::form_urlencoded::parse(query.as_bytes())
 			.into_owned()

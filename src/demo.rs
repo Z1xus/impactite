@@ -120,13 +120,12 @@ pub fn seed(db: &Db, site: u64, domain: &str, timezone: &str, days: i64) -> usiz
 		let mut visitors: Vec<u64> = Vec::new();
 
 		for _ in 0..visits {
-			let visitor = match visitors.is_empty() || rng.unit() > 0.12 {
-				true => {
-					let id = rng.next();
-					visitors.push(id);
-					id
-				}
-				false => visitors[rng.below(visitors.len() as u64) as usize],
+			let visitor = if visitors.is_empty() || rng.unit() > 0.12 {
+				let id = rng.next();
+				visitors.push(id);
+				id
+			} else {
+				visitors[rng.below(visitors.len() as u64) as usize]
 			};
 			let session = rng.next();
 			let hour = rng.pick(&hours, |h| h.1).0;

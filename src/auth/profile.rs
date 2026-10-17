@@ -15,7 +15,7 @@ use crate::app::{App, key_hash, token};
 use crate::auth::accounts::{Viewer, hash, signed_in};
 use crate::mail::Letter;
 use crate::site;
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 const LINK_SECS: i64 = 15 * 60;
 
@@ -61,54 +61,58 @@ struct Token {
 	token: String,
 }
 
-async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Update>) -> Response {
-	if let Some(name) = body.name.as_deref().map(str::trim) {
-		if name.is_empty() || name.len() > 80 {
-			return fail(StatusCode::BAD_REQUEST, "Tell us your name.");
-		}
-		if let Err(err) = web.app.set_user(viewer.user, Column::Name, name) {
-			return internal(err);
-		}
+async fn update(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Json(body): Json<Update>,
+) -> Reply<Response> {
+	let name = body.name.as_deref().map(str::trim);
+	if name.is_some_and(|name| name.is_empty() || name.len() > 80) {
+		return Err(Error::bad("Tell us your name."));
 	}
-	let mut pending = None;
-	if let Some(email) = body.email.as_deref().map(str::trim) {
-		if !email.contains('@') {
-			return fail(StatusCode::BAD_REQUEST, "Use a valid email.");
-		}
-		let current = match web.app.me(viewer.user) {
-			Ok(me) => me["email"].as_str().unwrap_or_default().to_owned(),
-			Err(err) => return internal(err),
-		};
-		if email.eq_ignore_ascii_case(&current) {
-			return StatusCode::NO_CONTENT.into_response();
-		}
-		if matches!(web.app.user_by_email(email), Ok(Some(_))) {
-			return fail(StatusCode::CONFLICT, "This email is already used.");
-		}
-		// with mail the new address confirms itself first, the old one hears about it
-		if web.mail.ready() {
-			return match confirm_email(&web, viewer.user, &current, email).await {
-				Ok(()) => Json(json!({ "pending": email })).into_response(),
-				Err(err) => {
-					tracing::warn!(%err, "email change mail");
-					fail(StatusCode::BAD_GATEWAY, "The mail couldn't be sent.")
-				}
-			};
-		}
-		pending = Some(email);
+	let email = body.email.as_deref().map(str::trim);
+	if email.is_some_and(|email| !email.contains('@')) {
+		return Err(Error::bad("Use a valid email."));
 	}
-	if let Some(email) = pending {
-		match web.app.set_user(viewer.user, Column::Email, email) {
-			Err(rusqlite::Error::SqliteFailure(err, _))
-				if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-			{
-				return fail(StatusCode::CONFLICT, "This email is already used.");
-			}
-			Err(err) => return internal(err),
-			Ok(()) => {}
-		}
+	if let Some(name) = name {
+		web.app.set_user(viewer.user, Column::Name, name)?;
 	}
-	StatusCode::NO_CONTENT.into_response()
+	let Some(email) = email else {
+		return Ok(StatusCode::NO_CONTENT.into_response());
+	};
+	let current = web.app.user_email(viewer.user)?;
+	if email.eq_ignore_ascii_case(&current) {
+		return Ok(StatusCode::NO_CONTENT.into_response());
+	}
+	if web.app.user_by_email(email)?.is_some() {
+		return Err(Error::conflict("This email is already used."));
+	}
+	// with mail the new address confirms itself first, the old one hears about it
+	if web.mail.ready() {
+		confirm_email(&web, viewer.user, &current, email)
+			.await
+			.map_err(|err| {
+				tracing::warn!(%err, "email change mail");
+				Error::new(StatusCode::BAD_GATEWAY, "The mail couldn't be sent.")
+			})?;
+		return Ok(Json(json!({ "pending": email })).into_response());
+	}
+	web.app
+		.set_user(viewer.user, Column::Email, email)
+		.map_err(used)?;
+	Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+// a unique email that already exists answers as a conflict
+fn used(err: rusqlite::Error) -> Error {
+	match err {
+		rusqlite::Error::SqliteFailure(failure, _)
+			if failure.code == rusqlite::ErrorCode::ConstraintViolation =>
+		{
+			Error::conflict("This email is already used.")
+		}
+		err => err.into(),
+	}
 }
 
 async fn confirm_email(web: &Web, user: i64, old: &str, new: &str) -> anyhow::Result<()> {
@@ -157,33 +161,23 @@ async fn confirm_email(web: &Web, user: i64, old: &str, new: &str) -> anyhow::Re
 		.await
 }
 
-async fn accept_email(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Response {
-	let Ok(Some((user, email))) = web.app.take_email_change(&body.token) else {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"This link expired or was already used.",
-		);
-	};
-	match web.app.set_user(user, Column::Email, &email) {
-		Err(rusqlite::Error::SqliteFailure(err, _))
-			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-		{
-			fail(StatusCode::CONFLICT, "This email is already used.")
-		}
-		Err(err) => internal(err),
-		Ok(()) => Json(json!({ "email": email })).into_response(),
-	}
+async fn accept_email(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Reply {
+	let (user, email) = web
+		.app
+		.take_email_change(&body.token)?
+		.ok_or_else(|| Error::bad("This link expired or was already used."))?;
+	web.app
+		.set_user(user, Column::Email, &email)
+		.map_err(used)?;
+	Ok(Json(json!({ "email": email })))
 }
 
 async fn password(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Json(body): Json<Password>,
-) -> Response {
-	let stored = match web.app.password_hash(viewer.user) {
-		Ok(stored) => stored,
-		Err(err) => return internal(err),
-	};
+) -> Reply<StatusCode> {
+	let stored = web.app.password_hash(viewer.user)?;
 	let matches = body.current.as_deref().is_some_and(|current| {
 		argon2::PasswordHash::new(&stored).is_ok_and(|parsed| {
 			Argon2::default()
@@ -192,111 +186,74 @@ async fn password(
 		})
 	});
 	if !stored.is_empty() && !matches {
-		return fail(StatusCode::FORBIDDEN, "The current password is wrong.");
+		return Err(Error::forbidden("The current password is wrong."));
 	}
 	if body.password.chars().count() < 10 {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Use at least 10 characters for the password.",
-		);
+		return Err(Error::bad("Use at least 10 characters for the password."));
 	}
 	// a new password signs out every other device
-	let changed = hash(&body.password)
-		.and_then(|hash| web.app.set_user(viewer.user, Column::Password, &hash))
-		.and_then(|()| web.app.end_other_sessions(viewer.user, &viewer.session));
-	match changed {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app
+		.set_user(viewer.user, Column::Password, &hash(&body.password)?)?;
+	web.app.end_other_sessions(viewer.user, &viewer.session)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn sessions(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	match web.app.sessions(viewer.user, &viewer.session) {
-		Ok(sessions) => Json(json!({ "sessions": sessions })).into_response(),
-		Err(err) => internal(err),
-	}
+async fn sessions(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	Ok(Json(
+		json!({ "sessions": web.app.sessions(viewer.user, &viewer.session)? }),
+	))
 }
 
-async fn end_session(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<i64>) -> Response {
-	match web.app.end_session_id(viewer.user, id) {
-		Ok(()) => sessions(State(web), viewer).await,
-		Err(err) => internal(err),
-	}
+async fn end_session(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<i64>) -> Reply {
+	web.app.end_session_id(viewer.user, id)?;
+	sessions(State(web), viewer).await
 }
 
-async fn end_others(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	match web.app.end_other_sessions(viewer.user, &viewer.session) {
-		Ok(()) => sessions(State(web), viewer).await,
-		Err(err) => internal(err),
-	}
+async fn end_others(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	web.app.end_other_sessions(viewer.user, &viewer.session)?;
+	sessions(State(web), viewer).await
 }
 
 async fn destroy(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Json(body): Json<Confirm>,
-) -> Response {
-	let email = match web.app.user_email(viewer.user) {
-		Ok(email) => email,
-		Err(err) => return internal(err),
-	};
+) -> Reply<StatusCode> {
+	let email = web.app.user_email(viewer.user)?;
 	if !body.email.trim().eq_ignore_ascii_case(&email) {
-		return fail(StatusCode::BAD_REQUEST, "Type your email to confirm.");
+		return Err(Error::bad("Type your email to confirm."));
 	}
-	match remove_account(&web, viewer.user).await {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err((status, message)) => fail(status, &message),
-	}
+	remove_account(&web, viewer.user).await?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn remove_account(web: &Web, user: i64) -> Result<(), (StatusCode, String)> {
-	let broken = |err: rusqlite::Error| {
-		tracing::error!(%err, "remove account");
-		(
-			StatusCode::INTERNAL_SERVER_ERROR,
-			"Something went wrong.".to_owned(),
-		)
-	};
-	let owned = web.app.owned_teams(user).map_err(broken)?;
+pub async fn remove_account(web: &Web, user: i64) -> Reply<()> {
+	let owned = web.app.owned_teams(user)?;
 	if let Some((_, name, _)) = owned.iter().find(|(_, _, others)| *others > 0) {
-		return Err((
+		return Err(Error::new(
 			StatusCode::CONFLICT,
 			format!("Hand over {name} to another member first."),
 		));
 	}
 	for (team, _, _) in owned {
-		for site in web.app.team_sites(team).map_err(broken)? {
-			if !site::drop_site(web, site).await {
-				return Err((
-					StatusCode::INTERNAL_SERVER_ERROR,
-					"Something went wrong.".to_owned(),
-				));
-			}
+		for site in web.app.team_sites(team)? {
+			site::drop_site(web, site).await?;
 		}
-		web.app.delete_team(team).map_err(broken)?;
+		web.app.delete_team(team)?;
 	}
-	web.app.delete_user(user).map_err(broken)
+	web.app.delete_user(user)?;
+	Ok(())
 }
 
-async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Response {
+async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Reply<StatusCode> {
 	if !web.mail.ready() {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Mail is not set up on this server.",
-		);
+		return Err(Error::bad("Mail is not set up on this server."));
 	}
-	let user = match web.app.user_by_email(&body.email) {
-		Ok(user) => user,
-		Err(err) => return internal(err),
-	};
 	// answer the same way for unknown emails so accounts stay private
-	let Some(user) = user else {
-		return StatusCode::NO_CONTENT.into_response();
+	let Some(user) = web.app.user_by_email(&body.email)? else {
+		return Ok(StatusCode::NO_CONTENT);
 	};
-	let token = match web.app.create_login(user) {
-		Ok(token) => token,
-		Err(err) => return internal(err),
-	};
+	let token = web.app.create_login(user)?;
 	let base = web.url.trim_end_matches('/');
 	let link = format!("{base}/login/link/{token}");
 	let lines =
@@ -308,8 +265,7 @@ async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Re
 		table: None,
 		button: Some(("Sign in", &link)),
 	};
-	if let Err(err) = web
-		.mail
+	web.mail
 		.send(
 			&body.email,
 			"Sign in to impactite",
@@ -317,22 +273,19 @@ async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Re
 			&letter.html(),
 		)
 		.await
-	{
-		tracing::warn!(%err, "login mail");
-		return fail(StatusCode::BAD_GATEWAY, "The mail could not be sent.");
-	}
-	StatusCode::NO_CONTENT.into_response()
+		.map_err(|err| {
+			tracing::warn!(%err, "login mail");
+			Error::new(StatusCode::BAD_GATEWAY, "The mail could not be sent.")
+		})?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Response {
-	match web.app.take_login(&body.token) {
-		Ok(Some(user)) => signed_in(&web, user, None),
-		Ok(None) => fail(
-			StatusCode::NOT_FOUND,
-			"This link expired or was already used.",
-		),
-		Err(err) => internal(err),
-	}
+async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Reply<Response> {
+	let user = web
+		.app
+		.take_login(&body.token)?
+		.ok_or_else(|| Error::not_found("This link expired or was already used."))?;
+	signed_in(&web, user, None)
 }
 
 impl App {
@@ -365,7 +318,7 @@ impl App {
 			})
 	}
 
-	fn user_email(&self, user: i64) -> rusqlite::Result<String> {
+	pub(crate) fn user_email(&self, user: i64) -> rusqlite::Result<String> {
 		self.conn()
 			.query_row("select email from users where id = ?1", [user], |row| {
 				row.get(0)

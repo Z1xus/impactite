@@ -166,9 +166,10 @@ fn matches(host: &str, pattern: &str) -> bool {
 	let starts = std::iter::once(0).chain(labels(host));
 	starts.into_iter().any(|start| {
 		let rest = &host[start..];
-		match pattern.ends_with('.') {
-			true => rest.starts_with(pattern),
-			false => rest == pattern,
+		if pattern.ends_with('.') {
+			rest.starts_with(pattern)
+		} else {
+			rest == pattern
 		}
 	})
 }

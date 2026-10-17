@@ -2,8 +2,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get};
 use axum::{Json, Router};
 use jiff::civil::Date;
@@ -17,7 +15,7 @@ use crate::app::{App, Site};
 use crate::auth::accounts::Viewer;
 use crate::card;
 use crate::stats::{self, day_number};
-use crate::web::{Web, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 const KINDS: [&str; 7] = [
 	"daily", "weekly", "biweekly", "monthly", "spike", "drop", "export",
@@ -443,11 +441,8 @@ fn shown(to: &str) -> String {
 	}
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	match web.app.editable(viewer.user, &domain) {
-		Some(site) => respond(&web, site.id),
-		None => fail(StatusCode::FORBIDDEN, "You can't change this site."),
-	}
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	respond(&web, web.editable(viewer.user, &domain)?.id)
 }
 
 async fn add(
@@ -455,30 +450,23 @@ async fn add(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<NewReport>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
+) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
 	let alert = matches!(body.kind.as_str(), "spike" | "drop");
 	let threshold = if alert { body.threshold } else { 0 };
 	let to = body.email.trim();
 	if body.kind == "export" {
-		if let Err(err) = crate::s3::Bucket::parse(to) {
-			return fail(
-				StatusCode::BAD_REQUEST,
-				&format!("Check the bucket: {err}."),
-			);
-		}
+		crate::s3::Bucket::parse(to)
+			.map_err(|err| Error::bad(format!("Check the bucket: {err}.")))?;
 	} else {
 		let webhook = to.starts_with("https://") && url::Url::parse(to).is_ok();
 		if !KINDS.contains(&body.kind.as_str())
 			|| !(webhook || to.contains('@'))
 			|| (alert && !(1..=MAX_THRESHOLD).contains(&body.threshold))
 		{
-			return fail(
-				StatusCode::BAD_REQUEST,
+			return Err(Error::bad(
 				"Enter an email or an https webhook. Alerts also need a threshold.",
-			);
+			));
 		}
 	}
 	// starts as sent so nothing goes out right away
@@ -488,31 +476,23 @@ async fn add(
 		"spike" => 0,
 		_ => i64::from(day_number(now.date())),
 	};
-	match web.app.add_report(site.id, &body.kind, to, threshold, last) {
-		Ok(()) => respond(&web, site.id),
-		Err(err) => internal(err),
-	}
+	web.app
+		.add_report(site.id, &body.kind, to, threshold, last)?;
+	respond(&web, site.id)
 }
 
 async fn remove(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, id)): Path<(String, i64)>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	match web.app.remove_report(site.id, id) {
-		Ok(()) => respond(&web, site.id),
-		Err(err) => internal(err),
-	}
+) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
+	web.app.remove_report(site.id, id)?;
+	respond(&web, site.id)
 }
 
-fn respond(web: &Web, site: u64) -> Response {
-	match web.app.site_reports(site) {
-		Ok(reports) => Json(json!({ "reports": reports })).into_response(),
-		Err(err) => internal(err),
-	}
+fn respond(web: &Web, site: u64) -> Reply {
+	Ok(Json(json!({ "reports": web.app.site_reports(site)? })))
 }
 
 impl App {

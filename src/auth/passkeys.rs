@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use base64::Engine;
@@ -16,7 +16,7 @@ use crate::app::{App, lock};
 use crate::auth::accounts::{Viewer, signed_in};
 use crate::auth::webauthn::{self, Assertion, Key, Registration};
 use crate::ingest::ua;
-use crate::web::{Web, broken, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 const CEREMONY_SECS: i64 = 300;
 const MAX_CEREMONIES: usize = 10_000;
@@ -116,46 +116,35 @@ struct Signup {
 	open: bool,
 }
 
-async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Response {
+async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Reply {
 	let (purpose, email) = if body.open {
 		if !web.app.signup_open() {
-			return fail(StatusCode::FORBIDDEN, "Sign-up is closed on this server.");
+			return Err(Error::forbidden("Sign-up is closed on this server."));
 		}
 		(Purpose::Signup, body.email.clone().unwrap_or_default())
 	} else if body.invite {
-		match web.app.open_invite(&body.token) {
-			Ok(Some(invitation)) => (Purpose::Invite(body.token.clone()), invitation.email),
-			_ => {
-				return fail(
-					StatusCode::NOT_FOUND,
-					"This invite expired or was already used.",
-				);
-			}
-		}
+		let invitation = web
+			.app
+			.open_invite(&body.token)?
+			.ok_or_else(|| Error::not_found("This invite expired or was already used."))?;
+		(Purpose::Invite(body.token.clone()), invitation.email)
 	} else {
 		let expected = lock(&web.setup).clone();
 		if expected.as_deref() != Some(body.token.as_str()) {
-			return fail(StatusCode::FORBIDDEN, "This setup link is no longer valid.");
+			return Err(Error::forbidden("This setup link is no longer valid."));
 		}
 		(Purpose::Setup, body.email.clone().unwrap_or_default())
 	};
 	let mut handle = [0; 16];
-	if getrandom::fill(&mut handle).is_err() {
-		return broken();
-	}
+	getrandom::fill(&mut handle).map_err(|_| Error::broken())?;
 	ceremony(&web, purpose, |challenge| {
 		webauthn::creation_options(&web.rp, challenge, &handle, &email, &body.name, &[])
 	})
 }
 
-async fn new(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	let (email, name, exclude) = match (
-		web.app.user_contact(viewer.user),
-		web.app.passkey_ids(viewer.user),
-	) {
-		(Ok((email, name)), Ok(exclude)) => (email, name, exclude),
-		_ => return broken(),
-	};
+async fn new(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	let (email, name) = web.app.user_contact(viewer.user)?;
+	let exclude = web.app.passkey_ids(viewer.user)?;
 	let handle = viewer.user.to_be_bytes();
 	ceremony(&web, Purpose::Add(viewer.user), |challenge| {
 		webauthn::creation_options(&web.rp, challenge, &handle, &email, &name, &exclude)
@@ -167,50 +156,39 @@ async fn add(
 	viewer: Viewer,
 	headers: HeaderMap,
 	Json(proof): Json<Proof>,
-) -> Response {
-	let key = match registered(&web, &proof, &Purpose::Add(viewer.user)) {
-		Ok(key) => key,
-		Err((status, message)) => return fail(status, message),
-	};
-	match web
-		.app
+) -> Reply {
+	let key = registered(&web, &proof, &Purpose::Add(viewer.user))?;
+	web.app
 		.add_passkey(viewer.user, &key, &device(&headers, "Passkey"))
-	{
-		Ok(()) => list(State(web), viewer).await,
-		Err(_) => fail(StatusCode::CONFLICT, "This passkey is already saved."),
-	}
+		.map_err(|_| Error::conflict("This passkey is already saved."))?;
+	list(State(web), viewer).await
 }
 
-async fn list(State(web): State<Arc<Web>>, viewer: Viewer) -> Response {
-	match web.app.passkeys(viewer.user) {
-		Ok(passkeys) => Json(json!({ "passkeys": passkeys })).into_response(),
-		Err(err) => internal(err),
-	}
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	Ok(Json(json!({ "passkeys": web.app.passkeys(viewer.user)? })))
 }
 
-async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Response {
-	let Ok(id) = B64.decode(&id) else {
-		return fail(StatusCode::NOT_FOUND, "Passkey not found.");
-	};
+async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Reply {
+	let id = B64
+		.decode(&id)
+		.map_err(|_| Error::not_found("Passkey not found."))?;
 	let last = web
 		.app
 		.passkey_ids(viewer.user)
 		.is_ok_and(|ids| ids.len() <= 1)
 		&& !web.app.has_password(viewer.user).unwrap_or(false);
 	if last {
-		return fail(
-			StatusCode::BAD_REQUEST,
+		return Err(Error::bad(
 			"Add another passkey before removing your last one.",
-		);
+		));
 	}
-	match web.app.remove_passkey(viewer.user, &id) {
-		Ok(true) => list(State(web), viewer).await,
-		Ok(false) => fail(StatusCode::NOT_FOUND, "Passkey not found."),
-		Err(err) => internal(err),
+	if !web.app.remove_passkey(viewer.user, &id)? {
+		return Err(Error::not_found("Passkey not found."));
 	}
+	list(State(web), viewer).await
 }
 
-async fn login_begin(State(web): State<Arc<Web>>) -> Response {
+async fn login_begin(State(web): State<Arc<Web>>) -> Reply {
 	ceremony(&web, Purpose::Login, |challenge| {
 		webauthn::request_options(&web.rp, challenge)
 	})
@@ -222,44 +200,35 @@ struct Login {
 	credential: Assertion,
 }
 
-async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Response {
+async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Reply<Response> {
 	let unknown = || {
-		fail(
+		Error::new(
 			StatusCode::UNAUTHORIZED,
 			"This passkey is not registered here.",
 		)
 	};
 	if web.take(&body.challenge) != Some(Purpose::Login) {
-		return fail(StatusCode::BAD_REQUEST, "This sign-in expired. Try again.");
+		return Err(Error::bad("This sign-in expired. Try again."));
 	}
-	let Some(id) = body.credential.credential() else {
-		return unknown();
-	};
-	let Ok(Some((user, key))) = web.app.passkey(&id) else {
-		return unknown();
-	};
-	match webauthn::verify(&web.rp, &body.challenge, &body.credential, &key) {
-		Ok(counter) => {
-			let _ = web.app.touch_passkey(&id, counter);
-			signed_in(&web, user, None)
-		}
-		Err(err) => {
+	let id = body.credential.credential().ok_or_else(unknown)?;
+	let (user, key) = web.app.passkey(&id)?.ok_or_else(unknown)?;
+	let counter =
+		webauthn::verify(&web.rp, &body.challenge, &body.credential, &key).map_err(|err| {
 			tracing::warn!(err, "passkey login");
-			fail(
+			Error::new(
 				StatusCode::UNAUTHORIZED,
 				"This passkey could not be verified.",
 			)
-		}
-	}
+		})?;
+	let _ = web.app.touch_passkey(&id, counter);
+	signed_in(&web, user, None)
 }
 
-fn ceremony(web: &Web, purpose: Purpose, options: impl FnOnce(&str) -> Value) -> Response {
-	match web.begin(purpose) {
-		Some(challenge) => {
-			Json(json!({ "challenge": challenge, "options": options(&challenge) })).into_response()
-		}
-		None => broken(),
-	}
+fn ceremony(web: &Web, purpose: Purpose, options: impl FnOnce(&str) -> Value) -> Reply {
+	let challenge = web.begin(purpose).ok_or_else(Error::broken)?;
+	Ok(Json(
+		json!({ "challenge": challenge, "options": options(&challenge) }),
+	))
 }
 
 impl App {

@@ -158,8 +158,8 @@ async fn destroy(State(web): State<Arc<Web>>, Path(domain): Path<String>, call: 
 		Err(fail) => return reply(Err(fail)),
 	};
 	reply(match drop_site(&web, site).await {
-		true => Ok(json!({ "deleted": true })),
-		false => Err(broken("drop site")),
+		Ok(()) => Ok(json!({ "deleted": true })),
+		Err(_) => Err(broken("drop site")),
 	})
 }
 
@@ -194,9 +194,10 @@ async fn add_goal(State(web): State<Arc<Web>>, call: Call) -> Response {
 				"page_path: must start with /".to_owned(),
 			));
 		}
-		let currency = match page {
-			true => String::new(),
-			false => call.param("currency").unwrap_or_default().to_uppercase(),
+		let currency = if page {
+			String::new()
+		} else {
+			call.param("currency").unwrap_or_default().to_uppercase()
 		};
 		let find = || -> Result<Option<Goal>, Fail> {
 			Ok(web
@@ -331,15 +332,14 @@ async fn share(State(web): State<Arc<Web>>, call: Call) -> Response {
 				.find(|link| link["name"] == name && link["slug"] != site.domain.as_str())
 				.and_then(|link| link["slug"].as_str().map(str::to_owned)))
 		};
-		let slug = match find()? {
-			Some(slug) => slug,
-			None => {
-				let slug = token().map_err(broken)?[..20].to_owned();
-				web.app
-					.add_share(site.id, &slug, name, "")
-					.map_err(broken)?;
-				slug
-			}
+		let slug = if let Some(slug) = find()? {
+			slug
+		} else {
+			let slug = token().map_err(broken)?[..20].to_owned();
+			web.app
+				.add_share(site.id, &slug, name, "")
+				.map_err(broken)?;
+			slug
 		};
 		Ok(json!({
 			"name": name,

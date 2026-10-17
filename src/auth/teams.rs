@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
@@ -14,7 +14,7 @@ use crate::auth::accounts::{Viewer, cookie, new_account, signed_in};
 use crate::auth::passkeys::{Proof, Purpose};
 use crate::mail::Letter;
 use crate::site;
-use crate::web::{Web, broken, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 pub const ROLES: &[&str] = &["owner", "admin", "editor", "viewer"];
 const INVITE_SECS: i64 = 7 * 86_400;
@@ -61,14 +61,11 @@ pub(crate) fn manager(web: &Web, user: i64, team: i64) -> bool {
 	matches!(role(web, user, team).as_deref(), Some("owner" | "admin"))
 }
 
-async fn show(State(web): State<Arc<Web>>, viewer: Viewer, Path(team): Path<i64>) -> Response {
+async fn show(State(web): State<Arc<Web>>, viewer: Viewer, Path(team): Path<i64>) -> Reply {
 	if role(&web, viewer.user, team).is_none() {
-		return fail(StatusCode::NOT_FOUND, "Team not found.");
+		return Err(Error::not_found("Team not found."));
 	}
-	match web.app.team(team, manager(&web, viewer.user, team)) {
-		Ok(team) => Json(team).into_response(),
-		Err(err) => internal(err),
-	}
+	Ok(Json(web.app.team(team, manager(&web, viewer.user, team))?))
 }
 
 async fn rename(
@@ -76,46 +73,36 @@ async fn rename(
 	viewer: Viewer,
 	Path(team): Path<i64>,
 	Json(body): Json<Name>,
-) -> Response {
+) -> Reply<StatusCode> {
 	let name = body.name.trim();
 	if !manager(&web, viewer.user, team) {
-		return fail(
-			StatusCode::FORBIDDEN,
+		return Err(Error::forbidden(
 			"Only owners and admins can rename the team.",
-		);
+		));
 	}
 	if name.is_empty() || name.len() > 80 {
-		return fail(StatusCode::BAD_REQUEST, "Give the team a name.");
+		return Err(Error::bad("Give the team a name."));
 	}
-	match web.app.rename_team(team, name) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.rename_team(team, name)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn destroy(State(web): State<Arc<Web>>, viewer: Viewer, Path(team): Path<i64>) -> Response {
+async fn destroy(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(team): Path<i64>,
+) -> Reply<StatusCode> {
 	if role(&web, viewer.user, team).as_deref() != Some("owner") {
-		return fail(StatusCode::FORBIDDEN, "Only the owner can delete the team.");
+		return Err(Error::forbidden("Only the owner can delete the team."));
 	}
 	if web.app.is_personal(team).unwrap_or(true) {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Your personal workspace can't be deleted.",
-		);
+		return Err(Error::bad("Your personal workspace can't be deleted."));
 	}
-	let sites = match web.app.team_sites(team) {
-		Ok(sites) => sites,
-		Err(err) => return internal(err),
-	};
-	for site in sites {
-		if !site::drop_site(&web, site).await {
-			return broken();
-		}
+	for site in web.app.team_sites(team)? {
+		site::drop_site(&web, site).await?;
 	}
-	match web.app.delete_team(team) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.delete_team(team)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn set_role(
@@ -123,19 +110,17 @@ async fn set_role(
 	viewer: Viewer,
 	Path((team, user)): Path<(i64, i64)>,
 	Json(body): Json<Role>,
-) -> Response {
+) -> Reply<StatusCode> {
 	let current = role(&web, user, team);
 	if !manager(&web, viewer.user, team) || current.is_none() || current.as_deref() == Some("owner")
 	{
-		return fail(StatusCode::FORBIDDEN, "You can't change this role.");
+		return Err(Error::forbidden("You can't change this role."));
 	}
 	if !ROLES[1..].contains(&body.role.as_str()) {
-		return fail(StatusCode::BAD_REQUEST, "Pick admin, editor or viewer.");
+		return Err(Error::bad("Pick admin, editor or viewer."));
 	}
-	match web.app.set_role(team, user, &body.role) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.set_role(team, user, &body.role)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn transfer(
@@ -143,47 +128,35 @@ async fn transfer(
 	viewer: Viewer,
 	Path(team): Path<i64>,
 	Json(body): Json<Owner>,
-) -> Response {
+) -> Reply<StatusCode> {
 	if role(&web, viewer.user, team).as_deref() != Some("owner")
 		|| role(&web, body.user, team).is_none()
 		|| body.user == viewer.user
 	{
-		return fail(
-			StatusCode::FORBIDDEN,
+		return Err(Error::forbidden(
 			"Only the owner can hand over the team to a member.",
-		);
+		));
 	}
 	if web.app.is_personal(team).unwrap_or(true) {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"Your personal workspace stays yours.",
-		);
+		return Err(Error::bad("Your personal workspace stays yours."));
 	}
-	let swapped = web
-		.app
-		.set_role(team, body.user, "owner")
-		.and_then(|()| web.app.set_role(team, viewer.user, "admin"));
-	match swapped {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.set_role(team, body.user, "owner")?;
+	web.app.set_role(team, viewer.user, "admin")?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn revoke(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((team, id)): Path<(i64, i64)>,
-) -> Response {
+) -> Reply<StatusCode> {
 	if !manager(&web, viewer.user, team) {
-		return fail(
-			StatusCode::FORBIDDEN,
+		return Err(Error::forbidden(
 			"Only owners and admins can revoke invites.",
-		);
+		));
 	}
-	match web.app.revoke_invite(team, id) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.revoke_invite(team, id)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 impl App {
@@ -209,22 +182,22 @@ impl App {
 				}))
 			})?
 			.collect::<rusqlite::Result<Vec<_>>>()?;
-		let invites = match invites {
-			true => conn
-				.prepare(
-					"select rowid, email, role, expires_at from invites
-					where team = ?1 and site is null and expires_at > unixepoch() order by rowid",
-				)?
-				.query_map([team], |row| {
-					Ok(json!({
-						"id": row.get::<_, i64>(0)?,
-						"email": row.get::<_, String>(1)?,
-						"role": row.get::<_, String>(2)?,
-						"expires": row.get::<_, i64>(3)?,
-					}))
-				})?
-				.collect::<rusqlite::Result<Vec<_>>>()?,
-			false => Vec::new(),
+		let invites = if invites {
+			conn.prepare(
+				"select rowid, email, role, expires_at from invites
+  					where team = ?1 and site is null and expires_at > unixepoch() order by rowid",
+			)?
+			.query_map([team], |row| {
+				Ok(json!({
+					"id": row.get::<_, i64>(0)?,
+					"email": row.get::<_, String>(1)?,
+					"role": row.get::<_, String>(2)?,
+					"expires": row.get::<_, i64>(3)?,
+				}))
+			})?
+			.collect::<rusqlite::Result<Vec<_>>>()?
+		} else {
+			Vec::new()
 		};
 		Ok(
 			json!({ "id": team, "name": name, "personal": personal, "members": members, "invites": invites }),
@@ -286,15 +259,13 @@ async fn create_team(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Json(body): Json<NewTeam>,
-) -> Response {
+) -> Reply {
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 80 {
-		return fail(StatusCode::BAD_REQUEST, "Give the team a name.");
+		return Err(Error::bad("Give the team a name."));
 	}
-	match web.app.create_team(viewer.user, name, false) {
-		Ok(team) => Json(json!({ "id": team })).into_response(),
-		Err(err) => internal(err),
-	}
+	let team = web.app.create_team(viewer.user, name, false)?;
+	Ok(Json(json!({ "id": team })))
 }
 
 #[derive(Deserialize)]
@@ -308,31 +279,24 @@ async fn invite(
 	viewer: Viewer,
 	Path(team): Path<i64>,
 	Json(body): Json<Invite>,
-) -> Response {
+) -> Reply {
 	if !manager(&web, viewer.user, team) {
-		return fail(StatusCode::FORBIDDEN, "Only owners and admins can invite.");
+		return Err(Error::forbidden("Only owners and admins can invite."));
 	}
 	if web.app.is_personal(team).unwrap_or(true) {
-		return fail(StatusCode::BAD_REQUEST, "Create a team to invite people.");
+		return Err(Error::bad("Create a team to invite people."));
 	}
 	if !ROLES[1..].contains(&body.role.as_str()) || !body.email.contains('@') {
-		return fail(StatusCode::BAD_REQUEST, "Use a valid email and role.");
+		return Err(Error::bad("Use a valid email and role."));
 	}
-	let (token, team_name) = match (
-		web.app.invite(team, None, &body.email, &body.role),
-		web.app.team_name(team),
-	) {
-		(Ok(token), Ok(team)) => (token, team),
-		(Err(err), _) | (_, Err(err)) => return internal(err),
-	};
-	send_invite(&web, viewer.user, &team_name, &body.email, &token).await
+	let token = web.app.invite(team, None, &body.email, &body.role)?;
+	let name = web.app.team_name(team)?;
+	send_invite(&web, viewer.user, &name, &body.email, &token).await
 }
 
-pub async fn send_invite(web: &Web, user: i64, place: &str, email: &str, token: &str) -> Response {
-	match mail_invite(web, user, place, email, token).await {
-		Ok((link, sent)) => Json(json!({ "link": link, "sent": sent })).into_response(),
-		Err(err) => internal(err),
-	}
+pub async fn send_invite(web: &Web, user: i64, place: &str, email: &str, token: &str) -> Reply {
+	let (link, sent) = mail_invite(web, user, place, email, token).await?;
+	Ok(Json(json!({ "link": link, "sent": sent })))
 }
 
 pub async fn mail_invite(
@@ -380,61 +344,51 @@ struct Accept {
 	passkey: Option<Proof>,
 }
 
-async fn invitation(State(web): State<Arc<Web>>, Path(token): Path<String>) -> Response {
-	match web.app.open_invite(&token) {
-		Ok(Some(invite)) => {
-			Json(json!({ "place": invite.place, "email": invite.email })).into_response()
-		}
-		Ok(None) => fail(
-			StatusCode::NOT_FOUND,
-			"This invite expired or was already used.",
-		),
-		Err(err) => internal(err),
-	}
+async fn invitation(State(web): State<Arc<Web>>, Path(token): Path<String>) -> Reply {
+	let invite = web
+		.app
+		.open_invite(&token)?
+		.ok_or_else(|| Error::not_found(EXPIRED))?;
+	Ok(Json(
+		json!({ "place": invite.place, "email": invite.email }),
+	))
 }
+
+const EXPIRED: &str = "This invite expired or was already used.";
 
 async fn accept(
 	State(web): State<Arc<Web>>,
 	headers: HeaderMap,
 	Json(body): Json<Accept>,
-) -> Response {
-	let Ok(Some(Invitation {
+) -> Reply<Response> {
+	let Invitation {
 		team,
 		site,
 		email,
 		role,
 		..
-	})) = web.app.open_invite(&body.token)
-	else {
-		return fail(
-			StatusCode::NOT_FOUND,
-			"This invite expired or was already used.",
-		);
-	};
+	} = web.app
+		.open_invite(&body.token)?
+		.ok_or_else(|| Error::not_found(EXPIRED))?;
 	let signed = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let user = match (signed, &body.name) {
 		(Some(user), _) => user,
-		(None, Some(name)) => match new_account(
+		(None, Some(name)) => new_account(
 			&web,
 			&headers,
 			(name, &email),
 			body.password.as_deref(),
 			body.passkey.as_ref(),
 			&Purpose::Invite(body.token.clone()),
-		) {
-			Ok(user) => user,
-			Err((status, message)) => return fail(status, message),
-		},
+		)?,
 		_ => {
-			return fail(
+			return Err(Error::new(
 				StatusCode::UNAUTHORIZED,
 				"Sign in or create an account to join.",
-			);
+			));
 		}
 	};
-	if let Err(err) = web.app.join(team, site, user, &role, &body.token) {
-		return internal(err);
-	}
+	web.app.join(team, site, user, &role, &body.token)?;
 	signed_in(&web, user, Some(site.map_or(team, |_| 0)))
 }
 
@@ -442,15 +396,13 @@ async fn remove_member(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((team, user)): Path<(i64, i64)>,
-) -> Response {
+) -> Reply<StatusCode> {
 	let allowed = viewer.user == user || manager(&web, viewer.user, team);
-	if !allowed || web.app.role(user, team).ok().flatten().as_deref() == Some("owner") {
-		return fail(StatusCode::FORBIDDEN, "You can't remove this member.");
+	if !allowed || role(&web, user, team).as_deref() == Some("owner") {
+		return Err(Error::forbidden("You can't remove this member."));
 	}
-	match web.app.remove_member(team, user) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.remove_member(team, user)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 pub struct Invitation {

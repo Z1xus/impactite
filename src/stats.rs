@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use crate::app::{App, Site};
 use crate::site::goals::Goal;
 use crate::site::shares::Reader;
-use crate::web::{Web, fail};
+use crate::web::{Error, Reply, Web};
 
 pub struct Stats {
 	pub db: Arc<Db>,
@@ -168,15 +168,12 @@ pub(crate) fn unauthorized() -> Response {
 	)
 }
 
-pub async fn dashboard(State(web): State<Arc<Web>>, reader: Reader, body: Json<Value>) -> Response {
+pub async fn dashboard(State(web): State<Arc<Web>>, reader: Reader, body: Json<Value>) -> Reply {
 	let domain = body.0["site_id"].as_str().unwrap_or_default();
 	if !reader.reads(&web, domain) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
+		return Err(Error::not_found("Site not found."));
 	}
-	match run(&web.stats, body.0) {
-		Ok(value) => Json(value).into_response(),
-		Err(message) => fail(StatusCode::BAD_REQUEST, &message),
-	}
+	Ok(Json(run(&web.stats, body.0).map_err(Error::bad)?))
 }
 
 #[derive(Deserialize)]
@@ -189,23 +186,22 @@ pub async fn props(
 	State(web): State<Arc<Web>>,
 	reader: Reader,
 	Json(body): Json<PropsRequest>,
-) -> Response {
+) -> Reply {
 	if !reader.reads(&web, &body.site_id) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
+		return Err(Error::not_found("Site not found."));
 	}
-	let keys = period(&web.stats, &body.site_id, &body.date_range, false).and_then(|period| {
-		web.stats
-			.db
-			.prop_keys(
-				period.site.id,
-				day_number(period.from)..=day_number(period.to),
-			)
-			.map_err(|err| err.to_string())
-	});
-	match keys {
-		Ok(keys) => Json(json!(keys.iter().map(|key| &**key).collect::<Vec<_>>())).into_response(),
-		Err(message) => fail(StatusCode::BAD_REQUEST, &message),
-	}
+	let period = period(&web.stats, &body.site_id, &body.date_range, false).map_err(Error::bad)?;
+	let keys = web
+		.stats
+		.db
+		.prop_keys(
+			period.site.id,
+			day_number(period.from)..=day_number(period.to),
+		)
+		.map_err(|err| Error::bad(err.to_string()))?;
+	Ok(Json(json!(
+		keys.iter().map(|key| &**key).collect::<Vec<_>>()
+	)))
 }
 
 pub(crate) struct Period {
@@ -351,17 +347,19 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 	let grouping = grouping(&request.dimensions)?;
 	check_grouping(&grouping, from == to, realtime)?;
 
-	let goals = match others.is_empty() {
-		true => stats.app.goals(site.id).map_err(|err| err.to_string())?,
-		false => Vec::new(),
+	let goals = if others.is_empty() {
+		stats.app.goals(site.id).map_err(|err| err.to_string())?
+	} else {
+		Vec::new()
 	};
 	let mut base_filters = Vec::new();
 	let mut goal_filters = Vec::new();
 	for raw in &request.filters {
 		for (filter, from_goal) in filters(raw, &goals)? {
-			match from_goal {
-				true => goal_filters.push(filter),
-				false => base_filters.push(filter),
+			if from_goal {
+				goal_filters.push(filter)
+			} else {
+				base_filters.push(filter)
 			}
 		}
 	}
@@ -411,9 +409,10 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 				_ => (None, false),
 			};
 			let report = scan.run(filtered(), field, daily)?;
-			let base = match goal_filters.is_empty() {
-				true => report.total.visitors,
-				false => scan.run(base_filters.clone(), None, false)?.total.visitors,
+			let base = if goal_filters.is_empty() {
+				report.total.visitors
+			} else {
+				scan.run(base_filters.clone(), None, false)?.total.visitors
 			};
 			let rows = match grouping {
 				// reports keep hours for one day, so longer ranges ask day by day
@@ -494,12 +493,13 @@ fn windows(
 		.build()
 		.map_err(|err| err.to_string())?;
 	let since = start.time().hour() as u32 * 3600 + start.time().minute() as u32 * 60;
-	let windows = match start.date() == now.date() {
-		true => vec![(first..=first, Some(since))],
-		false => vec![
+	let windows = if start.date() == now.date() {
+		vec![(first..=first, Some(since))]
+	} else {
+		vec![
 			(first - 1..=first - 1, Some(since)),
 			(first..=first, Some(0)),
-		],
+		]
 	};
 	Ok((windows, Some(start)))
 }
@@ -535,9 +535,10 @@ fn sort(rows: &mut [Row], request: &Request, grouping: &Grouping, metrics: &[Met
 	};
 	match request.order_by.first() {
 		Some((name, direction)) => {
-			let by_metric = match request.dimensions.iter().any(|dim| dim == name) {
-				true => None,
-				false => request.metrics.iter().position(|metric| metric == name),
+			let by_metric = if request.dimensions.iter().any(|dim| dim == name) {
+				None
+			} else {
+				request.metrics.iter().position(|metric| metric == name)
 			};
 			rows.sort_by(|a, b| {
 				let ordering = match by_metric {
@@ -731,9 +732,10 @@ fn label<'a>(field: &Field, value: &'a str) -> &'a str {
 }
 
 fn unlabel(field: &Field, value: String) -> String {
-	match label(field, "") == value {
-		true => String::new(),
-		false => value,
+	if label(field, "") == value {
+		String::new()
+	} else {
+		value
 	}
 }
 
@@ -982,17 +984,11 @@ fn date_range(raw: &Value, today: Date, created: Date, trim: bool) -> Result<(Da
 			"day" => (today, today),
 			"month" => (
 				today.first_of_month(),
-				match trim {
-					true => today,
-					false => today.last_of_month(),
-				},
+				if trim { today } else { today.last_of_month() },
 			),
 			"year" => (
 				today.first_of_year(),
-				match trim {
-					true => today,
-					false => today.last_of_year(),
-				},
+				if trim { today } else { today.last_of_year() },
 			),
 			"all" => (created.min(today), today),
 			name => {
@@ -1010,9 +1006,10 @@ fn date_range(raw: &Value, today: Date, created: Date, trim: bool) -> Result<(Da
 		},
 		_ => return Err(invalid()),
 	};
-	match range.0 <= range.1 {
-		true => Ok(range),
-		false => Err(invalid()),
+	if range.0 <= range.1 {
+		Ok(range)
+	} else {
+		Err(invalid())
 	}
 }
 

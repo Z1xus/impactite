@@ -16,7 +16,7 @@ use crate::auth::accounts::Viewer;
 use crate::auth::passkeys::Purpose;
 use crate::site::shares::Reader;
 use crate::stats::period;
-use crate::web::{Web, broken, fail, internal};
+use crate::web::{Error, Reply, Web};
 
 const SCOPE: &str = "https://www.googleapis.com/auth/webmasters.readonly";
 const TOKEN: &str = "https://oauth2.googleapis.com/token";
@@ -77,54 +77,42 @@ fn redirect_uri(web: &Web) -> String {
 	format!("{}/api/app/google/callback", web.url.trim_end_matches('/'))
 }
 
-async fn show(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	let link = match web.app.google(site.id) {
-		Ok(link) => link,
-		Err(err) => return internal(err),
-	};
+async fn show(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
+	let link = web.app.google(site.id)?;
 	let properties = match &link {
-		Some(_) => match properties(&web, site.id).await {
-			Ok(properties) => properties,
-			Err(err) => {
-				tracing::warn!(%err, "search console sites");
-				Vec::new()
-			}
-		},
+		Some(_) => properties(&web, site.id).await.unwrap_or_else(|err| {
+			tracing::warn!(%err, "search console sites");
+			Vec::new()
+		}),
 		None => Vec::new(),
 	};
-	Json(json!({
+	Ok(Json(json!({
 		"configured": web.google.is_some(),
 		"redirect": redirect_uri(&web),
 		"connected": link.is_some(),
 		"property": link.map(|(_, property)| property).unwrap_or_default(),
 		"properties": properties,
-	}))
-	.into_response()
+	})))
 }
 
 async fn connect(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
+) -> Reply<Response> {
 	let (Some(site), Some(client)) = (web.app.editable(viewer.user, &domain), &web.google) else {
-		return fail(
-			StatusCode::FORBIDDEN,
+		return Err(Error::forbidden(
 			"Search Console is not set up for this site.",
-		);
+		));
 	};
 	consent(&web, client, Purpose::Google(site.id))
 }
 
 // search console keeps a refresh token, analytics imports only need an hour
-fn consent(web: &Web, client: &Client, purpose: Purpose) -> Response {
+fn consent(web: &Web, client: &Client, purpose: Purpose) -> Reply<Response> {
 	let offline = matches!(purpose, Purpose::Google(_));
-	let Some(state) = web.begin(purpose) else {
-		return broken();
-	};
+	let state = web.begin(purpose).ok_or_else(Error::broken)?;
 	let mut query = url::form_urlencoded::Serializer::new(String::new());
 	query
 		.append_pair("client_id", &client.id)
@@ -136,11 +124,11 @@ fn consent(web: &Web, client: &Client, purpose: Purpose) -> Response {
 	if offline {
 		query.append_pair("access_type", "offline");
 	}
-	Redirect::to(&format!(
+	Ok(Redirect::to(&format!(
 		"https://accounts.google.com/o/oauth2/v2/auth?{}",
 		query.finish()
 	))
-	.into_response()
+	.into_response())
 }
 
 async fn exchange(web: &Web, client: &Client, code: &str) -> Option<Value> {
@@ -173,29 +161,28 @@ fn keep(cache: &Mutex<HashMap<u64, (String, i64)>>, site: u64, body: &Value) {
 	}
 }
 
-async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) -> Response {
+async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) -> Reply<Response> {
 	let site = match web.take(&query.state) {
 		Some(Purpose::Google(site)) => site,
 		Some(Purpose::Analytics(site)) => return analytics_callback(&web, site, query).await,
-		_ => return fail(StatusCode::BAD_REQUEST, "This link expired. Connect again."),
+		_ => return Err(Error::bad("This link expired. Connect again.")),
 	};
-	let Ok(Some(domain)) = web.app.site_domain(site) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
+	let domain = web
+		.app
+		.site_domain(site)?
+		.ok_or_else(|| Error::not_found("Site not found."))?;
 	let back = format!("/{domain}/settings/search-console");
 	let failed = format!("/{domain}/settings/search-console?google=failed");
 	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
-		return Redirect::to(&back).into_response();
+		return Ok(Redirect::to(&back).into_response());
 	};
 	let body = exchange(&web, client, &code).await.unwrap_or_default();
 	let Some(refresh) = body["refresh_token"].as_str() else {
-		return Redirect::to(&failed).into_response();
+		return Ok(Redirect::to(&failed).into_response());
 	};
 	keep(&ACCESS, site, &body);
-	match web.app.link_google(site, refresh) {
-		Ok(()) => Redirect::to(&back).into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.link_google(site, refresh)?;
+	Ok(Redirect::to(&back).into_response())
 }
 
 async fn choose(
@@ -203,25 +190,19 @@ async fn choose(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Choice>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	match web.app.set_google_property(site.id, &body.property) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+) -> Reply<StatusCode> {
+	let site = web.editable(viewer.user, &domain)?;
+	web.app.set_google_property(site.id, &body.property)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn disconnect(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	if let Ok(Some((refresh, _))) = web.app.google(site.id) {
+) -> Reply<StatusCode> {
+	let site = web.editable(viewer.user, &domain)?;
+	if let Some((refresh, _)) = web.app.google(site.id)? {
 		// revoking is best effort, the link goes away either way
 		let _ = web
 			.http
@@ -231,24 +212,18 @@ async fn disconnect(
 			.await;
 	}
 	lock(&ACCESS).remove(&site.id);
-	match web.app.unlink_google(site.id) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
+	web.app.unlink_google(site.id)?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn keywords(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<Ask>) -> Response {
+async fn keywords(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<Ask>) -> Reply {
 	if !reader.reads(&web, &body.site_id) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
+		return Err(Error::not_found("Site not found."));
 	}
-	let range = match period(&web.stats, &body.site_id, &body.date_range, true) {
-		Ok(range) => range,
-		Err(message) => return fail(StatusCode::BAD_REQUEST, &message),
-	};
-	let property = match web.app.google(range.site.id) {
-		Ok(Some((_, property))) if !property.is_empty() => property,
-		Ok(_) => return fail(StatusCode::NOT_FOUND, "Search Console is not connected."),
-		Err(err) => return internal(err),
+	let range = period(&web.stats, &body.site_id, &body.date_range, true).map_err(Error::bad)?;
+	let property = match web.app.google(range.site.id)? {
+		Some((_, property)) if !property.is_empty() => property,
+		_ => return Err(Error::not_found("Search Console is not connected.")),
 	};
 	let mut query = json!({
 		"startDate": range.from.to_string(),
@@ -266,26 +241,23 @@ async fn keywords(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<
 		}] }]);
 	}
 	let url = format!("{API}/{}/searchAnalytics/query", urlencode(&property));
-	match google(&web, range.site.id, |http, token| {
+	let result = google(&web, range.site.id, |http, token| {
 		http.post(&url).bearer_auth(token).json(&query)
 	})
 	.await
-	{
-		Ok(result) => Json(json!({
-			"keywords": result["rows"].as_array().into_iter().flatten().map(|row| json!({
-				"name": row["keys"][0],
-				"visitors": row["clicks"],
-				"impressions": row["impressions"],
-				"ctr": row["ctr"],
-				"position": row["position"],
-			})).collect::<Vec<_>>()
-		}))
-		.into_response(),
-		Err(err) => {
-			tracing::warn!(%err, "search console query");
-			fail(StatusCode::BAD_GATEWAY, "Search Console did not answer.")
-		}
-	}
+	.map_err(|err| {
+		tracing::warn!(%err, "search console query");
+		Error::new(StatusCode::BAD_GATEWAY, "Search Console did not answer.")
+	})?;
+	Ok(Json(json!({
+		"keywords": result["rows"].as_array().into_iter().flatten().map(|row| json!({
+			"name": row["keys"][0],
+			"visitors": row["clicks"],
+			"impressions": row["impressions"],
+			"ctr": row["ctr"],
+			"position": row["position"],
+		})).collect::<Vec<_>>()
+	})))
 }
 
 fn urlencode(text: &str) -> String {
@@ -312,39 +284,38 @@ async fn google(
 		.get(&site)
 		.filter(|(_, expires)| *expires > now())
 		.map(|(token, _)| token.clone());
-	let token = match cached {
-		Some(token) => token,
-		None => {
-			let client = web
-				.google
-				.as_ref()
-				.ok_or_else(|| anyhow::anyhow!("not configured"))?;
-			let (refresh, _) = web
-				.app
-				.google(site)?
-				.ok_or_else(|| anyhow::anyhow!("not connected"))?;
-			let body: Value = web
-				.http
-				.post(TOKEN)
-				.form(&[
-					("client_id", client.id.as_str()),
-					("client_secret", &client.secret),
-					("refresh_token", &refresh),
-					("grant_type", "refresh_token"),
-				])
-				.send()
-				.await?
-				.error_for_status()?
-				.json()
-				.await?;
-			let token = body["access_token"]
-				.as_str()
-				.ok_or_else(|| anyhow::anyhow!("no access token"))?
-				.to_owned();
-			let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
-			lock(&ACCESS).insert(site, (token.clone(), expires));
-			token
-		}
+	let token = if let Some(token) = cached {
+		token
+	} else {
+		let client = web
+			.google
+			.as_ref()
+			.ok_or_else(|| anyhow::anyhow!("not configured"))?;
+		let (refresh, _) = web
+			.app
+			.google(site)?
+			.ok_or_else(|| anyhow::anyhow!("not connected"))?;
+		let body: Value = web
+			.http
+			.post(TOKEN)
+			.form(&[
+				("client_id", client.id.as_str()),
+				("client_secret", &client.secret),
+				("refresh_token", &refresh),
+				("grant_type", "refresh_token"),
+			])
+			.send()
+			.await?
+			.error_for_status()?
+			.json()
+			.await?;
+		let token = body["access_token"]
+			.as_str()
+			.ok_or_else(|| anyhow::anyhow!("no access token"))?
+			.to_owned();
+		let expires = now() + body["expires_in"].as_i64().unwrap_or(0) - 60;
+		lock(&ACCESS).insert(site, (token.clone(), expires));
+		token
 	};
 	Ok(request(&web.http, &token)
 		.send()
@@ -415,38 +386,33 @@ async fn connect_analytics(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
+) -> Reply<Response> {
 	let (Some(site), Some(client)) = (web.app.editable(viewer.user, &domain), &web.google) else {
-		return fail(
-			StatusCode::FORBIDDEN,
-			"Google is not set up on this server.",
-		);
+		return Err(Error::forbidden("Google is not set up on this server."));
 	};
 	consent(&web, client, Purpose::Analytics(site.id))
 }
 
-async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Response {
-	let Ok(Some(domain)) = web.app.site_domain(site) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
+async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Reply<Response> {
+	let domain = web
+		.app
+		.site_domain(site)?
+		.ok_or_else(|| Error::not_found("Site not found."))?;
 	let back = format!("/{domain}/settings/imports");
-	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
-		return Redirect::to(&back).into_response();
-	};
-	if let Some(body) = exchange(web, client, &code).await {
+	if let (Some(code), None, Some(client)) = (query.code, query.error, &web.google)
+		&& let Some(body) = exchange(web, client, &code).await
+	{
 		keep(&ANALYTICS_ACCESS, site, &body);
 	}
-	Redirect::to(&back).into_response()
+	Ok(Redirect::to(&back).into_response())
 }
 
 async fn analytics(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path(domain): Path<String>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
+) -> Reply {
+	let site = web.editable(viewer.user, &domain)?;
 	let status = lock(&IMPORTS).get(&site.id).cloned();
 	let mut properties = Vec::new();
 	if let Some(token) = token(site.id) {
@@ -481,14 +447,13 @@ async fn analytics(
 			}
 		}
 	}
-	Json(json!({
+	Ok(Json(json!({
 		"available": web.google.is_some(),
 		"connected": token(site.id).is_some(),
 		"properties": properties,
 		"importing": matches!(status, Some(None)),
 		"error": status.flatten(),
-	}))
-	.into_response()
+	})))
 }
 
 async fn start_import(
@@ -496,23 +461,17 @@ async fn start_import(
 	viewer: Viewer,
 	Path(domain): Path<String>,
 	Json(body): Json<Property>,
-) -> Response {
-	let Some(site) = web.app.editable(viewer.user, &domain) else {
-		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
-	};
-	let Some(token) = token(site.id) else {
-		return fail(
-			StatusCode::BAD_REQUEST,
-			"The Google sign-in expired. Connect again.",
-		);
-	};
+) -> Reply<StatusCode> {
+	let site = web.editable(viewer.user, &domain)?;
+	let token =
+		token(site.id).ok_or_else(|| Error::bad("The Google sign-in expired. Connect again."))?;
 	if !body.property.starts_with("properties/") {
-		return fail(StatusCode::BAD_REQUEST, "Pick a property.");
+		return Err(Error::bad("Pick a property."));
 	}
 	{
 		let mut imports = lock(&IMPORTS);
 		if matches!(imports.get(&site.id), Some(None)) {
-			return fail(StatusCode::CONFLICT, "An import is already running.");
+			return Err(Error::conflict("An import is already running."));
 		}
 		imports.insert(site.id, None);
 	}
@@ -551,5 +510,5 @@ async fn start_import(
 			None => imports.remove(&site.id),
 		};
 	});
-	StatusCode::ACCEPTED.into_response()
+	Ok(StatusCode::ACCEPTED)
 }

@@ -78,9 +78,10 @@ pub(crate) fn read_file(path: &Path, magic: &[u8], frames: usize) -> io::Result<
 
 fn check_magic(reader: &mut impl Read, magic: &[u8]) -> io::Result<()> {
 	let mut head = vec![0; magic.len()];
-	match read_full(reader, &mut head)? && head == magic {
-		true => Ok(()),
-		false => Err(invalid("unknown file format")),
+	if read_full(reader, &mut head)? && head == magic {
+		Ok(())
+	} else {
+		Err(invalid("unknown file format"))
 	}
 }
 
