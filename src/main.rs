@@ -46,6 +46,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
+use axum::extract::connect_info::IntoMakeServiceWithConnectInfo;
 use axum_server::tls_rustls::RustlsConfig;
 use clap::{Args, Parser, Subcommand};
 use crater::Db;
@@ -240,20 +241,7 @@ async fn main() -> anyhow::Result<()> {
 		Command::Serve(serve_args) => serve(app, mail, &cli.data, *serve_args).await,
 		Command::Mail {
 			command: MailCommand::Test { to },
-		} => {
-			let lines = ["impactite can send mail from this server.".to_owned()];
-			let letter = mail::Letter {
-				base: "",
-				title: "Mail works",
-				lines: &lines,
-				table: None,
-				button: None,
-			};
-			mail.send(&to, "impactite test mail", &letter.text(), &letter.html())
-				.await?;
-			println!("sent to {to}");
-			Ok(())
-		}
+		} => mail_test(&mail, &to).await,
 		Command::Site {
 			command: SiteCommand::Add { domain, timezone },
 		} => {
@@ -267,57 +255,7 @@ async fn main() -> anyhow::Result<()> {
 			println!("{}  {}  {}", site.id, site.domain, site.timezone);
 			Ok(())
 		}
-		Command::Import { source } => {
-			let (domain, timezone) = match &source {
-				ImportSource::Plausible { site, timezone, .. }
-				| ImportSource::Goatcounter { site, timezone, .. }
-				| ImportSource::Impactite { site, timezone, .. }
-				| ImportSource::Umami { site, timezone, .. } => (site, timezone),
-			};
-			let db = open_events(&cli.data, ", or import from the site settings")?;
-			let site = find_or_create(&app, domain, timezone)?;
-			let started = std::time::Instant::now();
-			let (count, unit) = match source {
-				ImportSource::Plausible {
-					source,
-					plausible_site_id,
-					..
-				} if source.starts_with("http") => {
-					let id = plausible_site_id
-						.context("--plausible-site-id is needed for clickhouse")?;
-					let (count, first) =
-						import::clickhouse::import(&db, &site, &source, id).await?;
-					if let Some(first) = first {
-						app.backdate(site.id, first)?;
-					}
-					(count, "events")
-				}
-				ImportSource::Plausible { source, .. } => (
-					import::plausible_zip(&db, &app, &site, Path::new(&source))?,
-					"days",
-				),
-				ImportSource::Goatcounter { file, .. } => {
-					(import::goatcounter_csv(&db, &app, &site, &file)?, "events")
-				}
-				ImportSource::Impactite { file, .. } => {
-					(import::native_zip(&db, &app, &site, &file)?, "events")
-				}
-				ImportSource::Umami { file, .. } => {
-					(import::umami_csv(&db, &app, &site, &file)?, "events")
-				}
-			};
-			db.sync()?;
-			db.close()?;
-			cli::say(
-				'+',
-				&format!(
-					"{count} {unit}  |  {}  |  {:.1?}",
-					site.domain,
-					started.elapsed()
-				),
-			);
-			Ok(())
-		}
+		Command::Import { source } => import(&app, &cli.data, source).await,
 		Command::Demo {
 			domain,
 			days,
@@ -457,6 +395,92 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		server::router(ingest, stats, web).into_make_service_with_connect_info::<SocketAddr>();
 	tracing::info!(listen = %listen, %url, "listening");
 
+	bind(&args, listen, &url, data, handle, service).await?;
+
+	sweeper.abort();
+	let _ = sweeper.await;
+	if let Some(checker) = checker {
+		checker.abort();
+	}
+	if let Some(task) = geo_task {
+		task.abort();
+		let _ = task.await;
+	}
+	db.close().context("close event store")?;
+	Ok(())
+}
+
+async fn import(app: &App, data: &Path, source: ImportSource) -> anyhow::Result<()> {
+	let (domain, timezone) = match &source {
+		ImportSource::Plausible { site, timezone, .. }
+		| ImportSource::Goatcounter { site, timezone, .. }
+		| ImportSource::Impactite { site, timezone, .. }
+		| ImportSource::Umami { site, timezone, .. } => (site, timezone),
+	};
+	let db = open_events(data, ", or import from the site settings")?;
+	let site = find_or_create(app, domain, timezone)?;
+	let started = std::time::Instant::now();
+	let (count, unit) = match source {
+		ImportSource::Plausible {
+			source,
+			plausible_site_id,
+			..
+		} if source.starts_with("http") => {
+			let id = plausible_site_id.context("--plausible-site-id is needed for clickhouse")?;
+			let (count, first) = import::clickhouse::import(&db, &site, &source, id).await?;
+			if let Some(first) = first {
+				app.backdate(site.id, first)?;
+			}
+			(count, "events")
+		}
+		ImportSource::Plausible { source, .. } => (
+			import::plausible_zip(&db, app, &site, Path::new(&source))?,
+			"days",
+		),
+		ImportSource::Goatcounter { file, .. } => {
+			(import::goatcounter_csv(&db, app, &site, &file)?, "events")
+		}
+		ImportSource::Impactite { file, .. } => {
+			(import::native_zip(&db, app, &site, &file)?, "events")
+		}
+		ImportSource::Umami { file, .. } => (import::umami_csv(&db, app, &site, &file)?, "events"),
+	};
+	db.sync()?;
+	db.close()?;
+	cli::say(
+		'+',
+		&format!(
+			"{count} {unit}  |  {}  |  {:.1?}",
+			site.domain,
+			started.elapsed()
+		),
+	);
+	Ok(())
+}
+
+async fn mail_test(mail: &Mail, to: &str) -> anyhow::Result<()> {
+	let lines = ["impactite can send mail from this server.".to_owned()];
+	let letter = mail::Letter {
+		base: "",
+		title: "Mail works",
+		lines: &lines,
+		table: None,
+		button: None,
+	};
+	mail.send(to, "impactite test mail", &letter.text(), &letter.html())
+		.await?;
+	println!("sent to {to}");
+	Ok(())
+}
+
+async fn bind(
+	args: &Serve,
+	listen: SocketAddr,
+	url: &str,
+	data: &Path,
+	handle: axum_server::Handle<SocketAddr>,
+	service: IntoMakeServiceWithConnectInfo<axum::Router, SocketAddr>,
+) -> anyhow::Result<()> {
 	if let (Some(cert), Some(key)) = (&args.cert, &args.key) {
 		let config = RustlsConfig::from_pem_file(cert, key)
 			.await
@@ -477,7 +501,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			.serve(service)
 			.await?;
 	} else if args.acme {
-		let host = url::Url::parse(&url)?
+		let host = url::Url::parse(url)?
 			.host_str()
 			.context("--url has no host")?
 			.to_owned();
@@ -499,7 +523,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 				}
 			}
 		});
-		tokio::spawn(redirect(url.clone()));
+		tokio::spawn(redirect(url.to_owned()));
 		axum_server::bind(listen)
 			.acceptor(acceptor)
 			.handle(handle)
@@ -511,17 +535,6 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			.serve(service)
 			.await?;
 	}
-
-	sweeper.abort();
-	let _ = sweeper.await;
-	if let Some(checker) = checker {
-		checker.abort();
-	}
-	if let Some(task) = geo_task {
-		task.abort();
-		let _ = task.await;
-	}
-	db.close().context("close event store")?;
 	Ok(())
 }
 
