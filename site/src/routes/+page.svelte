@@ -31,7 +31,6 @@
 	import Scale from "../lib/Scale.svelte";
 	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
-	import { MediaQuery } from "svelte/reactivity";
 	import { impact } from "../lib/impact.ts";
 
 	let { data } = $props();
@@ -89,8 +88,7 @@
 		});
 	});
 	const compact = (value: number) => Math.round(value).toLocaleString("en-US");
-	// the preview wakes up when the meteor lands, so the built page and reduced motion start woken
-	let landed = $state(new MediaQuery("(prefers-reduced-motion: reduce)", true).current);
+	let landed = $state(false);
 	// the same six numbers, panels and tabs as the dashboard, filled with the demo site's month
 	const TOTALS = [9148, 10512, 21400, 54, 127, 2.04];
 	const PREVIOUS = [6629, 7729, 15620, 54, 130, 2.02];
@@ -220,6 +218,23 @@
 	<link rel="prefetch" href={DEMO} />
 </svelte:head>
 
+{#snippet kpis(awake: boolean)}
+	<Kpis
+		totals={awake ? TOTALS : TOTALS.map(() => 0)}
+		previous={awake ? PREVIOUS : null}
+		active={metric}
+		pick={(i) => (metric = i)}
+	/>
+{/snippet}
+
+{#snippet rows(side: "left" | "right", awake: boolean)}
+	<Rows
+		rows={rowsOf(side).map((row) => (awake ? row : { ...row, value: 0 }))}
+		format={compact}
+		limit={5}
+	/>
+{/snippet}
+
 <div id="top" class="mx-auto flex max-w-6xl flex-col px-6" {@attach appear}>
 	<header class="flex h-16 items-center justify-between">
 		<a href="#top" class="flex items-center gap-2 font-mono text-[15px]">
@@ -277,12 +292,8 @@
 			data-appear
 			style:--delay="120ms"
 		>
-			<Kpis
-				totals={landed ? TOTALS : TOTALS.map(() => 0)}
-				previous={landed ? PREVIOUS : null}
-				active={metric}
-				pick={(i) => (metric = i)}
-			/>
+			<div class="preview-animated">{@render kpis(landed)}</div>
+			<div class="preview-static">{@render kpis(true)}</div>
 			<div class="px-4 pt-3 pb-5" data-chart>
 				<Chart
 					values={shape(metric)}
@@ -295,11 +306,8 @@
 		<div class="mt-6 grid gap-6 md:grid-cols-2" data-appear style:--delay="240ms">
 			{#each ["left", "right"] as const as side (side)}
 				<Panel tabs={PANELS[side].tabs} bind:tab={tabs[side]}>
-					<Rows
-						rows={rowsOf(side).map((row) => (landed ? row : { ...row, value: 0 }))}
-						format={compact}
-						limit={5}
-					/>
+					<div class="preview-animated">{@render rows(side, landed)}</div>
+					<div class="preview-static">{@render rows(side, true)}</div>
 				</Panel>
 			{/each}
 		</div>

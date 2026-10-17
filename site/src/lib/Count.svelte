@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from "svelte";
 	import { Tween, prefersReducedMotion } from "svelte/motion";
 	import { cubicOut } from "svelte/easing";
 
@@ -10,11 +9,12 @@
 		delay = 0
 	}: { value: number; on: boolean; digits?: number; delay?: number } = $props();
 
-	// the built page carries the real number, the browser counts up to it once it scrolls in
-	const tween = new Tween(
-		untrack(() => value),
-		{ duration: 1400, easing: cubicOut }
-	);
+	const tween = new Tween(0, { duration: 1400, easing: cubicOut });
+	const format = (value: number) =>
+		value.toLocaleString("en-US", {
+			minimumFractionDigits: digits,
+			maximumFractionDigits: digits
+		});
 
 	$effect(() => {
 		const still = prefersReducedMotion.current;
@@ -22,9 +22,5 @@
 	});
 </script>
 
-<span class="num"
-	>{tween.current.toLocaleString("en-US", {
-		minimumFractionDigits: digits,
-		maximumFractionDigits: digits
-	})}</span
->
+<span class="preview-animated num">{format(tween.current)}</span>
+<span class="preview-static num">{format(value)}</span>

@@ -1,8 +1,18 @@
 @import "../../../web/src/routes/layout.css";
 @source "../../../web/src/lib";
 
+.preview-animated {
+	display: none;
+}
+
 /* set after start, so restoring the scroll on reload does not glide down from the top */
 @media (prefers-reduced-motion: no-preference) {
+	.js .preview-animated {
+		display: contents;
+	}
+	.js .preview-static {
+		display: none;
+	}
 	html.started {
 		scroll-behavior: smooth;
 	}
