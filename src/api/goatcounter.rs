@@ -331,7 +331,9 @@ async fn count(State(web): State<Arc<Web>>, call: Call) -> Response {
 			let client = Client {
 				ip,
 				ua,
-				country: (hit.location.len() >= 2).then(|| hit.location[..2].to_uppercase()),
+				country: Some(hit.location.chars().take(2).collect::<String>())
+					.filter(|code| code.chars().count() == 2)
+					.map(|code| code.to_uppercase()),
 				language: String::new(),
 			};
 			let query = hit.query.trim_start_matches('?');
