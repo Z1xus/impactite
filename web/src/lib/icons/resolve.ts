@@ -201,6 +201,7 @@ export const LETTERED = new Set([
 ]);
 
 export function icon(dim: string, value: string): Spec | null {
+	if (dim === "visit:referrer" && value === "(none)") return SOURCES["Direct / None"];
 	switch (dim) {
 		case "visit:source":
 		case "visit:utm_source":

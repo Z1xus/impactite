@@ -116,6 +116,7 @@ const countries = new Intl.DisplayNames(["en"], { type: "region" });
 const languages = new Intl.DisplayNames(["en"], { type: "language" });
 
 export function display(dim: string, value: string) {
+	if (dim === "visit:referrer" && value === "(none)") return "Direct / None";
 	if (dim === "visit:country" && /^[A-Z]{2}$/.test(value)) return countries.of(value) ?? value;
 	if (dim === "visit:language" && /^[a-z]{2,3}$/.test(value)) return languages.of(value) ?? value;
 	return value;
