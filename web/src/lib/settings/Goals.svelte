@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { collection } from "#lib/collection.svelte.ts";
-	import NewEvents from "#lib/settings/NewEvents.svelte";
+	import NewEvents from "./NewEvents.svelte";
 	import { attempt } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";

@@ -6,12 +6,15 @@
 		children,
 		variant = "primary",
 		busy = false,
+		href,
 		class: className = "",
 		...rest
 	}: HTMLButtonAttributes & {
 		children: Snippet;
 		variant?: "primary" | "quiet" | "danger" | "icon" | "plain" | "text";
 		busy?: boolean;
+		// a link that looks like the button
+		href?: string;
 	} = $props();
 
 	const variants = {
@@ -22,14 +25,16 @@
 		plain: "h-9 px-1 text-dim hover:text-fg",
 		text: "h-9 px-2 font-sans text-[14px] tracking-normal normal-case text-dim hover:bg-raised hover:text-fg"
 	};
+	const look = $derived(
+		`inline-flex items-center justify-center gap-2 rounded-px font-sans text-[14px] transition-colors duration-100 enabled:cursor-pointer disabled:cursor-default ${variants[variant]} ${busy ? "cursor-wait opacity-60" : ""} ${className}`
+	);
 </script>
 
-<button
-	{...rest}
-	disabled={busy || rest.disabled}
-	class="inline-flex items-center justify-center gap-2 rounded-px font-sans text-[14px] transition-colors duration-100 enabled:cursor-pointer disabled:cursor-default {variants[
-		variant
-	]} {busy ? 'cursor-wait opacity-60' : ''} {className}"
->
-	{@render children()}
-</button>
+{#if href}
+	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- callers pass resolved paths -->
+	<a {href} class={look}>{@render children()}</a>
+{:else}
+	<button {...rest} disabled={busy || rest.disabled} class={look}>
+		{@render children()}
+	</button>
+{/if}

@@ -78,13 +78,10 @@
 <Gate>
 	<div class="flex flex-col gap-3" bind:this={panel}>
 		{#if session.sso}
-			<!-- eslint-disable svelte/no-navigation-without-resolve -- a server redirect, not a page -->
-			<a
-				href="/api/app/sso"
-				class="flex h-9 w-full items-center justify-center rounded-px border border-edge font-sans text-[14px] text-fg transition-colors duration-100 hover:border-dim"
-				>Sign in with {session.sso}</a
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a server redirect, not a page -->
+			<Button variant="quiet" href="/api/app/sso" class="w-full"
+				>Sign in with {session.sso}</Button
 			>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		{/if}
 		{#if ssoError}
 			<Message tone="bad">{ssoError}</Message>
@@ -137,11 +134,7 @@
 				</Button>
 			{/each}
 			{#if session.signup}
-				<a
-					href={resolve("/signup")}
-					class="inline-flex h-9 items-center px-1 font-sans text-[14px] text-dim transition-colors duration-100 hover:text-fg"
-					>Create an account</a
-				>
+				<Button variant="plain" href={resolve("/signup")}>Create an account</Button>
 			{/if}
 		</div>
 	</div>

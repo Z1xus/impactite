@@ -29,5 +29,5 @@ export type Context = {
 	expand: (dim: string, title: string) => void;
 };
 
-export type Tab = { key: string; label: string };
+type Tab = { key: string; label: string };
 export type PanelSpec = { id: string; tabs: Tab[] };
