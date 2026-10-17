@@ -5,6 +5,7 @@ export function impact(stage: HTMLElement, landed: () => void) {
 	const rock = stage.querySelector<HTMLElement>("[data-rock]");
 	if (!rock) return;
 	const show = () => {
+		stage.dataset.landed = "true";
 		rock.style.opacity = "1";
 		rock.style.transform = "";
 	};

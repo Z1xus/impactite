@@ -245,7 +245,7 @@
 		</nav>
 	</header>
 
-	<div class="relative" use:impact={() => (landed = true)}>
+	<div class="relative" data-landed="false" use:impact={() => (landed = true)}>
 		<section class="grid items-center gap-12 py-20 md:grid-cols-[1fr_auto]">
 			<div class="shown flex flex-col gap-6" data-appear>
 				<h1 class="font-mono text-[44px] leading-[1.05] tracking-tight md:text-[64px]">
@@ -283,9 +283,9 @@
 				active={metric}
 				pick={(i) => (metric = i)}
 			/>
-			<div class="px-4 pt-3 pb-5">
+			<div class="px-4 pt-3 pb-5" data-chart>
 				<Chart
-					values={landed ? shape(metric) : days.map(() => 0)}
+					values={shape(metric)}
 					{labels}
 					format={(value) => format(METRICS[metric].key, value)}
 					height={200}

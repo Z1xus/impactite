@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { theme } from "#lib/theme.svelte.ts";
-	import { css, threshold } from "./bayer";
+	import { css } from "./bayer";
+	import { chart, COLORS, sample } from "./chart.ts";
+	import { paint } from "./pixels.ts";
+	import Pixels from "./Pixels.svelte";
 
 	let {
 		values,
@@ -27,6 +30,7 @@
 	let canvas: HTMLCanvasElement;
 	let box: HTMLDivElement;
 	let width = $state(0);
+	let ready = $state(false);
 	let hover = $state<number | null>(null);
 
 	let shown: number[] = [];
@@ -38,6 +42,8 @@
 
 	const MORPH = 280;
 	const SLIDE = 420;
+	// server rendering uses a fixed grid until the container can be measured
+	const INITIAL_COLUMNS = 480;
 	// labels the drawn series had, and a scroll in progress when time moved on
 	let shownLabels: string[] = [];
 	let slide: { series: number[]; shift: number; offset: number } | null = null;
@@ -87,81 +93,24 @@
 		});
 	}
 
-	function sample(series: number[], x: number, columns: number) {
-		if (series.length < 2) return series[0] ?? 0;
-		const at = (x / (columns - 1)) * (series.length - 1);
-		const low = Math.floor(at);
-		const high = Math.min(series.length - 1, low + 1);
-		return series[low] + (series[high] - series[low]) * (at - low);
-	}
-
 	function draw() {
 		const ctx = canvas?.getContext("2d");
 		if (!ctx || !width) return;
-		const columns = Math.floor(width / cell);
+		const columns = Math.max(1, Math.floor(width / cell));
 		const rows = Math.floor(height / cell);
 		canvas.width = columns;
 		canvas.height = rows;
-		const image = ctx.createImageData(columns, rows);
-		const data = image.data;
-		const colors = {
-			line: rgb(css("--color-cyan")),
-			deep: rgb(css("--color-cyan-deep")),
-			night: rgb(css("--color-cyan-night")),
-			grid: rgb(css("--color-line")),
-			faint: rgb(css("--color-faint")),
-			fg: rgb(css("--color-fg"))
-		};
-		const put = (x: number, y: number, [r, g, b]: number[]) => {
-			if (x < 0 || y < 0 || x >= columns || y >= rows) return;
-			const i = (y * columns + x) * 4;
-			data[i] = r;
-			data[i + 1] = g;
-			data[i + 2] = b;
-			data[i + 3] = 255;
-		};
-		const top = (value: number) => Math.round((1 - value / peak) * (rows - 1));
-
-		if (axes) {
-			for (const tick of ticks) {
-				const y = top(tick);
-				for (let x = 0; x < columns; x += 2) put(x, y, colors.grid);
-			}
-		}
-
-		let lastY = top(at(0, columns));
-		for (let x = 0; x < columns; x++) {
-			const y = top(at(x, columns));
-			for (let yy = y + 1; yy < rows; yy++) {
-				const depth = (yy - y) / Math.max(1, rows - y);
-				const density = 0.3 * (1 - depth) ** 1.6;
-				if (threshold(x, yy) < density)
-					put(x, yy, depth < 0.18 ? colors.deep : colors.night);
-			}
-			for (let yy = Math.min(y, lastY); yy <= Math.max(y, lastY); yy++)
-				put(x, yy, colors.line);
-			lastY = y;
-		}
-
-		if (shownPrevious.length) {
-			for (let x = 0; x < columns; x += 2)
-				put(x, top(sample(shownPrevious, x, columns)), colors.faint);
-		}
-
-		if (hover !== null && shown.length) {
-			const x = Math.round((hover / Math.max(1, shown.length - 1)) * (columns - 1));
-			for (let y = 0; y < rows; y += 2) put(x, y, colors.faint);
-			const y = top(shown[hover] ?? 0);
-			for (let dx = -1; dx <= 1; dx++)
-				for (let dy = -1; dy <= 1; dy++) put(x + dx, y + dy, colors.fg);
-		}
-
-		ctx.putImageData(image, 0, 0);
-	}
-
-	function rgb(hex: string) {
-		const n = parseInt(hex.slice(1), 16);
-		return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+		const palette = COLORS.map((name) => {
+			const n = parseInt(css(name).slice(1), 16);
+			return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+		});
+		paint(
+			ctx,
+			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at),
+			columns,
+			palette
+		);
+		ready = true;
 	}
 
 	function animate(now: number) {
@@ -200,15 +149,14 @@
 			return () => cancelAnimationFrame(frame);
 		}
 		slide = null;
-		from = resample(shown, next.length);
-		fromPrevious = resample(shownPrevious, nextPrevious.length);
-		cancelAnimationFrame(frame);
-		if (still) {
+		if (still || !shown.length) {
 			shown = next;
 			shownPrevious = nextPrevious;
 			untrack(draw);
 			return;
 		}
+		from = resample(shown, next.length);
+		fromPrevious = resample(shownPrevious, nextPrevious.length);
 		started = performance.now();
 		frame = requestAnimationFrame(animate);
 		return () => cancelAnimationFrame(frame);
@@ -222,6 +170,7 @@
 	});
 
 	$effect(() => {
+		width = box.getBoundingClientRect().width;
 		const observer = new ResizeObserver(([entry]) => (width = entry.contentRect.width));
 		observer.observe(box);
 		return () => observer.disconnect();
@@ -262,6 +211,20 @@
 			role="img"
 			aria-label="chart"
 		>
+			{#if !ready}
+				<Pixels
+					pixels={chart(
+						INITIAL_COLUMNS,
+						Math.floor(height / cell),
+						peak,
+						axes,
+						values,
+						previous
+					)}
+					width={INITIAL_COLUMNS}
+					palette={COLORS.map((name) => `var(${name})`)}
+				/>
+			{/if}
 			<canvas
 				bind:this={canvas}
 				class="absolute inset-0 h-full w-full pixelated"
