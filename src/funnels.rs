@@ -179,6 +179,33 @@ impl App {
 		Ok(())
 	}
 
+	// a funnel loses a removed goal as a step, and goes when fewer than two steps are left
+	pub(crate) fn forget_goal(&self, site: u64, goal: i64) -> rusqlite::Result<()> {
+		for funnel in self.funnels(site)? {
+			let steps: Vec<i64> = funnel["steps"]
+				.as_array()
+				.into_iter()
+				.flatten()
+				.filter_map(Value::as_i64)
+				.collect();
+			if !steps.contains(&goal) {
+				continue;
+			}
+			let kept: Vec<_> = steps.into_iter().filter(|step| *step != goal).collect();
+			let id = funnel["id"].as_i64().unwrap_or_default();
+			match kept.len() {
+				0..=1 => self.remove_funnel(site, id)?,
+				_ => {
+					self.conn().execute(
+						"update funnels set steps = ?3 where site = ?1 and id = ?2",
+						params![site as i64, id, json!(kept).to_string()],
+					)?;
+				}
+			}
+		}
+		Ok(())
+	}
+
 	fn remove_funnel(&self, site: u64, id: i64) -> rusqlite::Result<()> {
 		self.conn().execute(
 			"delete from funnels where site = ?1 and id = ?2",

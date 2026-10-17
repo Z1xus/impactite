@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -52,7 +53,9 @@ pub async fn tick(web: &Arc<Web>) {
 		return;
 	};
 	for report in reports {
-		if let Err(err) = check(web, &report).await {
+		// one stuck webhook must not hold up the other reports or the sweep behind them
+		let done = tokio::time::timeout(Duration::from_secs(120), check(web, &report)).await;
+		if let Err(err) = done.unwrap_or_else(|_| Err(anyhow::anyhow!("timed out"))) {
 			tracing::warn!(%err, site = report.site.domain, kind = report.kind, "report");
 		}
 	}

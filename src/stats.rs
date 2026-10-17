@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use axum::Json;
@@ -260,6 +261,66 @@ pub(crate) fn run(stats: &Stats, raw: Value) -> Result<Value, String> {
 	serde_json::to_value(answer(stats, raw)?).map_err(|err| err.to_string())
 }
 
+type Window = (RangeInclusive<i32>, Option<u32>);
+
+// every question runs once per window, realtime spans midnight in two
+struct Scan<'a> {
+	stats: &'a Stats,
+	others: &'a [u64],
+	site: u64,
+	imports: bool,
+	windows: Vec<Window>,
+}
+
+impl Scan<'_> {
+	fn run(
+		&self,
+		filters: Vec<Filter>,
+		breakdown: Option<Field>,
+		daily: bool,
+	) -> Result<Report, String> {
+		let mut merged: Option<Report> = None;
+		for (days, since) in &self.windows {
+			let next = self.ask(
+				days.clone(),
+				*since,
+				filters.clone(),
+				breakdown.clone(),
+				daily,
+			)?;
+			merged = Some(match merged {
+				Some(report) => combine(report, next),
+				None => next,
+			});
+		}
+		merged.ok_or_else(|| "empty date range".to_string())
+	}
+
+	fn ask(
+		&self,
+		days: RangeInclusive<i32>,
+		since: Option<u32>,
+		filters: Vec<Filter>,
+		breakdown: Option<Field>,
+		daily: bool,
+	) -> Result<Report, String> {
+		query_sites(
+			self.stats,
+			self.others,
+			Query {
+				site: self.site,
+				days,
+				filters,
+				breakdown,
+				limit: usize::MAX,
+				daily,
+				imports: self.imports,
+				since,
+			},
+		)
+	}
+}
+
 pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 	let request: Request = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let realtime = request.date_range == json!("30m");
@@ -277,28 +338,7 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 		if realtime { &day } else { &request.date_range },
 		request.include.trim_relative_date_range,
 	)?;
-	let today = day_number(from);
-	let (windows, start) = match realtime {
-		false => (vec![(today..=day_number(to), None)], None),
-		true => {
-			let now = Timestamp::now().to_zoned(tz.clone()).datetime();
-			let start = (now - 30.minutes())
-				.with()
-				.second(0)
-				.subsec_nanosecond(0)
-				.build()
-				.map_err(|err| err.to_string())?;
-			let since = start.time().hour() as u32 * 3600 + start.time().minute() as u32 * 60;
-			let windows = match start.date() == now.date() {
-				true => vec![(today..=today, Some(since))],
-				false => vec![
-					(today - 1..=today - 1, Some(since)),
-					(today..=today, Some(0)),
-				],
-			};
-			(windows, Some(start))
-		}
-	};
+	let (windows, start) = windows(from, to, &tz, realtime)?;
 
 	let metrics = request
 		.metrics
@@ -309,23 +349,7 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 		return Err("#/metrics: Expected a minimum of 1 items".into());
 	}
 	let grouping = grouping(&request.dimensions)?;
-	if matches!(grouping, Grouping::TimeField(Time::Hour, _)) && from != to {
-		return Err(
-			"#/dimensions: time:hour with another dimension needs a single day date_range".into(),
-		);
-	}
-	if matches!(
-		grouping,
-		Grouping::Time(Time::Hour) | Grouping::TimeField(Time::Hour, _)
-	) && realtime
-	{
-		return Err("#/dimensions: time:hour does not go with the 30m date_range".into());
-	}
-	if matches!(grouping, Grouping::Time(Time::Minute)) != realtime
-		&& matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..))
-	{
-		return Err("#/dimensions: time:minute goes with the 30m date_range only".into());
-	}
+	check_grouping(&grouping, from == to, realtime)?;
 
 	let goals = match others.is_empty() {
 		true => stats.app.goals(site.id).map_err(|err| err.to_string())?,
@@ -346,29 +370,12 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 		Some(_) => imports_skip(&grouping, !request.filters.is_empty()).unwrap_or_default(),
 	};
 	let imports = request.include.imports && skip.is_empty();
-	let run = |filters: Vec<Filter>, breakdown: Option<Field>, daily: bool| {
-		let mut merged: Option<Report> = None;
-		for (days, since) in &windows {
-			let next = query_sites(
-				stats,
-				&others,
-				Query {
-					site: site.id,
-					days: days.clone(),
-					filters: filters.clone(),
-					breakdown: breakdown.clone(),
-					limit: usize::MAX,
-					daily,
-					imports,
-					since: *since,
-				},
-			)?;
-			merged = Some(match merged {
-				Some(report) => combine(report, next),
-				None => next,
-			});
-		}
-		merged.ok_or_else(|| "empty date range".to_string())
+	let scan = Scan {
+		stats,
+		others: &others,
+		site: site.id,
+		imports,
+		windows,
 	};
 	let filtered = || {
 		base_filters
@@ -380,16 +387,15 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 
 	let (mut rows, base) = match &grouping {
 		Grouping::Goal => {
-			let base = run(filtered(), None, false)?.total.visitors;
+			let base = scan.run(filtered(), None, false)?.total.visitors;
 			let rows = goals
 				.iter()
 				.map(|goal| {
 					let mut filters = filtered();
 					filters.extend(goal.filters());
-					let report = run(filters, None, false)?;
 					Ok(Row {
 						dimensions: vec![json!(goal.name)],
-						metrics: report.total,
+						metrics: scan.run(filters, None, false)?.total,
 					})
 				})
 				.collect::<Result<Vec<_>, String>>()?
@@ -404,30 +410,17 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 				Grouping::TimeField(_, field) => (Some(field.clone()), true),
 				_ => (None, false),
 			};
-			let report = run(filtered(), field, daily)?;
+			let report = scan.run(filtered(), field, daily)?;
 			let base = match goal_filters.is_empty() {
 				true => report.total.visitors,
-				false => run(base_filters.clone(), None, false)?.total.visitors,
+				false => scan.run(base_filters.clone(), None, false)?.total.visitors,
 			};
 			let rows = match grouping {
 				// reports keep hours for one day, so longer ranges ask day by day
 				Grouping::Time(Time::Hour) if from != to => (day_number(from)..=day_number(to))
 					.zip(from.series(1.day()))
 					.map(|(number, day)| {
-						let report = query_sites(
-							stats,
-							&others,
-							Query {
-								site: site.id,
-								days: number..=number,
-								filters: filtered(),
-								breakdown: None,
-								limit: usize::MAX,
-								daily: false,
-								imports,
-								since: None,
-							},
-						)?;
+						let report = scan.ask(number..=number, None, filtered(), None, false)?;
 						Ok(rows(&report, grouping, day, start))
 					})
 					.collect::<Result<Vec<_>, String>>()?
@@ -440,42 +433,7 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 		}
 	};
 
-	let compute = |m: Metric, metrics: &Metrics| value(m, metrics, base);
-	match request.order_by.first() {
-		Some((name, direction)) => {
-			let by_metric = match request.dimensions.iter().any(|dim| dim == name) {
-				true => None,
-				false => request.metrics.iter().position(|metric| metric == name),
-			};
-			rows.sort_by(|a, b| {
-				let ordering = match by_metric {
-					Some(i) => compute(metrics[i], &a.metrics)
-						.as_f64()
-						.partial_cmp(&compute(metrics[i], &b.metrics).as_f64())
-						.unwrap_or(std::cmp::Ordering::Equal),
-					None => a
-						.dimensions
-						.first()
-						.map(Value::to_string)
-						.cmp(&b.dimensions.first().map(Value::to_string)),
-				};
-				match direction.as_str() {
-					"asc" => ordering,
-					_ => ordering.reverse(),
-				}
-			});
-		}
-		None if !matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..)) => {
-			rows.sort_by(|a, b| {
-				compute(metrics[0], &b.metrics)
-					.as_f64()
-					.partial_cmp(&compute(metrics[0], &a.metrics).as_f64())
-					.unwrap_or(std::cmp::Ordering::Equal)
-			})
-		}
-		None => {}
-	}
-
+	sort(&mut rows, &request, &grouping, &metrics, base);
 	let total_rows = rows.len();
 	let mut time_labels: Vec<Value> = match grouping {
 		Grouping::Time(_) | Grouping::TimeField(..) => rows
@@ -485,12 +443,15 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 		_ => Vec::new(),
 	};
 	time_labels.dedup();
-	let results: Vec<Line> = rows
+	let results = rows
 		.into_iter()
 		.skip(request.pagination.offset)
 		.take(request.pagination.limit)
 		.map(|row| Line {
-			metrics: metrics.iter().map(|&m| compute(m, &row.metrics)).collect(),
+			metrics: metrics
+				.iter()
+				.map(|&m| value(m, &row.metrics, base))
+				.collect(),
 			dimensions: row.dimensions,
 		})
 		.collect();
@@ -511,19 +472,109 @@ pub(crate) fn answer(stats: &Stats, raw: Value) -> Result<Answer, String> {
 	Ok(Answer {
 		results,
 		meta,
-		query: json!({
-			"site_id": site.domain,
-			"metrics": request.metrics,
-			"date_range": [
-				from.to_zoned(tz.clone()).map(|day| day.timestamp().to_string()).unwrap_or_default(),
-				to.checked_add(1.day())
-					.and_then(|end| end.to_zoned(tz.clone()))
-					.map(|end| end.timestamp().saturating_sub(1.second()).map(|ts| ts.to_string()).unwrap_or_default())
-					.unwrap_or_default(),
-			],
-			"dimensions": request.dimensions,
-			"filters": request.filters,
-		}),
+		query: echo(&request, &site, &tz, from, to),
+	})
+}
+
+fn windows(
+	from: Date,
+	to: Date,
+	tz: &TimeZone,
+	realtime: bool,
+) -> Result<(Vec<Window>, Option<DateTime>), String> {
+	let first = day_number(from);
+	if !realtime {
+		return Ok((vec![(first..=day_number(to), None)], None));
+	}
+	let now = Timestamp::now().to_zoned(tz.clone()).datetime();
+	let start = (now - 30.minutes())
+		.with()
+		.second(0)
+		.subsec_nanosecond(0)
+		.build()
+		.map_err(|err| err.to_string())?;
+	let since = start.time().hour() as u32 * 3600 + start.time().minute() as u32 * 60;
+	let windows = match start.date() == now.date() {
+		true => vec![(first..=first, Some(since))],
+		false => vec![
+			(first - 1..=first - 1, Some(since)),
+			(first..=first, Some(0)),
+		],
+	};
+	Ok((windows, Some(start)))
+}
+
+fn check_grouping(grouping: &Grouping, single_day: bool, realtime: bool) -> Result<(), String> {
+	if matches!(grouping, Grouping::TimeField(Time::Hour, _)) && !single_day {
+		return Err(
+			"#/dimensions: time:hour with another dimension needs a single day date_range".into(),
+		);
+	}
+	if matches!(
+		grouping,
+		Grouping::Time(Time::Hour) | Grouping::TimeField(Time::Hour, _)
+	) && realtime
+	{
+		return Err("#/dimensions: time:hour does not go with the 30m date_range".into());
+	}
+	if matches!(grouping, Grouping::Time(Time::Minute)) != realtime
+		&& matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..))
+	{
+		return Err("#/dimensions: time:minute goes with the 30m date_range only".into());
+	}
+	Ok(())
+}
+
+// the first order wins, with no order the biggest first and time in its own order
+fn sort(rows: &mut [Row], request: &Request, grouping: &Grouping, metrics: &[Metric], base: u64) {
+	let compare = |m: Metric, a: &Row, b: &Row| {
+		value(m, &a.metrics, base)
+			.as_f64()
+			.partial_cmp(&value(m, &b.metrics, base).as_f64())
+			.unwrap_or(std::cmp::Ordering::Equal)
+	};
+	match request.order_by.first() {
+		Some((name, direction)) => {
+			let by_metric = match request.dimensions.iter().any(|dim| dim == name) {
+				true => None,
+				false => request.metrics.iter().position(|metric| metric == name),
+			};
+			rows.sort_by(|a, b| {
+				let ordering = match by_metric {
+					Some(i) => compare(metrics[i], a, b),
+					None => a
+						.dimensions
+						.first()
+						.map(Value::to_string)
+						.cmp(&b.dimensions.first().map(Value::to_string)),
+				};
+				match direction.as_str() {
+					"asc" => ordering,
+					_ => ordering.reverse(),
+				}
+			});
+		}
+		None if !matches!(grouping, Grouping::Time(_) | Grouping::TimeField(..)) => {
+			rows.sort_by(|a, b| compare(metrics[0], b, a))
+		}
+		None => {}
+	}
+}
+
+// the question as it was understood, with the range in utc timestamps
+fn echo(request: &Request, site: &Site, tz: &TimeZone, from: Date, to: Date) -> Value {
+	json!({
+		"site_id": site.domain,
+		"metrics": request.metrics,
+		"date_range": [
+			from.to_zoned(tz.clone()).map(|day| day.timestamp().to_string()).unwrap_or_default(),
+			to.checked_add(1.day())
+				.and_then(|end| end.to_zoned(tz.clone()))
+				.map(|end| end.timestamp().saturating_sub(1.second()).map(|ts| ts.to_string()).unwrap_or_default())
+				.unwrap_or_default(),
+		],
+		"dimensions": request.dimensions,
+		"filters": request.filters,
 	})
 }
 

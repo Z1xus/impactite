@@ -180,9 +180,10 @@ async fn add(
 			"Use an event name or a path like /pricing.",
 		);
 	}
-	let scroll = body.scroll.min(100);
+	let scroll = if body.page { body.scroll.min(100) } else { 0 };
 	let currency = body.currency.trim().to_uppercase();
-	if currency.len() > 3 || (body.page && !currency.is_empty()) {
+	let lettered = currency.len() == 3 && currency.bytes().all(|b| b.is_ascii_alphabetic());
+	if (!currency.is_empty() && !lettered) || (body.page && !currency.is_empty()) {
 		return fail(
 			StatusCode::BAD_REQUEST,
 			"Revenue goals use an event and a 3 letter currency.",
@@ -326,6 +327,6 @@ impl App {
 			"delete from goals where site = ?1 and id = ?2",
 			params![site as i64, id],
 		)?;
-		Ok(())
+		self.forget_goal(site, id)
 	}
 }
