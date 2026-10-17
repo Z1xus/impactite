@@ -1,8 +1,9 @@
 @import "../../../web/src/routes/layout.css";
 @source "../../../web/src/lib";
 
+/* set after start, so restoring the scroll on reload does not glide down from the top */
 @media (prefers-reduced-motion: no-preference) {
-	html {
+	html.started {
 		scroll-behavior: smooth;
 	}
 }
