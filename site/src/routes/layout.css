@@ -17,7 +17,8 @@
 
 /* hidden only when script runs, so the page still shows without it */
 @media (prefers-reduced-motion: no-preference) {
-	.js [data-appear] {
+	.js [data-appear],
+	.js [data-rock] {
 		opacity: 0;
 	}
 	.js [data-appear].shown {

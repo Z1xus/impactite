@@ -266,7 +266,7 @@
 					>
 				</div>
 			</div>
-			<div class="relative z-20 justify-self-center" data-rock style="opacity: 0">
+			<div class="relative z-20 justify-self-center" data-rock>
 				<Meteor size={340} pixel={4} />
 			</div>
 		</section>
@@ -282,12 +282,9 @@
 				active={metric}
 				pick={(i) => (metric = i)}
 			/>
-			<div
-				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-out motion-reduce:transition-none"
-				style:clip-path={landed ? "inset(0)" : "inset(0 100% 0 0)"}
-			>
+			<div class="px-4 pt-3 pb-5">
 				<Chart
-					values={shape(metric)}
+					values={landed ? shape(metric) : days.map(() => 0)}
 					{labels}
 					format={(value) => format(METRICS[metric].key, value)}
 					height={200}
