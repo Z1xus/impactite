@@ -342,8 +342,8 @@ async fn upload(
 		let extension = match (upload.source.as_str(), body.starts_with(&[0x1f, 0x8b])) {
 			("plausible" | "impactite", _) => "zip",
 			("goatcounter", true) => "csv.gz",
-			("goatcounter", false) => "csv",
-			_ => bail!("Choose impactite, Plausible or GoatCounter."),
+			("goatcounter" | "umami", _) => "csv",
+			_ => bail!("Choose impactite, Plausible, GoatCounter or Umami."),
 		};
 		let path = dir.join(format!("{}.{extension}", token()?));
 		fs::write(&path, &body)?;
