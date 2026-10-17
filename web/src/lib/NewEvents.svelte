@@ -64,11 +64,8 @@
 
 {#if events.length}
 	<div class="flex flex-col gap-4">
-		<p class="text-[14px] text-dim">
-			These events came in over the last 30 days. Add the ones you want to track as goals.
-			{#if events.some((event) => event.revenue)}Events with revenue need a currency.{/if}
-		</p>
-		<div class="max-h-[50vh] [scrollbar-gutter:stable] overflow-y-auto pr-2">
+		<p class="text-[14px] text-dim">Events from the last 30 days that have no goal.</p>
+		<div class="max-h-[50vh] [scrollbar-gutter:stable] overflow-y-auto">
 			<List
 				items={events.map((event) => ({
 					key: event.name,
@@ -92,7 +89,7 @@
 									class="h-9 w-16 rounded-px border border-edge bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
 								/>
 							{/if}
-							<Button variant="quiet" onclick={() => add(event)}>Add goal</Button>
+							<Button variant="quiet" onclick={() => add(event)}>Add</Button>
 							<Button variant="plain" onclick={() => ignore(event.name)}
 								>Ignore</Button
 							>
