@@ -5,7 +5,6 @@ type Saved = { order: string[]; hidden: string[]; table: boolean };
 const list = (value: unknown) =>
 	Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 
-// the panel order, hidden panels and chart or table view a person chose for a site
 export function createLayout(domain: () => string, readonly: () => boolean) {
 	let saved = $state<Saved>({ order: [], hidden: [], table: false });
 	let arranging = $state(false);

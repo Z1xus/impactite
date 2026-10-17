@@ -10,6 +10,7 @@
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
 	import Message from "#lib/ui/Message.svelte";
+	import Note from "#lib/ui/Note.svelte";
 
 	const token = page.params.token ?? "";
 	let usePassword = $state(false);
@@ -50,9 +51,9 @@
 		<Message tone="bad">{failed}</Message>
 	{:else if place}
 		<div class="flex flex-col gap-3">
-			<p class="mb-3 text-center text-[14px] text-dim">
+			<Note>
 				You're invited to <span class="text-fg">{place}</span>.
-			</p>
+			</Note>
 			<Form block action={session.me || usePassword ? "join" : "join with passkey"} {submit}>
 				{#if !session.me}
 					<Field label="name" bind:value={name} autocomplete="name" required />

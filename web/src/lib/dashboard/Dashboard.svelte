@@ -38,6 +38,7 @@
 	import Title from "#lib/ui/Title.svelte";
 	import Live from "#lib/ui/Live.svelte";
 	import Select from "#lib/ui/Select.svelte";
+	import Note from "#lib/ui/Note.svelte";
 
 	let {
 		domain,
@@ -118,8 +119,7 @@
 				else params.set(key, value);
 		});
 
-	// the filters in the url, replaced as a whole
-	const setRaw = (raw: string[]) =>
+	const applyFilters = (raw: string[]) =>
 		navigate((params) => {
 			params.delete("f");
 			for (const item of raw) params.append("f", item);
@@ -127,7 +127,7 @@
 
 	function setFilter(filter: Filter) {
 		editing = undefined;
-		setRaw([
+		applyFilters([
 			...filters.filter((item) => item.dim !== filter.dim).map(encodeFilter),
 			encodeFilter(filter)
 		]);
@@ -135,7 +135,7 @@
 
 	function removeFilter(dim: string) {
 		editing = undefined;
-		setRaw(filters.filter((item) => item.dim !== dim).map(encodeFilter));
+		applyFilters(filters.filter((item) => item.dim !== dim).map(encodeFilter));
 	}
 
 	const ctx = $derived<Context | null>(
@@ -353,18 +353,18 @@
 		{editable}
 		edit={(filter) => (editing = filter)}
 		remove={removeFilter}
-		apply={setRaw}
+		apply={applyFilters}
 	/>
 
 	{#if editable && !combined && empty === false && newEvents.length}
 		<div
 			class="flex flex-wrap items-center justify-between gap-4 rounded-px border border-line bg-panel py-2 pr-2 pl-4"
 		>
-			<span class="text-[14px] text-dim">
+			<Note>
 				{newEvents.length === 1
 					? `Your site sends ${newEvents[0].name} events, but there's no goal for them yet.`
 					: `Your site sends ${newEvents.length} kinds of events that have no goal yet.`}
-			</span>
+			</Note>
 			<Button variant="quiet" onclick={() => (reviewing = true)}>Review</Button>
 		</div>
 	{/if}

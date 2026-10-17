@@ -4,6 +4,7 @@
 	import { attempt } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import List from "#lib/ui/List.svelte";
+	import Note from "#lib/ui/Note.svelte";
 
 	type Event = { name: string; count: number; revenue: boolean };
 
@@ -64,7 +65,7 @@
 
 {#if events.length}
 	<div class="flex flex-col gap-4">
-		<p class="text-[14px] text-dim">Events from the last 30 days that have no goal.</p>
+		<Note>Events from the last 30 days that have no goal.</Note>
 		<div class="max-h-[50vh] [scrollbar-gutter:stable] overflow-y-auto">
 			<List
 				items={events.map((event) => ({

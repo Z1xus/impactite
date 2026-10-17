@@ -13,7 +13,6 @@
 		children: Snippet;
 		variant?: "primary" | "quiet" | "danger" | "icon" | "plain" | "text";
 		busy?: boolean;
-		// a link that looks like the button
 		href?: string;
 	} = $props();
 

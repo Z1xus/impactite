@@ -6,10 +6,12 @@
 	import userPlus from "pixelarticons/svg/user-plus.svg?raw";
 	import mail from "pixelarticons/svg/mail.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
-	import { date, clock } from "#lib/display.svelte.ts";
+	import { date } from "#lib/display.svelte.ts";
 	import { ask } from "#lib/ask.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import { api } from "#lib/api.ts";
+	import type { Admin } from "#lib/admin/types.ts";
+	import Version from "#lib/admin/Version.svelte";
 	import { session } from "#lib/session.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import List from "#lib/ui/List.svelte";
@@ -19,32 +21,7 @@
 	import Settings from "#lib/ui/Settings.svelte";
 	import Title from "#lib/ui/Title.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
-
-	type User = {
-		id: number;
-		name: string;
-		email: string;
-		admin: boolean;
-		created: number;
-		sites: number;
-	};
-	type Admin = {
-		signup: boolean;
-		mail: boolean;
-		users: User[];
-		version: string;
-		update: {
-			enabled: boolean;
-			checking: boolean;
-			checked_at: number | null;
-			failed: boolean;
-			latest: {
-				version: string;
-				url: string;
-				changes: { version: string; lines: string[] }[];
-			} | null;
-		};
-	};
+	import Note from "#lib/ui/Note.svelte";
 
 	let info = $state<Admin | null>(null);
 	let checking = $state(false);
@@ -118,93 +95,13 @@
 			{/snippet}
 
 			{#if section === "version"}
-				<Section id="version" label="version">
-					{#snippet actions()}
-						{#if info && info.update.enabled}
-							<Button
-								variant="text"
-								busy={checking || info.update.checking}
-								onclick={checkUpdate}
-							>
-								{checking || info.update.checking ? "Checking…" : "Check now"}
-							</Button>
-						{/if}
-					{/snippet}
-					{#if info.update.latest}
-						<div class="flex flex-col gap-4">
-							<div class="flex items-baseline justify-between gap-4 text-[14px]">
-								<span class="text-fg">
-									impactite {info.update.latest.version} is available.
-									<span class="text-dim">You're on {info.version}.</span>
-								</span>
-								<!-- eslint-disable svelte/no-navigation-without-resolve -- the release page on github -->
-								<a
-									href={info.update.latest.url}
-									class="shrink-0 text-cyan hover:text-fg">Release notes</a
-								>
-								<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							</div>
-							<div
-								class="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-4 gap-y-2 rounded-px border border-line bg-panel px-3 py-3 text-[14px] text-fg"
-							>
-								{#each info.update.latest.changes as change (change.version)}
-									{#each change.lines as line, i (i)}
-										{@const at = line.indexOf(": ")}
-										<span class="label text-dim"
-											>{i === 0 ? change.version : ""}</span
-										>
-										<span class="label text-cyan"
-											>{at > 0 ? line.slice(0, at) : ""}</span
-										>
-										<span>{at > 0 ? line.slice(at + 2) : line}</span>
-									{/each}
-								{/each}
-							</div>
-							<span class="text-[14px] text-dim">
-								Run <code class="font-mono text-[12px] text-cyan"
-									>impactite update</code
-								> or pull the new Docker image, then restart.
-							</span>
-						</div>
-					{:else}
-						<span class="text-[14px] text-dim">
-							{#if !info.update.enabled}
-								impactite {info.version}. Update checks are disabled.
-							{:else if checking || info.update.checking}
-								impactite {info.version}. Checking for updates…
-							{:else if info.update.failed}
-								impactite {info.version}. Could not check for updates.
-							{:else if info.update.checked_at !== null}
-								impactite {info.version} is up to date.
-							{:else}
-								impactite {info.version}. Updates have not been checked yet.
-							{/if}
-						</span>
-					{/if}
-					{#if info.update.latest && info.update.failed}
-						<span class="text-[14px] text-dim"
-							>Could not refresh update information.</span
-						>
-					{/if}
-					{#if info.update.checked_at !== null}
-						<span class="text-[14px] text-dim">
-							Last successful check:
-							<time datetime={new Date(info.update.checked_at * 1000).toISOString()}>
-								{date(info.update.checked_at)} at {clock(
-									new Date(info.update.checked_at * 1000)
-										.toTimeString()
-										.slice(0, 5)
-								)}
-							</time>
-						</span>
-					{/if}
-				</Section>
+				<Version {info} {checking} check={checkUpdate} />
 			{/if}
 
 			{#if section === "signup"}
 				<Section id="signup" label="sign-up">
 					<div class="flex items-center justify-between gap-4">
-						<span class="text-[14px] text-dim">Who can create an account.</span>
+						<Note>Who can create an account.</Note>
 						<Toggle
 							bind:value={
 								() => (info?.signup ? "open" : "invite"),

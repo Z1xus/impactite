@@ -5,6 +5,7 @@
 	import Snippet from "#lib/settings/Snippet.svelte";
 	import { display, query } from "#lib/stats.ts";
 	import { theme } from "#lib/theme.svelte.ts";
+	import Note from "#lib/ui/Note.svelte";
 
 	let { domain, landed }: { domain: string; landed: () => void } = $props();
 
@@ -164,7 +165,7 @@
 		{:else}
 			<span class="flex flex-col gap-1">
 				<span class="text-[14px] text-fg">First visit landed.</span>
-				{#if first}<span class="text-[14px] text-dim">{first}</span>{/if}
+				{#if first}<Note>{first}</Note>{/if}
 			</span>
 		{/if}
 	</div>

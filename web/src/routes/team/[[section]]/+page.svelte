@@ -63,7 +63,7 @@
 	let email = $state("");
 	let inviteRole = $state<Role>("editor");
 	let link = $state("");
-	let confirm = $state("");
+	let typed = $state("");
 
 	$effect(() => {
 		if (current && (current.personal || current.id === 0)) goto(resolve("/"));
@@ -149,7 +149,7 @@
 		);
 
 	async function destroy() {
-		if (confirm.trim().toLowerCase() !== team?.name.toLowerCase())
+		if (typed.trim().toLowerCase() !== team?.name.toLowerCase())
 			throw new Error(`Type ${team?.name} to confirm.`);
 		await api(`/api/app/teams/${id}`, undefined, "DELETE");
 		await refresh();
@@ -185,14 +185,12 @@
 				<Title>{team?.name}</Title>
 			{/snippet}
 
-			{#if manager}
-				{#if section === "general"}
-					<Section id="general" label="general">
-						<Form action="rename" submit={rename} inline>
-							<Field label="name" bind:value={name} required />
-						</Form>
-					</Section>
-				{/if}
+			{#if manager && section === "general"}
+				<Section id="general" label="general">
+					<Form action="rename" submit={rename} inline>
+						<Field label="name" bind:value={name} required />
+					</Form>
+				</Section>
 			{/if}
 
 			{#if section === "members"}
@@ -261,7 +259,7 @@
 								<Field
 									label="type the team name to confirm"
 									placeholder={team.name}
-									bind:value={confirm}
+									bind:value={typed}
 								/>
 							</Form>
 						</Danger>
