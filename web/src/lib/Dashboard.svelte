@@ -808,38 +808,40 @@
 		{/if}
 		{#if empty === false}<Live site={domain} />{/if}
 		<div class="ml-auto flex items-center gap-2 max-sm:w-full max-sm:justify-between">
-			{#if empty === false}
+			{#if arranging}
+				<Button variant="quiet" class="ml-auto" onclick={() => (arranging = false)}
+					>Done</Button
+				>
+			{:else if empty === false}
 				<Button variant="text" onclick={() => (editing = null)}
 					><Icon svg={funnel} size={14} />Filter</Button
 				>
-			{/if}
-			{#if view && empty === false}
-				<Period {view} {go} />
-				{#if !readonly}
-					{#if arranging}<Button variant="quiet" onclick={() => (arranging = false)}
-							>Done</Button
-						>{/if}
-					<Menu
-						label="Dashboard options"
-						icon={more}
-						plain
-						iconOnly
-						align="right"
-						items={[
-							{ label: "Edit layout", onclick: () => (arranging = true) },
-							...(hasImports
-								? [
-										{
-											label: "Include imported data",
-											current: withImports,
-											onclick: () => go({ imports: withImports ? "0" : null })
-										}
-									]
-								: []),
-							"divider",
-							{ label: "Download CSV", onclick: downloadReport }
-						]}
-					/>
+				{#if view}
+					<Period {view} {go} />
+					{#if !readonly}
+						<Menu
+							label="Dashboard options"
+							icon={more}
+							plain
+							iconOnly
+							align="right"
+							items={[
+								{ label: "Edit layout", onclick: () => (arranging = true) },
+								...(hasImports
+									? [
+											{
+												label: "Include imported data",
+												current: withImports,
+												onclick: () =>
+													go({ imports: withImports ? "0" : null })
+											}
+										]
+									: []),
+								"divider",
+								{ label: "Download CSV", onclick: downloadReport }
+							]}
+						/>
+					{/if}
 				{/if}
 			{/if}
 		</div>

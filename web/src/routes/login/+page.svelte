@@ -16,7 +16,7 @@
 	const MODES: { key: Mode; label: string }[] = [
 		{ key: "passkey", label: "Use a passkey" },
 		{ key: "password", label: "Use a password" },
-		{ key: "link", label: "Email me a link" }
+		{ key: "link", label: "Email me a sign-in link" }
 	];
 
 	let mode = $state<Mode>("passkey");
