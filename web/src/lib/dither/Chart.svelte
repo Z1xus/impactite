@@ -239,13 +239,15 @@
 
 <div class="flex gap-3">
 	{#if axes}
-		<div
-			class="flex min-w-10 flex-col justify-between py-0 text-right"
-			style:height="{height}px"
-		>
-			{#each ticks as tick (tick)}
-				<span class="-translate-y-1/2 label first:translate-y-0 last:translate-y-[-100%]"
-					>{format(tick)}</span
+		<div class="relative min-w-11" style:height="{height}px">
+			{#each ticks as tick, i (tick)}
+				<span
+					class="absolute right-0 label {i === 1
+						? '-translate-y-1/2'
+						: i === 2
+							? '-translate-y-full'
+							: ''}"
+					style:top="{i * 50}%">{format(tick)}</span
 				>
 			{/each}
 		</div>
