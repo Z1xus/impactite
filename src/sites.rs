@@ -6,34 +6,40 @@ use anyhow::bail;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, patch};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use crater::Dim;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{self, Viewer, Web, broken, fail};
+use crate::accounts::Viewer;
 use crate::app::{App, Site, token};
 use crate::import;
+use crate::shares::Reader;
 use crate::stats::day_number;
+use crate::teams;
+use crate::web::{Web, broken, fail, internal};
 
 const UPLOAD: usize = 1 << 30;
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
+		.route("/api/app/sites", post(add_site))
+		.route("/api/app/live/{domain}", get(live))
 		.route("/api/app/sites/{domain}", patch(update).delete(destroy))
 		.route(
 			"/api/app/sites/{domain}/imports",
 			get(list).post(upload).layer(DefaultBodyLimit::max(UPLOAD)),
 		)
 		.route("/api/app/sites/{domain}/imports/{id}", delete(remove))
-		.route("/api/app/sites/{domain}/reset", axum::routing::post(reset))
+		.route("/api/app/sites/{domain}/reset", post(reset))
 		.route("/api/app/sites/{domain}/strays", get(strays))
-		.route("/api/app/sites/{domain}/purge", axum::routing::post(purge))
+		.route("/api/app/sites/{domain}/purge", post(purge))
 		.route(
 			"/api/app/sites/{domain}/guests",
 			get(guests).post(invite_guest),
@@ -116,7 +122,7 @@ async fn update(
 		return broken();
 	}
 	if let Some(raw) = &body.domain {
-		let Some(domain) = accounts::clean_domain(raw) else {
+		let Some(domain) = clean_domain(raw) else {
 			return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
 		};
 		if domain != site.domain {
@@ -221,9 +227,7 @@ async fn invite_guest(
 		.site_team(site.id)
 		.and_then(|team| web.app.invite(team, Some(site.id), &body.email, &body.role));
 	match token {
-		Ok(token) => {
-			accounts::send_invite(&web, viewer.user, &site.domain, &body.email, &token).await
-		}
+		Ok(token) => teams::send_invite(&web, viewer.user, &site.domain, &body.email, &token).await,
 		Err(_) => broken(),
 	}
 }
@@ -548,5 +552,106 @@ impl App {
 			params![site as i64, id],
 		)?;
 		Ok(())
+	}
+}
+
+#[derive(Deserialize)]
+struct NewSite {
+	team: i64,
+	domain: String,
+	timezone: String,
+}
+
+async fn add_site(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Json(body): Json<NewSite>,
+) -> Response {
+	if !matches!(web.app.role(viewer.user, body.team), Ok(Some(role)) if role != "viewer") {
+		return fail(StatusCode::FORBIDDEN, "You can't add sites to this team.");
+	}
+	let Some(domain) = clean_domain(&body.domain) else {
+		return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
+	};
+	if TimeZone::get(&body.timezone).is_err() {
+		return fail(StatusCode::BAD_REQUEST, "Pick a timezone from the list.");
+	}
+	match web.app.add_site(&domain, &body.timezone, Some(body.team)) {
+		Ok(site) => Json(json!({ "id": site.id, "domain": site.domain })).into_response(),
+		Err(rusqlite::Error::SqliteFailure(err, _))
+			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+		{
+			fail(StatusCode::CONFLICT, "This domain is already tracked.")
+		}
+		Err(err) => internal(err),
+	}
+}
+
+async fn live(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
+	if !reader.reads(&web, &domain) {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	}
+	let Ok(Some(site)) = web.app.site(&domain) else {
+		return fail(StatusCode::NOT_FOUND, "Site not found.");
+	};
+	let ticks = futures_util::stream::unfold(
+		(
+			web.ingest.clone(),
+			tokio::time::interval(std::time::Duration::from_secs(2)),
+		),
+		move |(ingest, mut interval)| async move {
+			interval.tick().await;
+			let count = ingest.current_visitors(site.id);
+			let event = Event::default().data(count.to_string());
+			Some((Ok::<_, std::convert::Infallible>(event), (ingest, interval)))
+		},
+	);
+	Sse::new(ticks)
+		.keep_alive(KeepAlive::default())
+		.into_response()
+}
+
+pub fn clean_domain(raw: &str) -> Option<String> {
+	let domain = raw
+		.trim()
+		.trim_start_matches("https://")
+		.trim_start_matches("http://")
+		.trim_start_matches("www.")
+		.trim_end_matches('/')
+		.to_lowercase();
+	// unicode names become punycode, the form browsers report
+	let Ok(url::Host::Domain(domain)) = url::Host::parse(&domain) else {
+		return None;
+	};
+	// a dot keeps names like `settings` or `team:1` from shadowing app pages
+	let label = |label: &str| {
+		(1..=63).contains(&label.len())
+			&& !label.starts_with('-')
+			&& !label.ends_with('-')
+			&& label
+				.bytes()
+				.all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+	};
+	((domain.contains('.') || domain == "localhost") && domain.split('.').all(label))
+		.then_some(domain)
+}
+
+impl App {
+	pub fn editable(&self, user: i64, domain: &str) -> Option<Site> {
+		let role = self.site_role(user, domain).ok().flatten()?;
+		(role != "viewer").then_some(())?;
+		self.site(domain).ok().flatten()
+	}
+
+	pub fn site_role(&self, user: i64, domain: &str) -> rusqlite::Result<Option<String>> {
+		self.conn()
+			.query_row(
+				"select m.role from sites s join members m on m.team = s.team where m.user = ?1 and s.domain = ?2
+				union all select g.role from sites s join guests g on g.site = s.id where g.user = ?1 and s.domain = ?2
+				limit 1",
+				params![user, domain],
+				|row| row.get(0),
+			)
+			.optional()
 	}
 }

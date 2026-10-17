@@ -12,10 +12,11 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail, internal};
+use crate::accounts::Viewer;
 use crate::app::{App, Site};
 use crate::card;
 use crate::stats::{self, day_number};
+use crate::web::{Web, fail, internal};
 
 const KINDS: [&str; 7] = [
 	"daily", "weekly", "biweekly", "monthly", "spike", "drop", "export",

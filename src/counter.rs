@@ -10,9 +10,9 @@ use jiff::Timestamp;
 use jiff::tz::TimeZone;
 use serde_json::json;
 
-use crate::accounts::Web;
 use crate::app::lock;
 use crate::stats::run;
+use crate::web::Web;
 
 const FRESH: Duration = Duration::from_secs(300);
 

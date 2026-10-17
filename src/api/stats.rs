@@ -11,8 +11,8 @@ use jiff::tz::TimeZone;
 use jiff::{Timestamp, ToSpan};
 use serde_json::{Map, Value, json};
 
-use crate::accounts::Web;
 use crate::stats::{error, key_reads, keyed, run, unauthorized};
+use crate::web::Web;
 
 type Params = HashMap<String, String>;
 

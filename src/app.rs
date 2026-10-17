@@ -450,6 +450,10 @@ pub(crate) fn token() -> rusqlite::Result<String> {
 	Ok(hex(&secret))
 }
 
+pub(crate) fn now() -> i64 {
+	jiff::Timestamp::now().as_second()
+}
+
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 	mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }

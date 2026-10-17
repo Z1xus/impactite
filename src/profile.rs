@@ -10,10 +10,12 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail, hash, internal, now, signed_in};
+use crate::accounts::{Viewer, hash, signed_in};
+use crate::app::now;
 use crate::app::{App, key_hash, token};
 use crate::mail::Letter;
 use crate::sites;
+use crate::web::{Web, fail, internal};
 
 const LINK_SECS: i64 = 15 * 60;
 

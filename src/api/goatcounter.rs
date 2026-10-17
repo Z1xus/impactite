@@ -14,12 +14,12 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{Call, Fail, broken, reply};
-use crate::accounts::Web;
 use crate::app::Site;
 use crate::export;
 use crate::ingest::{Client, Hit};
 use crate::names;
 use crate::stats::{self, answer, period};
+use crate::web::Web;
 
 const LIMIT: usize = 100;
 const VIEWS: &str = "pageview";

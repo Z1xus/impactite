@@ -1,47 +1,22 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use axum::extract::{FromRequestParts, Path, State};
+use axum::extract::{FromRequestParts, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::app::{App, Site, key_hash, lock, token};
-use crate::ingest::Ingest;
-use crate::mail::Letter;
-use crate::mail::Mail;
+use crate::app::{App, key_hash, lock, now, token};
 use crate::passkeys::{Failure, Proof, Purpose, device, registered};
-use crate::shares::Reader;
-use crate::stats::Stats;
-use crate::webauthn::Relying;
+use crate::web::{Web, fail, internal};
 
 const COOKIE: &str = "impactite_session";
 const SESSION_SECS: i64 = 30 * 86_400;
-const INVITE_SECS: i64 = 7 * 86_400;
-pub const ROLES: &[&str] = &["owner", "admin", "editor", "viewer"];
-
-pub struct Web {
-	pub app: Arc<App>,
-	pub stats: Arc<Stats>,
-	pub ingest: Arc<Ingest>,
-	pub mail: Arc<Mail>,
-	pub http: reqwest::Client,
-	pub data: std::path::PathBuf,
-	pub url: String,
-	pub rp: Relying,
-	pub setup: Mutex<Option<String>>,
-	pub ceremonies: Mutex<std::collections::HashMap<String, (Purpose, i64)>>,
-	pub alias: Option<String>,
-	pub updates: Mutex<crate::update::Status>,
-	pub sso: Option<crate::sso::Provider>,
-	pub google: Option<crate::google::Client>,
-}
 
 pub struct Viewer {
 	pub user: i64,
@@ -74,40 +49,6 @@ pub fn routes() -> Router<Arc<Web>> {
 		.route("/api/app/setup", post(setup))
 		.route("/api/app/login", post(login))
 		.route("/api/app/logout", post(logout))
-		.route("/api/app/teams", post(create_team))
-		.route("/api/app/teams/{team}/invites", post(invite))
-		.route(
-			"/api/app/teams/{team}/members/{user}",
-			delete(remove_member),
-		)
-		.route("/api/app/invites/accept", post(accept))
-		.route("/api/app/invites/{token}", get(invitation))
-		.route("/api/app/sites", post(add_site))
-		.route("/api/app/live/{domain}", get(live))
-}
-
-async fn live(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Response {
-	if !reader.reads(&web, &domain) {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	}
-	let Ok(Some(site)) = web.app.site(&domain) else {
-		return fail(StatusCode::NOT_FOUND, "Site not found.");
-	};
-	let ticks = futures_util::stream::unfold(
-		(
-			web.ingest.clone(),
-			tokio::time::interval(std::time::Duration::from_secs(2)),
-		),
-		move |(ingest, mut interval)| async move {
-			interval.tick().await;
-			let count = ingest.current_visitors(site.id);
-			let event = Event::default().data(count.to_string());
-			Some((Ok::<_, std::convert::Infallible>(event), (ingest, interval)))
-		},
-	);
-	Sse::new(ticks)
-		.keep_alive(KeepAlive::default())
-		.into_response()
 }
 
 #[derive(Deserialize)]
@@ -174,7 +115,7 @@ async fn setup(
 	signed_in(&web, user, None)
 }
 
-fn new_account(
+pub(crate) fn new_account(
 	web: &Web,
 	headers: &HeaderMap,
 	(name, email): (&str, &str),
@@ -253,216 +194,6 @@ async fn logout(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 	response
 }
 
-#[derive(Deserialize)]
-struct NewTeam {
-	name: String,
-}
-
-async fn create_team(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Json(body): Json<NewTeam>,
-) -> Response {
-	let name = body.name.trim();
-	if name.is_empty() || name.len() > 80 {
-		return fail(StatusCode::BAD_REQUEST, "Give the team a name.");
-	}
-	match web.app.create_team(viewer.user, name, false) {
-		Ok(team) => Json(json!({ "id": team })).into_response(),
-		Err(err) => internal(err),
-	}
-}
-
-#[derive(Deserialize)]
-struct Invite {
-	email: String,
-	role: String,
-}
-
-async fn invite(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Path(team): Path<i64>,
-	Json(body): Json<Invite>,
-) -> Response {
-	if !matches!(web.app.role(viewer.user, team), Ok(Some(role)) if role == "owner" || role == "admin")
-	{
-		return fail(StatusCode::FORBIDDEN, "Only owners and admins can invite.");
-	}
-	if web.app.is_personal(team).unwrap_or(true) {
-		return fail(StatusCode::BAD_REQUEST, "Create a team to invite people.");
-	}
-	if !ROLES[1..].contains(&body.role.as_str()) || !body.email.contains('@') {
-		return fail(StatusCode::BAD_REQUEST, "Use a valid email and role.");
-	}
-	let (token, team_name) = match (
-		web.app.invite(team, None, &body.email, &body.role),
-		web.app.team_name(team),
-	) {
-		(Ok(token), Ok(team)) => (token, team),
-		(Err(err), _) | (_, Err(err)) => return internal(err),
-	};
-	send_invite(&web, viewer.user, &team_name, &body.email, &token).await
-}
-
-pub async fn send_invite(web: &Web, user: i64, place: &str, email: &str, token: &str) -> Response {
-	match mail_invite(web, user, place, email, token).await {
-		Ok((link, sent)) => Json(json!({ "link": link, "sent": sent })).into_response(),
-		Err(err) => internal(err),
-	}
-}
-
-pub async fn mail_invite(
-	web: &Web,
-	user: i64,
-	place: &str,
-	email: &str,
-	token: &str,
-) -> rusqlite::Result<(String, bool)> {
-	let inviter = web.app.user_name(user)?;
-	let base = web.url.trim_end_matches('/');
-	let link = format!("{base}/invite/{token}");
-	let lines = [
-		format!("{inviter} invited you to {place} on impactite."),
-		"The link works for 7 days.".to_owned(),
-	];
-	let title = format!("Join {place}");
-	let letter = Letter {
-		base,
-		title: &title,
-		lines: &lines,
-		table: None,
-		button: Some(("Join", &link)),
-	};
-	let subject = format!("Join {place} on impactite");
-	let sent = match web
-		.mail
-		.send(email, &subject, &letter.text(), &letter.html())
-		.await
-	{
-		Ok(()) => web.mail.ready(),
-		Err(err) => {
-			tracing::warn!(%err, "invite mail");
-			false
-		}
-	};
-	Ok((link, sent))
-}
-
-#[derive(Deserialize)]
-struct Accept {
-	token: String,
-	name: Option<String>,
-	password: Option<String>,
-	passkey: Option<Proof>,
-}
-
-async fn invitation(State(web): State<Arc<Web>>, Path(token): Path<String>) -> Response {
-	match web.app.open_invite(&token) {
-		Ok(Some(invite)) => {
-			Json(json!({ "place": invite.place, "email": invite.email })).into_response()
-		}
-		Ok(None) => fail(
-			StatusCode::NOT_FOUND,
-			"This invite expired or was already used.",
-		),
-		Err(err) => internal(err),
-	}
-}
-
-async fn accept(
-	State(web): State<Arc<Web>>,
-	headers: HeaderMap,
-	Json(body): Json<Accept>,
-) -> Response {
-	let Ok(Some(Invitation {
-		team,
-		site,
-		email,
-		role,
-		..
-	})) = web.app.open_invite(&body.token)
-	else {
-		return fail(
-			StatusCode::NOT_FOUND,
-			"This invite expired or was already used.",
-		);
-	};
-	let signed = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
-	let user = match (signed, &body.name) {
-		(Some(user), _) => user,
-		(None, Some(name)) => match new_account(
-			&web,
-			&headers,
-			(name, &email),
-			body.password.as_deref(),
-			body.passkey.as_ref(),
-			&Purpose::Invite(body.token.clone()),
-		) {
-			Ok(user) => user,
-			Err((status, message)) => return fail(status, message),
-		},
-		_ => {
-			return fail(
-				StatusCode::UNAUTHORIZED,
-				"Sign in or create an account to join.",
-			);
-		}
-	};
-	if let Err(err) = web.app.join(team, site, user, &role, &body.token) {
-		return internal(err);
-	}
-	signed_in(&web, user, Some(site.map_or(team, |_| 0)))
-}
-
-async fn remove_member(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Path((team, user)): Path<(i64, i64)>,
-) -> Response {
-	let allowed = viewer.user == user
-		|| matches!(web.app.role(viewer.user, team), Ok(Some(role)) if role == "owner" || role == "admin");
-	if !allowed || web.app.role(user, team).ok().flatten().as_deref() == Some("owner") {
-		return fail(StatusCode::FORBIDDEN, "You can't remove this member.");
-	}
-	match web.app.remove_member(team, user) {
-		Ok(()) => StatusCode::NO_CONTENT.into_response(),
-		Err(err) => internal(err),
-	}
-}
-
-#[derive(Deserialize)]
-struct NewSite {
-	team: i64,
-	domain: String,
-	timezone: String,
-}
-
-async fn add_site(
-	State(web): State<Arc<Web>>,
-	viewer: Viewer,
-	Json(body): Json<NewSite>,
-) -> Response {
-	if !matches!(web.app.role(viewer.user, body.team), Ok(Some(role)) if role != "viewer") {
-		return fail(StatusCode::FORBIDDEN, "You can't add sites to this team.");
-	}
-	let Some(domain) = clean_domain(&body.domain) else {
-		return fail(StatusCode::BAD_REQUEST, "Use a domain like example.com.");
-	};
-	if jiff::tz::TimeZone::get(&body.timezone).is_err() {
-		return fail(StatusCode::BAD_REQUEST, "Pick a timezone from the list.");
-	}
-	match web.app.add_site(&domain, &body.timezone, Some(body.team)) {
-		Ok(site) => Json(json!({ "id": site.id, "domain": site.domain })).into_response(),
-		Err(rusqlite::Error::SqliteFailure(err, _))
-			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-		{
-			fail(StatusCode::CONFLICT, "This domain is already tracked.")
-		}
-		Err(err) => internal(err),
-	}
-}
-
 fn valid_identity(name: &str, email: &str) -> Result<(), &'static str> {
 	if name.trim().is_empty() {
 		return Err("Tell us your name.");
@@ -483,7 +214,7 @@ pub(crate) fn signed_in(web: &Web, user: i64, team: Option<i64>) -> Response {
 	response
 }
 
-fn cookie(headers: &HeaderMap) -> Option<String> {
+pub(crate) fn cookie(headers: &HeaderMap) -> Option<String> {
 	headers
 		.get_all(header::COOKIE)
 		.iter()
@@ -504,27 +235,6 @@ fn set_cookie(response: &mut Response, web: &Web, value: &str, max_age: i64) {
 	if let Ok(value) = HeaderValue::from_str(&cookie) {
 		response.headers_mut().insert(header::SET_COOKIE, value);
 	}
-}
-
-pub struct Invitation {
-	pub team: i64,
-	pub site: Option<i64>,
-	pub email: String,
-	pub role: String,
-	pub place: String,
-}
-
-pub fn fail(status: StatusCode, message: &str) -> Response {
-	(status, Json(json!({ "error": message }))).into_response()
-}
-
-pub fn internal(err: rusqlite::Error) -> Response {
-	tracing::error!(%err, "accounts");
-	broken()
-}
-
-pub fn broken() -> Response {
-	fail(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong.")
 }
 
 #[derive(Deserialize)]
@@ -556,40 +266,11 @@ pub async fn signup(
 	}
 }
 
-pub fn clean_domain(raw: &str) -> Option<String> {
-	let domain = raw
-		.trim()
-		.trim_start_matches("https://")
-		.trim_start_matches("http://")
-		.trim_start_matches("www.")
-		.trim_end_matches('/')
-		.to_lowercase();
-	// unicode names become punycode, the form browsers report
-	let Ok(url::Host::Domain(domain)) = url::Host::parse(&domain) else {
-		return None;
-	};
-	// a dot keeps names like `settings` or `team:1` from shadowing app pages
-	let label = |label: &str| {
-		(1..=63).contains(&label.len())
-			&& !label.starts_with('-')
-			&& !label.ends_with('-')
-			&& label
-				.bytes()
-				.all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-	};
-	((domain.contains('.') || domain == "localhost") && domain.split('.').all(label))
-		.then_some(domain)
-}
-
 pub(crate) fn hash(password: &str) -> rusqlite::Result<String> {
 	Argon2::default()
 		.hash_password(password.as_bytes())
 		.map(|hash| hash.to_string())
 		.map_err(|err| rusqlite::Error::ToSqlConversionFailure(err.to_string().into()))
-}
-
-pub(crate) fn now() -> i64 {
-	jiff::Timestamp::now().as_second()
 }
 
 impl App {
@@ -688,156 +369,11 @@ impl App {
 		Ok(())
 	}
 
-	pub fn create_team(&self, user: i64, name: &str, personal: bool) -> rusqlite::Result<i64> {
-		let conn = self.conn();
-		conn.execute(
-			"insert into teams (name, personal, created_at) values (?1, ?2, unixepoch())",
-			params![name, personal],
-		)?;
-		let team = conn.last_insert_rowid();
-		conn.execute(
-			"insert into members (team, user, role) values (?1, ?2, 'owner')",
-			params![team, user],
-		)?;
-		Ok(team)
-	}
-
-	pub fn team_name(&self, team: i64) -> rusqlite::Result<String> {
-		self.conn()
-			.query_row("select name from teams where id = ?1", [team], |row| {
-				row.get(0)
-			})
-	}
-
 	pub fn user_name(&self, user: i64) -> rusqlite::Result<String> {
 		self.conn()
 			.query_row("select name from users where id = ?1", [user], |row| {
 				row.get(0)
 			})
-	}
-
-	pub fn personal_team(&self, user: i64) -> rusqlite::Result<i64> {
-		self.conn().query_row(
-			"select t.id from teams t join members m on m.team = t.id where m.user = ?1 and t.personal = 1",
-			[user],
-			|row| row.get(0),
-		)
-	}
-
-	pub fn is_personal(&self, team: i64) -> rusqlite::Result<bool> {
-		self.conn()
-			.query_row("select personal from teams where id = ?1", [team], |row| {
-				row.get(0)
-			})
-	}
-
-	pub fn adopt_sites(&self, team: i64) -> rusqlite::Result<()> {
-		self.conn().execute(
-			"update sites set team = ?1 where team is null and domain not like '~%'",
-			[team],
-		)?;
-		Ok(())
-	}
-
-	pub fn role(&self, user: i64, team: i64) -> rusqlite::Result<Option<String>> {
-		self.conn()
-			.query_row(
-				"select role from members where user = ?1 and team = ?2",
-				params![user, team],
-				|row| row.get(0),
-			)
-			.optional()
-	}
-
-	pub fn editable(&self, user: i64, domain: &str) -> Option<Site> {
-		let role = self.site_role(user, domain).ok().flatten()?;
-		(role != "viewer").then_some(())?;
-		self.site(domain).ok().flatten()
-	}
-
-	pub fn site_role(&self, user: i64, domain: &str) -> rusqlite::Result<Option<String>> {
-		self.conn()
-			.query_row(
-				"select m.role from sites s join members m on m.team = s.team where m.user = ?1 and s.domain = ?2
-				union all select g.role from sites s join guests g on g.site = s.id where g.user = ?1 and s.domain = ?2
-				limit 1",
-				params![user, domain],
-				|row| row.get(0),
-			)
-			.optional()
-	}
-
-	pub fn invite(
-		&self,
-		team: i64,
-		site: Option<u64>,
-		email: &str,
-		role: &str,
-	) -> rusqlite::Result<String> {
-		let token = token()?;
-		self.conn().execute(
-			"insert into invites (hash, team, site, email, role, expires_at) values (?1, ?2, ?3, ?4, ?5, ?6)",
-			params![
-				key_hash(&token),
-				team,
-				site.map(|site| site as i64),
-				email.trim(),
-				role,
-				now() + INVITE_SECS
-			],
-		)?;
-		Ok(token)
-	}
-
-	pub fn open_invite(&self, token: &str) -> rusqlite::Result<Option<Invitation>> {
-		self.conn()
-			.query_row(
-				"select i.team, i.site, i.email, i.role, coalesce(s.domain, t.name) from invites i
-				join teams t on t.id = i.team left join sites s on s.id = i.site
-				where i.hash = ?1 and i.expires_at > ?2",
-				params![key_hash(token), now()],
-				|row| {
-					Ok(Invitation {
-						team: row.get(0)?,
-						site: row.get(1)?,
-						email: row.get(2)?,
-						role: row.get(3)?,
-						place: row.get(4)?,
-					})
-				},
-			)
-			.optional()
-	}
-
-	pub fn join(
-		&self,
-		team: i64,
-		site: Option<i64>,
-		user: i64,
-		role: &str,
-		token: &str,
-	) -> rusqlite::Result<()> {
-		let conn = self.conn();
-		match site {
-			Some(site) => conn.execute(
-				"insert into guests (site, user, role) values (?1, ?2, ?3) on conflict do nothing",
-				params![site, user, role],
-			)?,
-			None => conn.execute(
-				"insert into members (team, user, role) values (?1, ?2, ?3) on conflict do nothing",
-				params![team, user, role],
-			)?,
-		};
-		conn.execute("delete from invites where hash = ?1", [key_hash(token)])?;
-		Ok(())
-	}
-
-	pub fn remove_member(&self, team: i64, user: i64) -> rusqlite::Result<()> {
-		self.conn().execute(
-			"delete from members where team = ?1 and user = ?2",
-			params![team, user],
-		)?;
-		Ok(())
 	}
 
 	pub fn me(&self, user: i64) -> rusqlite::Result<Value> {

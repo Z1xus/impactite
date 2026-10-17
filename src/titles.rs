@@ -8,9 +8,9 @@ use axum::routing::get;
 use axum::{Json, Router};
 use rusqlite::params;
 
-use crate::accounts::{Web, fail, internal};
 use crate::app::App;
 use crate::shares::Reader;
+use crate::web::{Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new().route("/api/app/sites/{domain}/titles", get(list))

@@ -17,10 +17,11 @@ use serde_json::{Map, Value, json};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-use crate::accounts::{Viewer, Web, fail};
+use crate::accounts::Viewer;
 use crate::app::Site;
 use crate::goals::Goal;
 use crate::stats::{self, day_number};
+use crate::web::{Web, fail};
 
 #[derive(Deserialize)]
 pub struct ExportRequest {

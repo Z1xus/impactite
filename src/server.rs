@@ -6,7 +6,7 @@ use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
-use crate::accounts::{self, Web};
+use crate::accounts;
 use crate::admin;
 use crate::api;
 use crate::assets;
@@ -32,6 +32,7 @@ use crate::teams;
 use crate::titles;
 use crate::totp;
 use crate::tracker;
+use crate::web::Web;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 	let mut events = Router::new()

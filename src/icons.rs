@@ -5,8 +5,8 @@ use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
-use crate::accounts::Web;
 use crate::shares::Reader;
+use crate::web::Web;
 
 const MAX_BYTES: usize = 256 * 1024;
 

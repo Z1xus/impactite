@@ -12,9 +12,10 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::{Viewer, Web, fail, internal};
+use crate::accounts::Viewer;
 use crate::app::{App, Site};
 use crate::net::Proxies;
+use crate::web::{Web, fail, internal};
 
 const KINDS: [&str; 5] = ["ip", "country", "page", "hostname", "prop"];
 

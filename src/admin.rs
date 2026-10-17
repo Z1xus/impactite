@@ -9,9 +9,10 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, Web, fail, internal};
+use crate::accounts::Viewer;
 use crate::app::{App, lock};
 use crate::profile;
+use crate::web::{Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()

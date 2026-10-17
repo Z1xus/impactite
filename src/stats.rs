@@ -12,10 +12,10 @@ use jiff::{Span, Timestamp, ToSpan};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::accounts::{Web, fail};
 use crate::app::{App, Site};
 use crate::goals::Goal;
 use crate::shares::Reader;
+use crate::web::{Web, fail};
 
 pub struct Stats {
 	pub db: Arc<Db>,

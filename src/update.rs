@@ -11,8 +11,8 @@ use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::accounts::Web;
 use crate::app::{hex, lock};
+use crate::web::Web;
 
 const REPO: &str = "z1xus/impactite";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -142,7 +142,7 @@ pub async fn check(web: &Web) -> Result<(), CheckError> {
 			};
 			let mut status = lock(&web.updates);
 			status.latest = latest;
-			status.checked_at = Some(crate::accounts::now());
+			status.checked_at = Some(crate::app::now());
 			status.failed = false;
 			status.checking = false;
 		}

@@ -10,10 +10,12 @@ use rusqlite::params;
 use serde_json::{Value, json};
 
 use super::{Call, Fail, broken, reply};
-use crate::accounts::{self, Web, clean_domain};
 use crate::app::{App, Site, token};
 use crate::goals::Goal;
+use crate::sites::clean_domain;
 use crate::sites::drop_site;
+use crate::teams;
+use crate::web::Web;
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -294,7 +296,7 @@ async fn invite(State(web): State<Arc<Web>>, call: Call) -> Response {
 			.app
 			.invite(team, Some(site.id), email, role)
 			.map_err(broken)?;
-		accounts::mail_invite(&web, call.user, &site.domain, email, &token)
+		teams::mail_invite(&web, call.user, &site.domain, email, &token)
 			.await
 			.map_err(broken)?;
 		Ok(json!({ "email": email, "role": role, "status": "invited" }))

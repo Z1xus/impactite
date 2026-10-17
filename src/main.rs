@@ -36,6 +36,7 @@ mod titles;
 mod totp;
 mod tracker;
 mod update;
+mod web;
 mod webauthn;
 
 use std::fs;
@@ -56,13 +57,13 @@ use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
-use crate::accounts::Web;
 use crate::app::App;
 use crate::geo::Geo;
 use crate::ingest::Ingest;
 use crate::mail::Mail;
 use crate::net::Proxies;
 use crate::stats::Stats;
+use crate::web::Web;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -259,7 +260,7 @@ async fn main() -> anyhow::Result<()> {
 			if jiff::tz::TimeZone::get(&timezone).is_err() {
 				bail!("unknown timezone {timezone}");
 			}
-			let Some(domain) = accounts::clean_domain(&domain) else {
+			let Some(domain) = sites::clean_domain(&domain) else {
 				bail!("not a valid domain: {domain}");
 			};
 			let site = app.add_site(&domain, &timezone, default_team(&app)?)?;

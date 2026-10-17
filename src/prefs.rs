@@ -8,8 +8,9 @@ use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
 
-use crate::accounts::{Viewer, Web, fail, internal};
+use crate::accounts::Viewer;
 use crate::app::App;
+use crate::web::{Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new().route("/api/app/prefs/{key}", get(read).put(write))

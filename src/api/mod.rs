@@ -7,9 +7,9 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use serde_json::Value;
 
-use crate::accounts::Web;
 use crate::app::Site;
 use crate::stats::{error, unauthorized};
+use crate::web::Web;
 
 mod goatcounter;
 mod sites;
