@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { number } from "#lib/display.svelte.ts";
 	import { Tween } from "svelte/motion";
 	import { cubicOut } from "svelte/easing";
@@ -9,7 +10,10 @@
 		class: className = ""
 	}: { value: number; format?: (value: number) => string; class?: string } = $props();
 
-	const tween = new Tween(0, { duration: 320, easing: cubicOut });
+	const tween = new Tween(
+		untrack(() => value),
+		{ duration: 320, easing: cubicOut }
+	);
 
 	$effect(() => {
 		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;

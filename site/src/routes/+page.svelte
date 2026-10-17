@@ -31,6 +31,7 @@
 	import Scale from "../lib/Scale.svelte";
 	import { appear } from "../lib/appear.ts";
 	import { reveal } from "../lib/reveal.ts";
+	import { MediaQuery } from "svelte/reactivity";
 	import { impact } from "../lib/impact.ts";
 
 	let { data } = $props();
@@ -88,8 +89,8 @@
 		});
 	});
 	const compact = (value: number) => Math.round(value).toLocaleString("en-US");
-	// the preview wakes up when the meteor lands
-	let landed = $state(false);
+	// the preview wakes up when the meteor lands, so the built page and reduced motion start woken
+	let landed = $state(new MediaQuery("(prefers-reduced-motion: reduce)", true).current);
 	// the same six numbers, panels and tabs as the dashboard, filled with the demo site's month
 	const TOTALS = [9148, 10512, 21400, 54, 127, 2.04];
 	const PREVIOUS = [6629, 7729, 15620, 54, 130, 2.02];
