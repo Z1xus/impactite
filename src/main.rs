@@ -579,6 +579,9 @@ fn default_team(app: &App) -> anyhow::Result<Option<i64>> {
 }
 
 fn prune(app: &App, db: &Db) {
+	if let Err(err) = app.purge_expired() {
+		tracing::warn!(%err, "purge expired");
+	}
 	let Ok(sites) = app.retentions() else {
 		return;
 	};

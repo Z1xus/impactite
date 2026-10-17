@@ -19,6 +19,7 @@ use crate::web::{Web, broken, fail, internal};
 use crate::webauthn::{self, Assertion, Key, Registration};
 
 const CEREMONY_SECS: i64 = 300;
+const MAX_CEREMONIES: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Purpose {
@@ -55,6 +56,10 @@ impl Web {
 		let now = now();
 		let mut ceremonies = lock(&self.ceremonies);
 		ceremonies.retain(|_, (_, expires)| *expires > now);
+		// anyone can start a sign-in, so the open ones stay bounded
+		if ceremonies.len() >= MAX_CEREMONIES {
+			return None;
+		}
 		ceremonies.insert(challenge.clone(), (purpose, now + CEREMONY_SECS));
 		Some(challenge)
 	}

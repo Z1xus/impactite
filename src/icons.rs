@@ -31,8 +31,9 @@ pub async fn icon(
 	let dir = web.data.join("icons");
 	let path = dir.join(&host);
 	let bytes = match tokio::fs::read(&path).await {
-		Ok(bytes) => bytes,
-		Err(_) => {
+		// a host without an icon is asked again after a day
+		Ok(bytes) if !bytes.is_empty() || recent(&path).await => bytes,
+		_ => {
 			let fetched = fetch(&web.http, &host).await.unwrap_or_default();
 			let _ = tokio::fs::create_dir_all(&dir).await;
 			let _ = tokio::fs::write(&path, &fetched).await;
@@ -56,6 +57,16 @@ pub async fn icon(
 		bytes,
 	)
 		.into_response()
+}
+
+async fn recent(path: &std::path::Path) -> bool {
+	let modified = tokio::fs::metadata(path)
+		.await
+		.and_then(|meta| meta.modified());
+	modified.is_ok_and(|at| {
+		at.elapsed()
+			.is_ok_and(|age| age < Duration::from_secs(86_400))
+	})
 }
 
 async fn fetch(http: &reqwest::Client, host: &str) -> Option<Vec<u8>> {

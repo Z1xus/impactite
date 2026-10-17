@@ -33,6 +33,12 @@ pub fn routes() -> Router<Arc<Web>> {
 		.route("/api/app/login/link/accept", post(accept_link))
 }
 
+enum Column {
+	Name,
+	Email,
+	Password,
+}
+
 #[derive(Deserialize)]
 struct Update {
 	name: Option<String>,
@@ -60,7 +66,7 @@ async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Up
 		if name.is_empty() || name.len() > 80 {
 			return fail(StatusCode::BAD_REQUEST, "Tell us your name.");
 		}
-		if let Err(err) = web.app.set_user(viewer.user, "name", name) {
+		if let Err(err) = web.app.set_user(viewer.user, Column::Name, name) {
 			return internal(err);
 		}
 	}
@@ -92,7 +98,7 @@ async fn update(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Up
 		pending = Some(email);
 	}
 	if let Some(email) = pending {
-		match web.app.set_user(viewer.user, "email", email) {
+		match web.app.set_user(viewer.user, Column::Email, email) {
 			Err(rusqlite::Error::SqliteFailure(err, _))
 				if err.code == rusqlite::ErrorCode::ConstraintViolation =>
 			{
@@ -158,7 +164,7 @@ async fn accept_email(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> R
 			"This link expired or was already used.",
 		);
 	};
-	match web.app.set_user(user, "email", &email) {
+	match web.app.set_user(user, Column::Email, &email) {
 		Err(rusqlite::Error::SqliteFailure(err, _))
 			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
 		{
@@ -194,7 +200,11 @@ async fn password(
 			"Use at least 10 characters for the password.",
 		);
 	}
-	match hash(&body.password).and_then(|hash| web.app.set_user(viewer.user, "password", &hash)) {
+	// a new password signs out every other device
+	let changed = hash(&body.password)
+		.and_then(|hash| web.app.set_user(viewer.user, Column::Password, &hash))
+		.and_then(|()| web.app.end_other_sessions(viewer.user, &viewer.session));
+	match changed {
 		Ok(()) => StatusCode::NO_CONTENT.into_response(),
 		Err(err) => internal(err),
 	}
@@ -326,11 +336,25 @@ async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Re
 }
 
 impl App {
-	fn set_user(&self, user: i64, column: &str, value: &str) -> rusqlite::Result<()> {
-		self.conn().execute(
-			&format!("update users set {column} = ?2 where id = ?1"),
-			params![user, value],
-		)?;
+	fn set_user(&self, user: i64, column: Column, value: &str) -> rusqlite::Result<()> {
+		let sql = match column {
+			Column::Name => "update users set name = ?2 where id = ?1",
+			Column::Email => "update users set email = ?2 where id = ?1",
+			Column::Password => "update users set password = ?2 where id = ?1",
+		};
+		self.conn().execute(sql, params![user, value])?;
+		Ok(())
+	}
+
+	// sessions, invites and links nobody used before they ran out
+	pub fn purge_expired(&self) -> rusqlite::Result<()> {
+		let conn = self.conn();
+		for table in ["sessions", "invites", "logins", "email_changes"] {
+			conn.execute(
+				&format!("delete from {table} where expires_at <= ?1"),
+				[now()],
+			)?;
+		}
 		Ok(())
 	}
 
