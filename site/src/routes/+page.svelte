@@ -329,7 +329,7 @@
 				</div>
 			{/each}
 		</div>
-		<p class="text-[14px] text-dim">
+		<p class="text-[14px] text-dim" data-appear>
 			Plausible CE 3.2.1, GoatCounter 2.7.0, Ryzen 5 7600X.
 			<a href={BENCH} class="text-cyan hover:text-fg">Source</a>
 		</p>
