@@ -418,12 +418,19 @@ impl App {
 		)
 	}
 
+	// the public link is named after the domain, so it follows the new name
 	pub fn rename_site(&self, site: u64, domain: &str) -> rusqlite::Result<()> {
-		self.conn().execute(
+		let mut conn = self.conn();
+		let tx = conn.transaction()?;
+		tx.execute(
+			"update shares set slug = ?2 where site = ?1 and slug = (select domain from sites where id = ?1)",
+			params![site as i64, domain],
+		)?;
+		tx.execute(
 			"update sites set domain = ?2 where id = ?1",
 			params![site as i64, domain],
 		)?;
-		Ok(())
+		tx.commit()
 	}
 
 	pub fn set_counter(&self, site: u64, counter: bool) -> rusqlite::Result<()> {
