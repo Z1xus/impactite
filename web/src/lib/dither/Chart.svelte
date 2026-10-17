@@ -48,9 +48,12 @@
 
 	function nice(max: number) {
 		const step = 10 ** Math.floor(Math.log10(max));
+		// counts get a whole middle tick, or 7.5 would read as 8
+		const whole = [...values, ...previous].every(Number.isInteger);
 		return (
-			[1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * step).find((n) => n >= max) ??
-			max
+			[1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
+				.map((m) => m * step)
+				.find((n) => n >= max && (!whole || Number.isInteger(n / 2))) ?? max
 		);
 	}
 
@@ -236,7 +239,10 @@
 
 <div class="flex gap-3">
 	{#if axes}
-		<div class="flex flex-col justify-between py-0 text-right" style:height="{height}px">
+		<div
+			class="flex min-w-10 flex-col justify-between py-0 text-right"
+			style:height="{height}px"
+		>
 			{#each ticks as tick (tick)}
 				<span class="-translate-y-1/2 label first:translate-y-0 last:translate-y-[-100%]"
 					>{format(tick)}</span
