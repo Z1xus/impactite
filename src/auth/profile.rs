@@ -10,11 +10,11 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, hash, signed_in};
 use crate::app::now;
 use crate::app::{App, key_hash, token};
+use crate::auth::accounts::{Viewer, hash, signed_in};
 use crate::mail::Letter;
-use crate::sites;
+use crate::site;
 use crate::web::{Web, fail, internal};
 
 const LINK_SECS: i64 = 15 * 60;
@@ -266,7 +266,7 @@ pub async fn remove_account(web: &Web, user: i64) -> Result<(), (StatusCode, Str
 	}
 	for (team, _, _) in owned {
 		for site in web.app.team_sites(team).map_err(broken)? {
-			if !sites::drop_site(web, site).await {
+			if !site::drop_site(web, site).await {
 				return Err((
 					StatusCode::INTERNAL_SERVER_ERROR,
 					"Something went wrong.".to_owned(),

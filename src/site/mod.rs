@@ -1,3 +1,13 @@
+pub mod counter;
+pub mod funnels;
+pub mod goals;
+pub mod google;
+pub mod reports;
+pub mod segments;
+pub mod shares;
+pub mod shields;
+pub mod titles;
+
 use std::fs;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -17,12 +27,12 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::Viewer;
 use crate::app::{App, Site, token};
+use crate::auth::accounts::Viewer;
+use crate::auth::teams::{self, manager};
 use crate::import;
-use crate::shares::Reader;
+use crate::site::shares::Reader;
 use crate::stats::day_number;
-use crate::teams::{self, manager};
 use crate::web::{Web, broken, fail, internal};
 
 const UPLOAD: usize = 1 << 30;

@@ -11,10 +11,9 @@ use serde_json::{Value, json};
 
 use super::{Call, Fail, broken, reply};
 use crate::app::{App, Site, token};
-use crate::goals::Goal;
-use crate::sites::clean_domain;
-use crate::sites::drop_site;
-use crate::teams;
+use crate::auth::teams;
+use crate::site::goals::Goal;
+use crate::site::{clean_domain, drop_site};
 use crate::web::Web;
 
 pub fn routes() -> Router<Arc<Web>> {

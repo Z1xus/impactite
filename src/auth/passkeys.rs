@@ -11,12 +11,12 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, signed_in};
 use crate::app::now;
 use crate::app::{App, lock};
+use crate::auth::accounts::{Viewer, signed_in};
+use crate::auth::webauthn::{self, Assertion, Key, Registration};
 use crate::ingest::ua;
 use crate::web::{Web, broken, fail, internal};
-use crate::webauthn::{self, Assertion, Key, Registration};
 
 const CEREMONY_SECS: i64 = 300;
 const MAX_CEREMONIES: usize = 10_000;

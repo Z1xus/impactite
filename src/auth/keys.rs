@@ -8,7 +8,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::Viewer;
+use crate::auth::accounts::Viewer;
 use crate::web::{Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {

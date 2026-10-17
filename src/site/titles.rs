@@ -9,7 +9,7 @@ use axum::{Json, Router};
 use rusqlite::params;
 
 use crate::app::App;
-use crate::shares::Reader;
+use crate::site::shares::Reader;
 use crate::web::{Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {

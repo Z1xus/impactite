@@ -9,11 +9,11 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, cookie, new_account, signed_in};
 use crate::app::{App, Site, key_hash, now, token};
+use crate::auth::accounts::{Viewer, cookie, new_account, signed_in};
+use crate::auth::passkeys::{Proof, Purpose};
 use crate::mail::Letter;
-use crate::passkeys::{Proof, Purpose};
-use crate::sites;
+use crate::site;
 use crate::web::{Web, broken, fail, internal};
 
 pub const ROLES: &[&str] = &["owner", "admin", "editor", "viewer"];
@@ -108,7 +108,7 @@ async fn destroy(State(web): State<Arc<Web>>, viewer: Viewer, Path(team): Path<i
 		Err(err) => return internal(err),
 	};
 	for site in sites {
-		if !sites::drop_site(&web, site).await {
+		if !site::drop_site(&web, site).await {
 			return broken();
 		}
 	}

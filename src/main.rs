@@ -1,43 +1,25 @@
-mod accounts;
-mod admin;
 mod api;
 mod app;
 mod assets;
+mod auth;
 mod card;
 mod cli;
-mod counter;
 mod demo;
 mod export;
-mod funnels;
 mod geo;
-mod goals;
-mod google;
 mod icons;
 mod import;
 mod ingest;
-mod keys;
 mod mail;
 mod names;
 mod net;
-mod passkeys;
-mod prefs;
-mod profile;
-mod reports;
 mod s3;
-mod segments;
 mod server;
-mod shares;
-mod shields;
-mod sites;
-mod sso;
+mod site;
 mod stats;
-mod teams;
-mod titles;
-mod totp;
 mod tracker;
 mod update;
 mod web;
-mod webauthn;
 
 use std::fs;
 use std::net::SocketAddr;
@@ -248,7 +230,7 @@ async fn main() -> anyhow::Result<()> {
 			if jiff::tz::TimeZone::get(&timezone).is_err() {
 				bail!("unknown timezone {timezone}");
 			}
-			let Some(domain) = sites::clean_domain(&domain) else {
+			let Some(domain) = site::clean_domain(&domain) else {
 				bail!("not a valid domain: {domain}");
 			};
 			let site = app.add_site(&domain, &timezone, default_team(&app)?)?;
@@ -338,7 +320,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		mail,
 		http: reqwest::Client::new(),
 		data: data.to_path_buf(),
-		rp: webauthn::Relying::from_url(&url).context("invalid --url")?,
+		rp: auth::webauthn::Relying::from_url(&url).context("invalid --url")?,
 		url: url.clone(),
 		setup: Mutex::new(setup),
 		ceremonies: Mutex::default(),
@@ -349,7 +331,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			.clone()
 			.zip(args.sso_client_id.clone())
 			.zip(args.sso_client_secret.clone())
-			.map(|((issuer, id), secret)| sso::Provider {
+			.map(|((issuer, id), secret)| auth::sso::Provider {
 				issuer,
 				id,
 				secret,
@@ -359,7 +341,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			.google_client_id
 			.clone()
 			.zip(args.google_client_secret.clone())
-			.map(|(id, secret)| google::Client { id, secret }),
+			.map(|(id, secret)| site::google::Client { id, secret }),
 	});
 
 	let checker = (!args.no_update_check).then(|| tokio::spawn(update::watch(web.clone())));
@@ -374,7 +356,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			loop {
 				interval.tick().await;
 				ingest.sweep();
-				reports::tick(&web).await;
+				site::reports::tick(&web).await;
 				if minutes.is_multiple_of(60) {
 					prune(&app, &db);
 				}

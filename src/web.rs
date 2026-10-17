@@ -8,11 +8,11 @@ use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
 use crate::app::App;
+use crate::auth::passkeys::Purpose;
+use crate::auth::webauthn::Relying;
 use crate::ingest::Ingest;
 use crate::mail::Mail;
-use crate::passkeys::Purpose;
 use crate::stats::Stats;
-use crate::webauthn::Relying;
 
 pub struct Web {
 	pub app: Arc<App>,
@@ -27,8 +27,8 @@ pub struct Web {
 	pub ceremonies: Mutex<HashMap<String, (Purpose, i64)>>,
 	pub alias: Option<String>,
 	pub updates: Mutex<crate::update::Status>,
-	pub sso: Option<crate::sso::Provider>,
-	pub google: Option<crate::google::Client>,
+	pub sso: Option<crate::auth::sso::Provider>,
+	pub google: Option<crate::site::google::Client>,
 }
 
 pub fn fail(status: StatusCode, message: &str) -> Response {

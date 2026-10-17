@@ -6,31 +6,15 @@ use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
-use crate::accounts;
-use crate::admin;
 use crate::api;
 use crate::assets;
-use crate::counter;
+use crate::auth::{accounts, admin, keys, passkeys, prefs, profile, sso, teams, totp};
 use crate::export;
-use crate::funnels;
-use crate::goals;
-use crate::google;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
-use crate::keys;
-use crate::passkeys;
-use crate::prefs;
-use crate::profile;
-use crate::reports;
-use crate::segments;
-use crate::shares;
-use crate::shields;
-use crate::sites;
-use crate::sso;
+use crate::site;
+use crate::site::{counter, funnels, goals, google, reports, segments, shares, shields, titles};
 use crate::stats::{self, Stats};
-use crate::teams;
-use crate::titles;
-use crate::totp;
 use crate::tracker;
 use crate::web::Web;
 
@@ -62,7 +46,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(goals::routes())
 				.merge(funnels::routes())
 				.merge(keys::routes())
-				.merge(sites::routes())
+				.merge(site::routes())
 				.merge(teams::routes())
 				.merge(profile::routes())
 				.merge(admin::routes())

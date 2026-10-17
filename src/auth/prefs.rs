@@ -8,8 +8,8 @@ use axum::{Json, Router};
 use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
 
-use crate::accounts::Viewer;
 use crate::app::App;
+use crate::auth::accounts::Viewer;
 use crate::web::{Web, fail, internal};
 
 pub fn routes() -> Router<Arc<Web>> {

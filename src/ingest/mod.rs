@@ -15,7 +15,7 @@ use jiff::tz::TimeZone;
 use crate::app::{App, Site, lock};
 use crate::geo::Geo;
 use crate::net::Proxies;
-use crate::shields::Shields;
+use crate::site::shields::Shields;
 
 const SESSION_SECS: i64 = 30 * 60;
 const SHARDS: usize = 64;

@@ -14,11 +14,11 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::accounts::signed_in;
 use crate::app::now;
-use crate::passkeys::Purpose;
+use crate::auth::accounts::signed_in;
+use crate::auth::passkeys::Purpose;
+use crate::auth::webauthn;
 use crate::web::Web;
-use crate::webauthn;
 
 pub struct Provider {
 	pub issuer: String,

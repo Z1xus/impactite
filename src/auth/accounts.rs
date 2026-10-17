@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::app::{App, key_hash, lock, now, token};
-use crate::passkeys::{Failure, Proof, Purpose, device, registered};
+use crate::auth::passkeys::{Failure, Proof, Purpose, device, registered};
 use crate::web::{Web, fail, internal};
 
 const COOKIE: &str = "impactite_session";
@@ -171,7 +171,7 @@ async fn login(State(web): State<Arc<Web>>, Json(body): Json<Credentials>) -> Re
 				),
 			)
 				.into_response(),
-			(Ok(Some(_)), Some(code)) => match crate::totp::verify(&web.app, user, code) {
+			(Ok(Some(_)), Some(code)) => match crate::auth::totp::verify(&web.app, user, code) {
 				Ok(()) => signed_in(&web, user, None),
 				Err(message) => (
 					StatusCode::UNAUTHORIZED,

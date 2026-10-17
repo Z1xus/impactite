@@ -12,8 +12,8 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::accounts::{Viewer, hash};
 use crate::app::{App, Site, token};
+use crate::auth::accounts::{Viewer, hash};
 use crate::web::{Web, fail, internal};
 
 // a signed in member or a share link token, for read only access
@@ -170,7 +170,7 @@ async fn page(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response
 				let title = escape(&format!(
 					"{}: {} visitors in the last 30 days",
 					share.domain,
-					crate::reports::grouped(now)
+					crate::site::reports::grouped(now)
 				));
 				let description = match change(now, then) {
 					Some(change) if change >= 0 => format!("Up {change}% on the 30 days before."),
@@ -209,7 +209,7 @@ async fn card(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response
 		&format!("{} last 30 days", share.domain).to_uppercase(),
 	);
 	canvas.text(1200 - 72 - 9 * 7 * 3, 64, 3, FAINT, "IMPACTITE");
-	canvas.text(66, 130, 10, FG, &crate::reports::grouped(now));
+	canvas.text(66, 130, 10, FG, &crate::site::reports::grouped(now));
 	if let Some(change) = change(now, then) {
 		let color = if change >= 0 { CYAN } else { BAD };
 		canvas.text(72, 290, 3, color, &format!("{change:+}% VISITORS"));

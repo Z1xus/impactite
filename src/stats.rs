@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::app::{App, Site};
-use crate::goals::Goal;
-use crate::shares::Reader;
+use crate::site::goals::Goal;
+use crate::site::shares::Reader;
 use crate::web::{Web, fail};
 
 pub struct Stats {

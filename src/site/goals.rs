@@ -10,9 +10,9 @@ use rusqlite::params;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::accounts::Viewer;
 use crate::app::{App, Site};
-use crate::shares::Reader;
+use crate::auth::accounts::Viewer;
+use crate::site::shares::Reader;
 use crate::stats::day_number;
 use crate::web::{Web, broken, fail, internal};
 

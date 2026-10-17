@@ -17,9 +17,9 @@ use serde_json::{Map, Value, json};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-use crate::accounts::Viewer;
 use crate::app::Site;
-use crate::goals::Goal;
+use crate::auth::accounts::Viewer;
+use crate::site::goals::Goal;
 use crate::stats::{self, day_number};
 use crate::web::{Web, fail};
 
