@@ -47,6 +47,19 @@
 		}
 	});
 
+	function arrows(event: KeyboardEvent) {
+		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		event.preventDefault();
+		if (!open) {
+			open = true;
+			return;
+		}
+		const entries = [...root.querySelectorAll<HTMLElement>("[role=menuitem]")];
+		const down = event.key === "ArrowDown";
+		const at = entries.indexOf(document.activeElement as HTMLElement);
+		entries.at((at < 0 && !down ? -1 : at + (down ? 1 : -1)) % entries.length)?.focus();
+	}
+
 	function outside(event: PointerEvent) {
 		if (open && !root.contains(event.target as Node)) open = false;
 	}
@@ -57,7 +70,7 @@
 	onkeydown={(event) => event.key === "Escape" && (open = false)}
 />
 
-<div class="relative min-w-0" bind:this={root}>
+<div class="relative min-w-0" bind:this={root} onkeydown={arrows} role="presentation">
 	<button
 		type="button"
 		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap text-fg transition-colors duration-100 {plain
