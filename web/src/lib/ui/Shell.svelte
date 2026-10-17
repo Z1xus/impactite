@@ -79,7 +79,7 @@
 
 <Dialog title="new team" bind:open={creating}>
 	<Form action="create team" submit={create}>
-		<Field label="name" placeholder="Acme" bind:value={name} required />
+		<Field label="name" placeholder="Acme" maxlength={80} bind:value={name} required />
 	</Form>
 </Dialog>
 

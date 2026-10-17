@@ -86,6 +86,7 @@
 				label={kind === "page" ? "path" : "event name"}
 				placeholder={kind === "page" ? "/pricing" : "Signup"}
 				bind:value
+				maxlength={300}
 				required
 			/>
 			{#if kind === "page"}
@@ -107,7 +108,7 @@
 				/>
 			{/if}
 		</div>
-		<Field label="display name" placeholder="optional" bind:value={name} />
+		<Field label="display name" placeholder="optional" maxlength={120} bind:value={name} />
 	</Form>
 </Dialog>
 
@@ -121,7 +122,7 @@
 	}
 >
 	<Form action="rename" submit={saveName}>
-		<Field label="name" bind:value={newName} required />
+		<Field label="name" maxlength={120} bind:value={newName} required />
 	</Form>
 </Dialog>
 

@@ -59,6 +59,7 @@
 					label={current?.meta ?? "value"}
 					placeholder={current?.example}
 					bind:value
+					maxlength={300}
 					required
 				/>
 			</div>
