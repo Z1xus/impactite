@@ -558,6 +558,7 @@
 		stops[panel.id]?.();
 		if (!dates || !panel.tabs.length) return;
 		const dim = dimOf(panel.id);
+		if (loaded[panel.id] !== signature(panel.id)) ranked[panel.id] = null;
 		loaded[panel.id] = signature(panel.id);
 		let stale = false;
 		stops[panel.id] = () => (stale = true);
