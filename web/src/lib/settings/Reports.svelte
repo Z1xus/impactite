@@ -78,6 +78,7 @@
 					label={kind === "spike" ? "current visitors at least" : "visitors a day under"}
 					type="number"
 					min="1"
+					max="1000000000"
 					bind:value={threshold}
 					required
 				/>

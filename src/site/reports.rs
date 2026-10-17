@@ -23,6 +23,7 @@ const KINDS: [&str; 7] = [
 	"daily", "weekly", "biweekly", "monthly", "spike", "drop", "export",
 ];
 const SEND_HOUR: i8 = 7;
+const MAX_THRESHOLD: u64 = 1_000_000_000;
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -459,6 +460,7 @@ async fn add(
 		return fail(StatusCode::FORBIDDEN, "You can't change this site.");
 	};
 	let alert = matches!(body.kind.as_str(), "spike" | "drop");
+	let threshold = if alert { body.threshold } else { 0 };
 	let to = body.email.trim();
 	if body.kind == "export" {
 		if let Err(err) = crate::s3::Bucket::parse(to) {
@@ -471,7 +473,7 @@ async fn add(
 		let webhook = to.starts_with("https://") && url::Url::parse(to).is_ok();
 		if !KINDS.contains(&body.kind.as_str())
 			|| !(webhook || to.contains('@'))
-			|| (alert && body.threshold == 0)
+			|| (alert && !(1..=MAX_THRESHOLD).contains(&body.threshold))
 		{
 			return fail(
 				StatusCode::BAD_REQUEST,
@@ -486,10 +488,7 @@ async fn add(
 		"spike" => 0,
 		_ => i64::from(day_number(now.date())),
 	};
-	match web
-		.app
-		.add_report(site.id, &body.kind, to, body.threshold, last)
-	{
+	match web.app.add_report(site.id, &body.kind, to, threshold, last) {
 		Ok(()) => respond(&web, site.id),
 		Err(err) => internal(err),
 	}
