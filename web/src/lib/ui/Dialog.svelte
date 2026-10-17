@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+	import { tick, type Snippet } from "svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
 	import Icon from "./Icon.svelte";
 
@@ -13,7 +13,17 @@
 	let dialog: HTMLDialogElement;
 
 	$effect(() => {
-		if (open && !dialog.open) dialog.showModal();
+		if (open && !dialog.open) {
+			dialog.showModal();
+			// the first field wins focus over the close button
+			tick().then(() =>
+				dialog
+					.querySelector<HTMLElement>(
+						"input:not([type=checkbox]):not([type=radio]), textarea"
+					)
+					?.focus()
+			);
+		}
 		if (!open && dialog.open) dialog.close();
 	});
 </script>
