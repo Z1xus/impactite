@@ -80,7 +80,8 @@ export function toQueryFilters(filters: Filter[]) {
 
 export function compact(value: number) {
 	if (value < 10_000) return number(Math.round(value));
-	if (value < 1_000_000) return `${number(value / 1000, value < 100_000 ? 1 : 0)}k`;
+	// thresholds where rounding would print 100.0k or 1,000k
+	if (value < 999_500) return `${number(value / 1000, value < 99_950 ? 1 : 0)}k`;
 	return `${number(value / 1_000_000, 1)}m`;
 }
 

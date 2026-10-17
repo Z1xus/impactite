@@ -54,6 +54,11 @@ export function today(timezone: string) {
 	return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
 }
 
+// a real calendar day, so 2026-02-31 is not one
+const isDate = (value: string) =>
+	/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+	new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+
 export function shift(date: string, days: number) {
 	const d = new Date(`${date}T00:00:00Z`);
 	d.setUTCDate(d.getUTCDate() + days);
@@ -78,7 +83,7 @@ export function parse(params: { get(name: string): string | null }, timezone: st
 		list.find((item) => item === value);
 	const day = (name: string) => {
 		const value = params.get(name) ?? "";
-		return /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(Date.parse(value)) ? value : now;
+		return isDate(value) ? value : now;
 	};
 	const [from, to] = [day("from"), day("to")].sort();
 	const [compareFrom, compareTo] = [day("compare_from"), day("compare_to")].sort();
@@ -140,8 +145,10 @@ export function previous(view: View, range: Range): Range | null {
 	}
 }
 
+// a leap day lands on the 28th in a year without one
 function shiftYears(date: string, years: number) {
-	return `${Number(date.slice(0, 4)) + years}${date.slice(4)}`;
+	const moved = `${Number(date.slice(0, 4)) + years}${date.slice(4)}`;
+	return isDate(moved) ? moved : `${moved.slice(0, 8)}28`;
 }
 
 export function intervals(range: Range): Interval[] {
