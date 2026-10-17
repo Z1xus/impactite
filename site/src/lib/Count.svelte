@@ -17,10 +17,8 @@
 	);
 
 	$effect(() => {
-		tween.set(
-			on ? value : 0,
-			on && !prefersReducedMotion.current ? { delay } : { duration: 0 }
-		);
+		const still = prefersReducedMotion.current;
+		tween.set(on || still ? value : 0, on && !still ? { delay } : { duration: 0 });
 	});
 </script>
 

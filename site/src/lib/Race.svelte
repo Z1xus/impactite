@@ -30,11 +30,13 @@
 			<span class="label {row.ours ? 'text-fg' : ''}">{row.label}</span>
 			<span class="h-5 overflow-hidden rounded-px">
 				<span
-					class="block h-full min-w-px transition-[width] duration-[1200ms] ease-out motion-reduce:transition-none {row.value ===
+					class="block h-full min-w-px {on
+						? 'w-(--width)'
+						: 'w-0'} transition-[width] duration-[1200ms] ease-out motion-reduce:w-(--width) motion-reduce:transition-none {row.value ===
 					best
 						? 'bg-cyan'
 						: 'dither [--dither-gap:var(--color-ink)]'}"
-					style:width={on ? `${(row.value / max) * 100}%` : "0%"}
+					style:--width="{(row.value / max) * 100}%"
 					style:transition-delay="{i * 180}ms"
 				></span>
 			</span>
