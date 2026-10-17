@@ -1,6 +1,7 @@
 <script lang="ts">
 	import check from "pixelarticons/svg/check.svg?raw";
 	import copy from "pixelarticons/svg/copy.svg?raw";
+	import { prefersReducedMotion } from "svelte/motion";
 	import { copy as copyText } from "#lib/toast.svelte.ts";
 	import Icon from "#lib/ui/Icon.svelte";
 
@@ -21,15 +22,10 @@
 	const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 	async function play() {
-		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-		await wait(still ? 0 : delay);
+		await wait(delay);
 		for (const [i, part] of parts.entries()) {
 			if (typeof part === "string") continue;
 			edits[i] = { selected: false, typed: -1 };
-			if (still) {
-				edits[i].typed = part.to.length;
-				continue;
-			}
 			active = i;
 			edits[i].selected = true;
 			await wait(550);
@@ -44,7 +40,7 @@
 	}
 
 	$effect(() => {
-		if (on && !started) {
+		if (on && !started && !prefersReducedMotion.current) {
 			started = true;
 			play();
 		}
@@ -60,9 +56,10 @@
 <div class="flex items-start gap-2 rounded-px border border-line bg-panel py-2.5 pr-2 pl-3">
 	<code
 		class="min-w-0 flex-1 py-0.5 font-mono text-[12px] leading-5 break-all whitespace-pre-wrap text-cyan"
-		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if (edits[i]?.typed ?? -1) < 0}<span
+		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if !prefersReducedMotion.current && (edits[i]?.typed ?? -1) < 0}<span
 					class={edits[i]?.selected ? "bg-edge text-fg" : ""}>{part.from}</span
-				>{:else}<span class="bg-cyan-night text-fg">{part.to.slice(0, edits[i].typed)}</span
+				>{:else}<span class="bg-cyan-night text-fg"
+					>{part.to.slice(0, edits[i]?.typed)}</span
 				>{/if}{#if active === i}<span
 					class="inline-block h-[1.1em] w-[0.55em] translate-y-[0.2em] bg-cyan"
 				></span>{/if}{/each}</code
