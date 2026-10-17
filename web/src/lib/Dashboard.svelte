@@ -807,7 +807,7 @@
 			</Select>
 		{/if}
 		{#if empty === false}<Live site={domain} />{/if}
-		<div class="ml-auto flex items-center gap-2">
+		<div class="ml-auto flex items-center gap-2 max-sm:w-full max-sm:justify-between">
 			{#if empty === false}
 				<Button variant="text" onclick={() => (editing = null)}
 					><Icon svg={funnel} size={14} />Filter</Button
@@ -1045,7 +1045,7 @@
 										: undefined}
 						>
 							{#if tabs[panel.id] === "map"}
-								<div class="px-2 py-1">
+								<div class="flex h-full items-center px-2 py-1">
 									<WorldMap
 										values={Object.fromEntries(
 											(ranked[panel.id] ?? []).map((row) => [
