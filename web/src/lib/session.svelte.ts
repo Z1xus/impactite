@@ -55,3 +55,7 @@ export function pickTeam(id: number) {
 export function currentTeam() {
 	return session.me?.teams.find((team) => team.id === session.team) ?? null;
 }
+
+export function findSite(domain: string) {
+	return session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain);
+}

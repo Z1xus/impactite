@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import Dashboard from "#lib/Dashboard.svelte";
-	import { session } from "#lib/session.svelte.ts";
+	import { findSite } from "#lib/session.svelte.ts";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
 	const domain = $derived(page.params.site ?? "");
-	const site = $derived(
-		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
-	);
+	const site = $derived(findSite(domain));
 </script>
 
 <Shell>

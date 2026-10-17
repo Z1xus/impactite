@@ -15,7 +15,7 @@
 	import more from "pixelarticons/svg/more-vertical.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
-	import { currentTeam, session } from "#lib/session.svelte.ts";
+	import { currentTeam, findSite, session } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
 		OPS,
@@ -63,11 +63,8 @@
 		readonly = false
 	}: { domain: string; timezone: string; readonly?: boolean } = $props();
 
-	const member = $derived(
-		session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain)
-	);
 	const editable = $derived(
-		!readonly && ["owner", "admin", "editor"].includes(member?.role ?? "")
+		!readonly && ["owner", "admin", "editor"].includes(findSite(domain)?.role ?? "")
 	);
 	let newEvents = $state<{ name: string; count: number; revenue: boolean }[]>([]);
 	let reviewing = $state(false);
