@@ -257,6 +257,7 @@
 		attempt(async () => {
 			await api(`/api/app/sites/${domain}`, { timezone }, "PATCH");
 			await refresh();
+			toast("Saved.");
 		});
 
 	async function addGoal() {
@@ -553,18 +554,21 @@
 			);
 			await api(`/api/app/sites/${domain}`, { skip }, "PATCH");
 			await refresh();
+			toast("Saved.");
 		});
 
 	const setCounter = (counter: boolean) =>
 		attempt(async () => {
 			await api(`/api/app/sites/${domain}`, { counter }, "PATCH");
 			await refresh();
+			toast("Saved.");
 		});
 
 	const setRetention = (retention: number) =>
 		attempt(async () => {
 			await api(`/api/app/sites/${domain}`, { retention }, "PATCH");
 			await refresh();
+			toast("Saved.");
 		});
 
 	async function purgePage() {
@@ -639,7 +643,7 @@
 			...(owner
 				? [
 						{ id: "guests", label: "guests", icon: users, group: "share" },
-						{ id: "danger", label: "danger zone", icon: alert }
+						{ id: "danger", label: "danger", icon: alert }
 					]
 				: [])
 		].map((item) => ({
@@ -955,7 +959,14 @@
 					{/snippet}
 					{#if (goals?.length ?? 0) < 2}
 						<span class="text-[14px] text-dim"
-							>Add two goals to build a funnel from them.</span
+							>Add two <a
+								href={resolve("/[site]/settings/[[section]]", {
+									site: domain,
+									section: "goals"
+								})}
+								class="text-fg transition-colors duration-100 hover:text-cyan"
+								>goals</a
+							> to build a funnel from them.</span
 						>
 					{:else if funnels?.length === 0}
 						<span class="text-[14px] text-dim">No funnels yet.</span>
@@ -1141,9 +1152,7 @@
 						<Button variant="quiet" onclick={() => (linking = true)}>Add link</Button>
 					{/snippet}
 					<div class="flex items-center justify-between gap-4">
-						<span class="min-w-0 text-[14px] [overflow-wrap:anywhere] text-dim"
-							>Anyone can view the dashboard at {url(domain)}</span
-						>
+						<span class="text-[14px] text-dim">Public dashboard</span>
 						<Toggle
 							bind:value={
 								() => (publicLink ? "public" : "private"),
@@ -1155,6 +1164,9 @@
 							]}
 						/>
 					</div>
+					{#if publicLink}
+						<Code code={url(domain)} />
+					{/if}
 					<List
 						items={links
 							?.filter((link) => link.slug !== domain)
@@ -1186,8 +1198,7 @@
 						/>
 					{/if}
 					<div class="flex items-center justify-between gap-4">
-						<span class="text-[14px] text-dim">Pages can show their visitor count.</span
-						>
+						<span class="text-[14px] text-dim">Visitor counter</span>
 						<Toggle
 							bind:value={
 								() => (site?.counter ? "on" : "off"),
