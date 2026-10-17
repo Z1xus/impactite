@@ -49,7 +49,13 @@
 
 	function keydown(event: KeyboardEvent) {
 		const target = event.target as HTMLElement;
-		if (event.metaKey || event.ctrlKey || event.altKey || target.closest("input, textarea"))
+		if (
+			event.metaKey ||
+			event.ctrlKey ||
+			event.altKey ||
+			target.closest("input, textarea") ||
+			document.querySelector("dialog[open]")
+		)
 			return;
 		const hotkey = PRESETS.find((item) => item.hotkey === event.key);
 		if (hotkey) choose(hotkey.key);
