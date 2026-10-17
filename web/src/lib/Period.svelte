@@ -104,7 +104,7 @@
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
 	{#if view.compare !== "off" && view.period !== "all" && view.period !== "realtime"}
-		<span class="hidden text-[12px] text-dim xl:inline"
+		<span class="hidden text-[13px] text-dim xl:inline"
 			>vs {COMPARE.find((item) => item.key === view.compare)?.label}</span
 		>
 	{/if}
@@ -136,8 +136,13 @@
 				</div>
 				{#if view.period !== "all" && view.period !== "realtime"}
 					<div class="mt-3 flex flex-col gap-3 border-t border-line pt-3">
-						<span class="text-[13px] text-dim">Compare with</span>
-						<Select value={view.compare} options={COMPARE} pick={compare} data />
+						<Select
+							label="compare with"
+							value={view.compare}
+							options={COMPARE}
+							pick={compare}
+							data
+						/>
 						{#if view.compare === "previous" || view.compare === "year"}
 							<Checks
 								bind:value={
