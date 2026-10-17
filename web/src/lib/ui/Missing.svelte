@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
-	import Message from "./Message.svelte";
 
 	let { text = "This site doesn't exist, or you don't have access to it." }: { text?: string } =
 		$props();
 </script>
 
-<div class="flex flex-col items-center gap-4 py-24">
-	<Message tone="dim">{text}</Message>
-	<a href={resolve("/")} class="label text-dim transition-colors hover:text-fg">all sites</a>
+<div class="flex flex-col items-center gap-5 py-24">
+	<p class="text-[14px] text-dim">{text}</p>
+	<a
+		href={resolve("/")}
+		class="inline-flex h-9 items-center rounded-px border border-edge px-3 text-[14px] text-fg transition-colors duration-100 hover:border-dim"
+		>All sites</a
+	>
 </div>
