@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import { ApiError, access, api } from "#lib/api.ts";
-	import Dashboard from "#lib/Dashboard.svelte";
+	import Dashboard from "#lib/dashboard/Dashboard.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";

@@ -19,17 +19,17 @@
 		type Filter
 	} from "#lib/stats.ts";
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
-	import { downloadCsv } from "#lib/dashboard/csv.ts";
-	import Filters from "#lib/dashboard/Filters.svelte";
-	import Grid from "#lib/dashboard/Grid.svelte";
-	import { createLayout } from "#lib/dashboard/layout.svelte.ts";
-	import Overview from "#lib/dashboard/Overview.svelte";
-	import type { Context, Funnel } from "#lib/dashboard/types.ts";
-	import Details from "#lib/Details.svelte";
-	import FilterDialog from "#lib/FilterDialog.svelte";
-	import NewEvents from "#lib/NewEvents.svelte";
-	import Period from "#lib/Period.svelte";
-	import Waiting from "#lib/Waiting.svelte";
+	import { downloadCsv } from "./csv.ts";
+	import Filters from "./Filters.svelte";
+	import Grid from "./Grid.svelte";
+	import { createLayout } from "./layout.svelte.ts";
+	import Overview from "./Overview.svelte";
+	import type { Context, Funnel } from "./types.ts";
+	import Details from "./Details.svelte";
+	import FilterDialog from "./FilterDialog.svelte";
+	import NewEvents from "#lib/settings/NewEvents.svelte";
+	import Period from "./Period.svelte";
+	import Waiting from "./Waiting.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";

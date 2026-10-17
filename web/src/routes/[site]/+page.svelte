@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/state";
-	import Dashboard from "#lib/Dashboard.svelte";
+	import Dashboard from "#lib/dashboard/Dashboard.svelte";
 	import { findSite } from "#lib/session.svelte.ts";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Shell from "#lib/ui/Shell.svelte";

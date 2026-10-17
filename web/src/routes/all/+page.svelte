@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Dashboard from "#lib/Dashboard.svelte";
+	import Dashboard from "#lib/dashboard/Dashboard.svelte";
 	import { currentTeam } from "#lib/session.svelte.ts";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Shell from "#lib/ui/Shell.svelte";

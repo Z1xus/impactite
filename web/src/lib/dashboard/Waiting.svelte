@@ -2,7 +2,7 @@
 	import { api } from "#lib/api.ts";
 	import { css, threshold } from "#lib/dither/bayer.ts";
 	import { crater, random } from "#lib/dither/crater.ts";
-	import Snippet from "#lib/Snippet.svelte";
+	import Snippet from "#lib/settings/Snippet.svelte";
 	import { display, query } from "#lib/stats.ts";
 	import { theme } from "#lib/theme.svelte.ts";
 
