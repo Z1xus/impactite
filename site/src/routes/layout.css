@@ -1,8 +1,10 @@
 @import "../../../web/src/routes/layout.css";
 @source "../../../web/src/lib";
 
-html {
-	scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+	html {
+		scroll-behavior: smooth;
+	}
 }
 
 @keyframes rise {
