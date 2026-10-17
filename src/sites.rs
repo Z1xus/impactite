@@ -22,7 +22,7 @@ use crate::app::{App, Site, token};
 use crate::import;
 use crate::shares::Reader;
 use crate::stats::day_number;
-use crate::teams;
+use crate::teams::{self, manager};
 use crate::web::{Web, broken, fail, internal};
 
 const UPLOAD: usize = 1 << 30;
@@ -265,13 +265,6 @@ fn respond_guests(web: &Web, site: &Site) -> Response {
 		Ok(guests) => Json(guests).into_response(),
 		Err(_) => broken(),
 	}
-}
-
-fn manager(web: &Web, user: i64, team: i64) -> bool {
-	matches!(
-		web.app.role(user, team).ok().flatten().as_deref(),
-		Some("owner" | "admin")
-	)
 }
 
 fn manages(web: &Web, user: i64, site: &Site) -> bool {

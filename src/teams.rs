@@ -57,7 +57,7 @@ fn role(web: &Web, user: i64, team: i64) -> Option<String> {
 	web.app.role(user, team).ok().flatten()
 }
 
-fn manager(web: &Web, user: i64, team: i64) -> bool {
+pub(crate) fn manager(web: &Web, user: i64, team: i64) -> bool {
 	matches!(role(web, user, team).as_deref(), Some("owner" | "admin"))
 }
 
@@ -309,8 +309,7 @@ async fn invite(
 	Path(team): Path<i64>,
 	Json(body): Json<Invite>,
 ) -> Response {
-	if !matches!(web.app.role(viewer.user, team), Ok(Some(role)) if role == "owner" || role == "admin")
-	{
+	if !manager(&web, viewer.user, team) {
 		return fail(StatusCode::FORBIDDEN, "Only owners and admins can invite.");
 	}
 	if web.app.is_personal(team).unwrap_or(true) {
@@ -444,8 +443,7 @@ async fn remove_member(
 	viewer: Viewer,
 	Path((team, user)): Path<(i64, i64)>,
 ) -> Response {
-	let allowed = viewer.user == user
-		|| matches!(web.app.role(viewer.user, team), Ok(Some(role)) if role == "owner" || role == "admin");
+	let allowed = viewer.user == user || manager(&web, viewer.user, team);
 	if !allowed || web.app.role(user, team).ok().flatten().as_deref() == Some("owner") {
 		return fail(StatusCode::FORBIDDEN, "You can't remove this member.");
 	}

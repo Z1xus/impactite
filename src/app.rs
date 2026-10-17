@@ -244,6 +244,22 @@ const MIGRATIONS: &[&str] = &[
 	",
 ];
 
+const SITE_TABLES: [&str; 13] = [
+	"goals",
+	"imports",
+	"salts",
+	"funnels",
+	"shields",
+	"shares",
+	"reports",
+	"segments",
+	"titles",
+	"guests",
+	"google",
+	"ignored_events",
+	"invites",
+];
+
 #[derive(Debug, Clone)]
 pub struct Site {
 	pub id: u64,
@@ -261,7 +277,7 @@ impl App {
 		let mut conn = Connection::open(path)?;
 		conn.pragma_update(None, "journal_mode", "wal")?;
 		conn.pragma_update(None, "foreign_keys", "on")?;
-		migrate(&mut conn)?;
+		migrate(&mut conn, path)?;
 		Ok(Self {
 			conn: Mutex::new(conn),
 		})
@@ -420,7 +436,7 @@ impl App {
 	pub fn delete_site(&self, site: u64) -> rusqlite::Result<()> {
 		let mut conn = self.conn();
 		let tx = conn.transaction()?;
-		for table in ["goals", "imports", "salts"] {
+		for table in SITE_TABLES {
 			tx.execute(
 				&format!("delete from {table} where site = ?1"),
 				[site as i64],
@@ -475,8 +491,15 @@ fn site(row: &rusqlite::Row) -> rusqlite::Result<Site> {
 	})
 }
 
-fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
+// an existing database is copied aside before a new schema touches it
+fn migrate(conn: &mut Connection, path: &Path) -> rusqlite::Result<()> {
 	let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+	if version > 0 && (version as usize) < MIGRATIONS.len() {
+		let copy = path.with_extension(format!("v{version}.bak"));
+		if !copy.exists() {
+			conn.execute("vacuum into ?1", [copy.to_string_lossy()])?;
+		}
+	}
 	for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
 		let tx = conn.transaction()?;
 		tx.execute_batch(sql)?;

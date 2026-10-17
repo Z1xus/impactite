@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use axum::extract::{FromRequestParts, State};
@@ -17,6 +17,7 @@ use crate::web::{Web, fail, internal};
 
 const COOKIE: &str = "impactite_session";
 const SESSION_SECS: i64 = 30 * 86_400;
+static DECOY: LazyLock<String> = LazyLock::new(|| hash("decoy password").unwrap_or_default());
 
 pub struct Viewer {
 	pub user: i64,
@@ -316,13 +317,17 @@ impl App {
 				|row| Ok((row.get(0)?, row.get(1)?)),
 			)
 			.optional()?;
+		// an unknown or passwordless account is checked against a decoy, so timing never says so
+		let stored = found
+			.as_ref()
+			.map(|(_, hash)| hash.as_str())
+			.filter(|hash| !hash.is_empty())
+			.unwrap_or(&DECOY);
+		let correct = Argon2::default()
+			.verify_password(password.as_bytes(), stored)
+			.is_ok();
 		Ok(found
-			.filter(|(_, hash)| {
-				!hash.is_empty()
-					&& Argon2::default()
-						.verify_password(password.as_bytes(), hash.as_str())
-						.is_ok()
-			})
+			.filter(|(_, hash)| correct && !hash.is_empty())
 			.map(|(user, _)| user))
 	}
 
