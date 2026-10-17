@@ -32,7 +32,7 @@
 
 	type Segment = { id: number; name: string; filters: string[]; shared: boolean; mine: boolean };
 
-	let segments = $state<Segment[]>([]);
+	let segments = $state.raw<Segment[]>([]);
 	let saving = $state(false);
 	let name = $state("");
 	let shared = $state<string[]>([]);

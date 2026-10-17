@@ -2,7 +2,7 @@ import { api } from "./api.ts";
 
 // a list the server sends back whole after every change, as `{ [key]: items }`
 export function collection<T>(url: () => string, key: string) {
-	let items = $state<T[] | null>(null);
+	let items = $state.raw<T[] | null>(null);
 	const keep = <R>(reply: Record<string, T[]> & R) => {
 		items = reply[key];
 		return reply;

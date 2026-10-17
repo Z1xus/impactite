@@ -24,7 +24,7 @@
 	let utm = $state("visit:utm_campaign");
 	let chosenProp = $state("");
 	let chosenFunnel = $state(0);
-	let ranked = $state<Ranked>(null);
+	let ranked = $state.raw<Ranked>(null);
 	let loading = $state(false);
 	// search console terms replace referrers under the google source when connected
 	let terms = $state(false);

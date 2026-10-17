@@ -33,11 +33,11 @@
 
 	const KEYS = METRICS.map((item) => item.key);
 
-	let totals = $state<number[] | null>(null);
-	let previousTotals = $state<number[] | null>(null);
-	let series = $state<number[]>([]);
-	let previousSeries = $state<number[]>([]);
-	let lines = $state<Line[]>([]);
+	let totals = $state.raw<number[] | null>(null);
+	let previousTotals = $state.raw<number[] | null>(null);
+	let series = $state.raw<number[]>([]);
+	let previousSeries = $state.raw<number[]>([]);
+	let lines = $state.raw<Line[]>([]);
 	let sort = $state<[string, "asc" | "desc"]>(["", "asc"]);
 
 	const labels = $derived(lines.map((line) => line.label));

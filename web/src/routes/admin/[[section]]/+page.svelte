@@ -23,7 +23,7 @@
 	import Toggle from "#lib/ui/Toggle.svelte";
 	import Note from "#lib/ui/Note.svelte";
 
-	let info = $state<Admin | null>(null);
+	let info = $state.raw<Admin | null>(null);
 	let checking = $state(false);
 
 	$effect(() => {

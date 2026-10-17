@@ -97,12 +97,12 @@
 	let editing = $state<Filter | null | undefined>(undefined);
 	let details = $state<{ dim: string; title: string } | null>(null);
 	let reviewing = $state(false);
-	let newEvents = $state<{ name: string; count: number; revenue: boolean }[]>([]);
-	let goals = $state<string[]>([]);
+	let newEvents = $state.raw<{ name: string; count: number; revenue: boolean }[]>([]);
+	let goals = $state.raw<string[]>([]);
 	let revenue = $state(false);
-	let funnels = $state<Funnel[]>([]);
-	let titles = $state<Record<string, string>>({});
-	let propKeys = $state<string[]>([]);
+	let funnels = $state.raw<Funnel[]>([]);
+	let titles = $state.raw<Record<string, string>>({});
+	let propKeys = $state.raw<string[]>([]);
 
 	function navigate(change: (params: URLSearchParams) => void) {
 		const params = new URLSearchParams(page.url.search);

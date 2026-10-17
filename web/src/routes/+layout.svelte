@@ -7,6 +7,9 @@
 	import { ApiError } from "#lib/api.ts";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import { toast } from "#lib/toast.svelte.ts";
+	import Button from "#lib/ui/Button.svelte";
+	import Gate from "#lib/ui/Gate.svelte";
+	import Message from "#lib/ui/Message.svelte";
 	import type { LayoutProps } from "./$types";
 
 	let { children }: LayoutProps = $props();
@@ -51,5 +54,19 @@
 </svelte:head>
 
 {#if session.ready && !redirect}
-	{@render children()}
+	<svelte:boundary>
+		{@render children()}
+		{#snippet failed(error, reset)}
+			<Gate>
+				<div class="flex flex-col items-center gap-4">
+					<Message
+						>{error instanceof Error
+							? error.message
+							: "This page hit an error."}</Message
+					>
+					<Button variant="quiet" onclick={reset}>Try again</Button>
+				</div>
+			</Gate>
+		{/snippet}
+	</svelte:boundary>
 {/if}

@@ -33,7 +33,7 @@
 	let source = $state<Source>("impactite");
 	let file = $state<File | null>(null);
 	let imported = $state("");
-	let analytics = $state<Analytics | null>(null);
+	let analytics = $state.raw<Analytics | null>(null);
 	let property = $state("");
 
 	const accept = $derived(

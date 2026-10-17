@@ -14,7 +14,7 @@
 	let hit = $state<number | null>(null);
 	let arrived = $state(false);
 	let first = $state("");
-	let strays = $state<string[]>([]);
+	let strays = $state.raw<string[]>([]);
 
 	$effect(() => {
 		const site = domain;

@@ -18,7 +18,7 @@
 	};
 
 	const path = $derived(`${sitePath(domain)}/guests`);
-	let people = $state<People | null>(null);
+	let people = $state.raw<People | null>(null);
 	let email = $state("");
 	let role = $state<"viewer" | "editor">("viewer");
 	let link = $state("");

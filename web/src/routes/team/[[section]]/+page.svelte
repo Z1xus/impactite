@@ -57,7 +57,7 @@
 		].map((item) => ({ ...item, href: resolve("/team/[[section]]", { section: item.id }) }))
 	);
 
-	let team = $state<Team | null>(null);
+	let team = $state.raw<Team | null>(null);
 	let name = $state("");
 	let inviting = $state(false);
 	let email = $state("");
