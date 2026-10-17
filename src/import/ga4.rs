@@ -80,7 +80,12 @@ pub async fn import(
 		let mut offset = 0;
 		loop {
 			let report = fetch(
-				http, token, property, table, dimensions, metrics, last, offset,
+				http,
+				token,
+				property,
+				(table, dimensions, metrics),
+				last,
+				offset,
 			)
 			.await?;
 			let rows = report["rows"].as_array().cloned().unwrap_or_default();
@@ -105,14 +110,11 @@ pub async fn import(
 	write(db, site, &days)
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn fetch(
 	http: &reqwest::Client,
 	token: &str,
 	property: &str,
-	table: &str,
-	dimensions: &[&str],
-	metrics: &[&str],
+	(table, dimensions, metrics): (&str, &[&str], &[&str]),
 	last: Date,
 	offset: u64,
 ) -> anyhow::Result<Value> {
