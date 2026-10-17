@@ -219,7 +219,7 @@
 	<link rel="prefetch" href={DEMO} />
 </svelte:head>
 
-<div id="top" class="mx-auto flex max-w-6xl flex-col px-6" use:appear>
+<div id="top" class="mx-auto flex max-w-6xl flex-col px-6" {@attach appear}>
 	<header class="flex h-16 items-center justify-between">
 		<a href="#top" class="flex items-center gap-2 font-mono text-[15px]">
 			<img src="/favicon.svg" alt="" width="22" height="22" />
@@ -283,7 +283,7 @@
 				pick={(i) => (metric = i)}
 			/>
 			<div
-				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-out"
+				class="px-4 pt-3 pb-5 transition-[clip-path] duration-1000 ease-out motion-reduce:transition-none"
 				style:clip-path={landed ? "inset(0)" : "inset(0 100% 0 0)"}
 			>
 				<Chart
@@ -294,7 +294,7 @@
 				/>
 			</div>
 		</section>
-		<div class="mt-6 grid gap-6 md:grid-cols-2">
+		<div class="mt-6 grid gap-6 md:grid-cols-2" data-appear style:--delay="240ms">
 			{#each ["left", "right"] as const as side (side)}
 				<Panel tabs={PANELS[side].tabs} bind:tab={tabs[side]}>
 					<Rows
@@ -340,16 +340,18 @@
 			<h2 class="font-mono text-[32px] tracking-tight">Do you really need Kubernetes?</h2>
 			<p class="text-dim">Set your monthly pageviews to see the load on one server.</p>
 		</div>
-		<Scale
-			cpu={STATS.find((stat) => stat.label === "cpu for 1M pageviews")?.values[0] ?? 0}
-			rate={STATS.find((stat) => stat.label === "pageviews per second")?.values[0] ?? 0}
-		/>
+		<div data-appear style:--delay="80ms">
+			<Scale
+				cpu={STATS.find((stat) => stat.label === "cpu for 1M pageviews")?.values[0] ?? 0}
+				rate={STATS.find((stat) => stat.label === "pageviews per second")?.values[0] ?? 0}
+			/>
+		</div>
 	</section>
 
 	<section
 		id="compatible"
 		class="grid gap-12 pb-28 md:grid-cols-[1fr_1.4fr]"
-		use:reveal={(on) => (swap = on)}
+		{@attach reveal((on) => (swap = on))}
 	>
 		<div class="flex flex-col gap-4" data-appear>
 			<h2 class="font-mono text-[32px] tracking-tight">
@@ -360,7 +362,7 @@
 				keep working.
 			</p>
 		</div>
-		<div class="flex flex-col gap-4">
+		<div class="flex flex-col gap-4" data-appear style:--delay="80ms">
 			<span class="label">plausible</span>
 			<Edit parts={PLAUSIBLE} on={swap} delay={300} />
 			<span class="label">goatcounter</span>
@@ -388,11 +390,14 @@
 			<h2 class="font-mono text-[32px] tracking-tight">One binary. Done.</h2>
 			<p class="text-dim">Pick how you run it and copy the result.</p>
 		</div>
-		<Install repo={REPO} />
+		<div data-appear style:--delay="80ms">
+			<Install repo={REPO} />
+		</div>
 	</section>
 
 	<footer
 		class="flex flex-col gap-4 border-t border-line py-8 sm:flex-row sm:items-center sm:justify-between"
+		data-appear
 	>
 		<span class="flex items-center gap-2 font-mono text-[13px] text-dim">
 			<img src="/favicon.svg" alt="" width="16" height="16" />

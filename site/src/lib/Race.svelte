@@ -24,13 +24,13 @@
 	);
 </script>
 
-<ul class="flex flex-col gap-3" use:reveal={(shown) => (on = shown)}>
+<ul class="flex flex-col gap-3" {@attach reveal((shown) => (on = shown))}>
 	{#each rows as row, i (row.label)}
 		<li class="grid grid-cols-[6.5rem_1fr_6.5rem] items-center gap-3">
 			<span class="label {row.ours ? 'text-fg' : ''}">{row.label}</span>
 			<span class="h-5 overflow-hidden rounded-px">
 				<span
-					class="block h-full min-w-px transition-[width] duration-[1200ms] ease-out {row.value ===
+					class="block h-full min-w-px transition-[width] duration-[1200ms] ease-out motion-reduce:transition-none {row.value ===
 					best
 						? 'bg-cyan'
 						: 'dither [--dither-gap:var(--color-ink)]'}"

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
-	import { Tween } from "svelte/motion";
+	import { Tween, prefersReducedMotion } from "svelte/motion";
 	import { cubicOut } from "svelte/easing";
 
 	let {
@@ -17,7 +17,10 @@
 	);
 
 	$effect(() => {
-		tween.set(on ? value : 0, on ? { delay } : { duration: 0 });
+		tween.set(
+			on ? value : 0,
+			on && !prefersReducedMotion.current ? { delay } : { duration: 0 }
+		);
 	});
 </script>
 

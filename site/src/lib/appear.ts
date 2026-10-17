@@ -11,5 +11,5 @@ export function appear(root: HTMLElement) {
 		{ threshold: 0.15 }
 	);
 	for (const node of root.querySelectorAll("[data-appear]:not(.shown)")) observer.observe(node);
-	return { destroy: () => observer.disconnect() };
+	return () => observer.disconnect();
 }
