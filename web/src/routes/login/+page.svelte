@@ -16,7 +16,7 @@
 	const MODES: { key: Mode; label: string }[] = [
 		{ key: "passkey", label: "Use a passkey" },
 		{ key: "password", label: "Use a password" },
-		{ key: "link", label: "Email me a sign-in link" }
+		{ key: "link", label: "Use an email link" }
 	];
 
 	let mode = $state<Mode>("passkey");
@@ -77,17 +77,11 @@
 
 <Gate>
 	<div class="flex flex-col gap-3" bind:this={panel}>
-		{#if session.sso}
-			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a server redirect, not a page -->
-			<Button variant="quiet" href="/api/app/sso" class="w-full"
-				>Sign in with {session.sso}</Button
-			>
-		{/if}
 		{#if ssoError}
 			<Message tone="bad">{ssoError}</Message>
 		{/if}
 		{#if mode === "password"}
-			<Form block action="sign in" submit={withPassword}>
+			<Form block action="Sign in" submit={withPassword}>
 				<Field
 					label="email"
 					type="email"
@@ -104,7 +98,8 @@
 				/>
 				{#if asked}
 					<Field
-						label="code from your app or a recovery code"
+						label="code"
+						placeholder="App or recovery code"
 						bind:value={code}
 						autocomplete="one-time-code"
 						required
@@ -112,7 +107,7 @@
 				{/if}
 			</Form>
 		{:else if mode === "link"}
-			<Form block action="email me a link" submit={withLink}>
+			<Form block action="Email me a link" submit={withLink}>
 				<Field
 					label="email"
 					type="email"
@@ -125,7 +120,13 @@
 				<Message tone="cyan">If the account exists, the link is on its way.</Message>
 			{/if}
 		{:else}
-			<Form block action="sign in with passkey" submit={withPasskey} />
+			<Form block action="Sign in with passkey" submit={withPasskey} />
+		{/if}
+		{#if session.sso}
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a server redirect, not a page -->
+			<Button variant="quiet" href="/api/app/sso" class="w-full"
+				>Sign in with {session.sso}</Button
+			>
 		{/if}
 		<div class="flex flex-wrap justify-center gap-x-4">
 			{#each MODES.filter((item) => item.key !== mode) as item (item.key)}

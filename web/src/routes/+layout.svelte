@@ -7,9 +7,8 @@
 	import { ApiError } from "#lib/api.ts";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import { toast } from "#lib/toast.svelte.ts";
-	import Button from "#lib/ui/Button.svelte";
+	import Failed from "#lib/ui/Failed.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
-	import Message from "#lib/ui/Message.svelte";
 	import type { LayoutProps } from "./$types";
 
 	let { children }: LayoutProps = $props();
@@ -56,17 +55,9 @@
 {#if session.ready && !redirect}
 	<svelte:boundary>
 		{@render children()}
+		<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -- the snippet signature puts reset second -->
 		{#snippet failed(error, reset)}
-			<Gate>
-				<div class="flex flex-col items-center gap-4">
-					<Message
-						>{error instanceof Error
-							? error.message
-							: "This page hit an error."}</Message
-					>
-					<Button variant="quiet" onclick={reset}>Try again</Button>
-				</div>
-			</Gate>
+			<Failed text="Something went wrong." retry={reset} />
 		{/snippet}
 	</svelte:boundary>
 {:else}

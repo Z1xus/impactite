@@ -2,6 +2,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
+	import { onMount } from "svelte";
 	import { api, type Me } from "#lib/api.ts";
 	import { create } from "#lib/passkey.ts";
 	import { adopt, pickTeam, session } from "#lib/session.svelte.ts";
@@ -19,10 +20,12 @@
 	let place = $state("");
 	let failed = $state("");
 
-	$effect(() => {
-		api<{ place: string }>(`/api/app/invites/${token}`)
-			.then((invite) => (place = invite.place))
-			.catch((err) => (failed = err.message));
+	onMount(async () => {
+		try {
+			place = (await api<{ place: string }>(`/api/app/invites/${token}`)).place;
+		} catch (err) {
+			failed = err instanceof Error ? err.message : "Something went wrong.";
+		}
 	});
 
 	async function submit() {
@@ -54,7 +57,10 @@
 			<Note>
 				You're invited to <span class="text-fg">{place}</span>.
 			</Note>
-			<Form block action={session.me || usePassword ? "join" : "join with passkey"} {submit}>
+			{#if session.me}
+				<Note>Joining as <span class="text-fg">{session.me.email}</span>.</Note>
+			{/if}
+			<Form block action={session.me || usePassword ? "Join" : "Join with passkey"} {submit}>
 				{#if !session.me}
 					<Field label="name" bind:value={name} autocomplete="name" required />
 					{#if usePassword}
