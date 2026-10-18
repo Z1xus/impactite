@@ -8,7 +8,6 @@
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import { toast } from "#lib/toast.svelte.ts";
 	import Failed from "#lib/ui/Failed.svelte";
-	import Gate from "#lib/ui/Gate.svelte";
 	import type { LayoutProps } from "./$types";
 
 	let { children }: LayoutProps = $props();
@@ -60,6 +59,4 @@
 			<Failed text="Something went wrong." retry={reset} />
 		{/snippet}
 	</svelte:boundary>
-{:else}
-	<Gate />
 {/if}

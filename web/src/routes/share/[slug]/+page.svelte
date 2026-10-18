@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { ApiError, access, api } from "#lib/api.ts";
 	import Dashboard from "#lib/dashboard/Dashboard.svelte";
-	import Button from "#lib/ui/Button.svelte";
+	import Failed from "#lib/ui/Failed.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
-	import Message from "#lib/ui/Message.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 	import { query } from "#lib/stats.ts";
 
@@ -31,7 +29,7 @@
 	function open() {
 		unlock("").catch((err) => {
 			if (err instanceof ApiError && err.status === 401) locked = true;
-			else missing = err instanceof Error ? err.message : "This link does not exist.";
+			else missing = "This link doesn't exist.";
 		});
 	}
 
@@ -74,12 +72,7 @@
 		</Form>
 	</Gate>
 {:else if missing}
-	<Gate>
-		<div class="flex flex-col items-center gap-4">
-			<Message tone="bad">{missing}</Message>
-			<Button variant="quiet" href={resolve("/")}>Home</Button>
-		</div>
-	</Gate>
+	<Failed text={missing} />
 {:else if !embed}
 	<Gate />
 {/if}
