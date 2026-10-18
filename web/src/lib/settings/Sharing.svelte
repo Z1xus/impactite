@@ -75,19 +75,17 @@
 	{#snippet actions()}
 		<Button variant="quiet" onclick={() => (adding = true)}>Add link</Button>
 	{/snippet}
-	<div class="flex items-center justify-between gap-4">
-		<Note>Public dashboard</Note>
-		<Toggle
-			bind:value={
-				() => (publicLink ? "public" : "private"),
-				(mode: "private" | "public") => setPublic(mode === "public")
-			}
-			options={[
-				{ key: "private", label: "private" },
-				{ key: "public", label: "public" }
-			]}
-		/>
-	</div>
+	<Toggle
+		label="public dashboard"
+		bind:value={
+			() => (publicLink ? "public" : "private"),
+			(mode: "private" | "public") => setPublic(mode === "public")
+		}
+		options={[
+			{ key: "private", label: "private" },
+			{ key: "public", label: "public" }
+		]}
+	/>
 	{#if publicLink}
 		<Code code={url(domain)} />
 	{/if}
@@ -118,19 +116,17 @@
 			code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
 		/>
 	{/if}
-	<div class="flex items-center justify-between gap-4">
-		<Note>Visitor counter</Note>
-		<Toggle
-			bind:value={
-				() => (site.counter ? "on" : "off"),
-				(mode: "off" | "on") => saveSite(domain, { counter: mode === "on" })
-			}
-			options={[
-				{ key: "off", label: "off" },
-				{ key: "on", label: "on" }
-			]}
-		/>
-	</div>
+	<Toggle
+		label="visitor counter"
+		bind:value={
+			() => (site.counter ? "on" : "off"),
+			(mode: "off" | "on") => saveSite(domain, { counter: mode === "on" })
+		}
+		options={[
+			{ key: "off", label: "off" },
+			{ key: "on", label: "on" }
+		]}
+	/>
 	{#if site.counter}
 		<Code code={counter} />
 	{/if}
