@@ -16,33 +16,34 @@
 <div class="flex flex-col gap-8 rounded-px border border-line bg-panel p-5">
 	<label class="flex flex-col gap-3">
 		<span class="label">your pageviews a month</span>
-		<span class="font-mono text-[28px] tracking-tight">{count(monthly)}</span>
+		<span class="font-mono text-heading tracking-tight">{count(monthly)}</span>
 		<input
 			type="range"
 			min="0"
 			max="100"
 			step="1"
 			bind:value={position}
-			class="h-5 w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-cyan [&::-moz-range-track]:h-1 [&::-moz-range-track]:bg-edge [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-edge [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-cyan"
+			aria-valuetext={count(monthly)}
+			class="range"
 		/>
 	</label>
 	<dl class="grid grid-cols-2 gap-6 sm:grid-cols-3">
 		<div class="flex flex-col gap-2">
 			<dt class="label">cpu a day</dt>
-			<dd class="font-mono text-[22px]">
+			<dd class="font-mono text-num">
 				{daily < 60 ? `${daily.toFixed(1)} s` : `${(daily / 60).toFixed(1)} min`}
 			</dd>
 		</div>
 		<div class="flex flex-col gap-2">
 			<dt class="label">of one core</dt>
-			<dd class="font-mono text-[22px]">{core < 0.01 ? "<0.01" : core.toFixed(2)}%</dd>
+			<dd class="font-mono text-num">{core < 0.01 ? "<0.01" : core.toFixed(2)}%</dd>
 		</div>
 		<div class="flex flex-col gap-2">
 			<dt class="label">headroom at peak</dt>
-			<dd class="font-mono text-[22px]">{count(room)}x</dd>
+			<dd class="font-mono text-num">{count(room)}x</dd>
 		</div>
 	</dl>
-	<p class="border-t border-line pt-5 text-[15px]">
+	<p class="border-t border-line pt-5 text-body">
 		{core < 5 ? "No. One small server is enough." : "Still one server. Give it more cores."}
 	</p>
 </div>

@@ -14,14 +14,10 @@
 		better: "more" | "less";
 	} = $props();
 
-	let on = $state(false);
+	let on = $state(true);
 
 	const max = $derived(Math.max(...rows.map((row) => row.value)));
-	const best = $derived(
-		better === "more"
-			? Math.max(...rows.map((row) => row.value))
-			: Math.min(...rows.map((row) => row.value))
-	);
+	const best = $derived(better === "more" ? max : Math.min(...rows.map((row) => row.value)));
 </script>
 
 <ul class="flex flex-col gap-3" {@attach reveal((shown) => (on = shown))}>
@@ -31,9 +27,8 @@
 			<span class="h-5 overflow-hidden rounded-px">
 				<span
 					class="block h-full min-w-px {on
-						? 'w-(--width)'
-						: 'w-0'} transition-[width] duration-[1200ms] ease-out motion-reduce:w-(--width) motion-reduce:transition-none {row.value ===
-					best
+						? 'w-(--width) transition-[width] duration-[1200ms] ease-out'
+						: 'w-0'} {row.value === best
 						? 'bg-cyan'
 						: 'dither [--dither-gap:var(--color-ink)]'}"
 					style:--width="{(row.value / max) * 100}%"
@@ -41,12 +36,12 @@
 				></span>
 			</span>
 			<span
-				class="text-right font-mono text-[14px] {row.value === best
+				class="text-right font-mono text-body {row.value === best
 					? 'text-cyan'
 					: 'text-dim'}"
 			>
 				<Count value={row.value} {on} {digits} delay={i * 180} />
-				<span class="text-[11px] text-faint">{unit}</span>
+				<span class="text-label text-faint">{unit}</span>
 			</span>
 		</li>
 	{/each}

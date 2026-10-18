@@ -1,13 +1,13 @@
 <script lang="ts">
 	import check from "pixelarticons/svg/check.svg?raw";
 	import copy from "pixelarticons/svg/copy.svg?raw";
-	import { prefersReducedMotion } from "svelte/motion";
 	import { copy as copyText } from "#lib/toast.svelte.ts";
 	import Icon from "#lib/ui/Icon.svelte";
+	import { reveal } from "./reveal.ts";
 
 	type Part = string | { from: string; to: string };
 
-	let { parts, on, delay = 0 }: { parts: Part[]; on: boolean; delay?: number } = $props();
+	let { parts, delay = 0 }: { parts: Part[]; delay?: number } = $props();
 
 	const final = $derived(
 		parts.map((part) => (typeof part === "string" ? part : part.to)).join("")
@@ -15,19 +15,19 @@
 
 	// per edit: the old text is selected, then replaced, then the new text is typed in
 	let edits: Record<number, { selected: boolean; typed: number }> = $state({});
+	let stage = $state<"waiting" | "playing" | "done">("done");
 	let active = $state(-1);
 	let copied = $state(false);
-	let started = false;
 
 	const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 	async function play() {
+		stage = "playing";
 		await wait(delay);
 		for (const [i, part] of parts.entries()) {
 			if (typeof part === "string") continue;
-			edits[i] = { selected: false, typed: -1 };
+			edits[i] = { selected: true, typed: -1 };
 			active = i;
-			edits[i].selected = true;
 			await wait(550);
 			edits[i].selected = false;
 			for (let typed = 0; typed <= part.to.length; typed++) {
@@ -37,14 +37,8 @@
 			await wait(250);
 		}
 		active = -1;
+		stage = "done";
 	}
-
-	$effect(() => {
-		if (on && !started && !prefersReducedMotion.current) {
-			started = true;
-			play();
-		}
-	});
 
 	async function write() {
 		if (!(await copyText(final))) return;
@@ -53,10 +47,16 @@
 	}
 </script>
 
-<div class="flex items-start gap-2 rounded-px border border-line bg-panel py-2.5 pr-2 pl-3">
+<div
+	class="flex items-start gap-2 rounded-px border border-line bg-panel py-2.5 pr-2 pl-3"
+	{@attach reveal((shown) => {
+		if (shown) play();
+		else stage = "waiting";
+	})}
+>
 	<code
-		class="min-w-0 flex-1 py-0.5 font-mono text-[12px] leading-5 break-all whitespace-pre-wrap text-cyan"
-		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if !prefersReducedMotion.current && (edits[i]?.typed ?? -1) < 0}<span
+		class="min-w-0 flex-1 py-0.5 font-mono text-small leading-5 break-all whitespace-pre-wrap text-cyan"
+		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if stage !== "done" && (edits[i]?.typed ?? -1) < 0}<span
 					class={edits[i]?.selected ? "bg-edge text-fg" : ""}>{part.from}</span
 				>{:else}<span class="bg-cyan-night text-fg"
 					>{part.to.slice(0, edits[i]?.typed)}</span

@@ -1,20 +1,41 @@
 @import "../../../web/src/routes/layout.css";
 @source "../../../web/src/lib";
 
-.preview-animated {
-	display: none;
+@theme {
+	--text-heading: 32px;
+	--text-heading--line-height: 1.2;
+	--text-display: 64px;
+	--text-display--line-height: 1.05;
 }
 
-/* set after start, so restoring the scroll on reload does not glide down from the top */
-@media (prefers-reduced-motion: no-preference) {
-	.js .preview-animated {
-		display: contents;
+@utility range {
+	appearance: none;
+	width: 100%;
+	height: 1.25rem;
+	cursor: pointer;
+	background: transparent;
+
+	&::-webkit-slider-runnable-track {
+		height: 4px;
+		background: var(--color-edge);
 	}
-	.js .preview-static {
-		display: none;
+	&::-webkit-slider-thumb {
+		appearance: none;
+		width: 16px;
+		height: 16px;
+		margin-top: -6px;
+		background: var(--color-cyan);
 	}
-	html.started {
-		scroll-behavior: smooth;
+	&::-moz-range-track {
+		height: 4px;
+		background: var(--color-edge);
+	}
+	&::-moz-range-thumb {
+		width: 16px;
+		height: 16px;
+		border: 0;
+		border-radius: 0;
+		background: var(--color-cyan);
 	}
 }
 
@@ -25,21 +46,21 @@
 	}
 }
 
-/* hidden only when script runs, so the page still shows without it */
-@media (prefers-reduced-motion: no-preference) {
-	.js [data-appear],
-	.js [data-rock] {
+/* hidden only while script can run, so the page still shows without it */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+	[data-appear],
+	[data-rock] {
 		opacity: 0;
 	}
-	.js [data-appear].shown {
+	[data-appear].shown {
 		opacity: 1;
 		animation: rise 700ms cubic-bezier(0.2, 0, 0, 1) var(--delay, 0ms) both;
 	}
-	.js [data-chart] {
+	[data-chart] {
 		clip-path: inset(0);
 		transition: clip-path 1s ease-out;
 	}
-	.js [data-landed="false"] [data-chart] {
+	[data-landed="false"] [data-chart] {
 		clip-path: inset(0 100% 0 0);
 	}
 }

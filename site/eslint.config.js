@@ -18,7 +18,8 @@ export default defineConfig(
 	{
 		languageOptions: { globals: { ...globals.browser, ...globals.node } },
 		rules: {
-			"no-undef": "off"
+			"no-undef": "off",
+			"svelte/no-navigation-without-resolve": "off"
 		}
 	},
 	{

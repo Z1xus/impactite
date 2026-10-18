@@ -1,7 +1,8 @@
+import { prefersReducedMotion } from "svelte/motion";
 import { css, threshold } from "#lib/dither/bayer.ts";
 
 // the meteor falls into the hero, and its shock ring wakes the preview below
-export function impact(stage: HTMLElement, landed: () => void) {
+export function impact(stage: HTMLElement, landed: (value: boolean) => void) {
 	const rock = stage.querySelector<HTMLElement>("[data-rock]");
 	if (!rock) return;
 	const show = () => {
@@ -9,11 +10,8 @@ export function impact(stage: HTMLElement, landed: () => void) {
 		rock.style.opacity = "1";
 		rock.style.transform = "";
 	};
-	if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-		show();
-		landed();
-		return;
-	}
+	if (prefersReducedMotion.current) return;
+	landed(false);
 
 	const CELL = 4;
 	const canvas = document.createElement("canvas");
@@ -28,7 +26,7 @@ export function impact(stage: HTMLElement, landed: () => void) {
 	if (!g) {
 		canvas.remove();
 		show();
-		landed();
+		landed(true);
 		return;
 	}
 	const [fg, cyan, deep] = ["--color-fg", "--color-cyan", "--color-cyan-deep"].map(css);
@@ -93,7 +91,7 @@ export function impact(stage: HTMLElement, landed: () => void) {
 			if (!done) {
 				done = true;
 				show();
-				landed();
+				landed(true);
 			}
 			const p = (time - FALL) / RING;
 			if (p >= 1) {

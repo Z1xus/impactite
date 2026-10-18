@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
 	import "./layout.css";
 	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
 	import og from "../lib/og.png?no-inline";
@@ -8,8 +7,6 @@
 	const DESCRIPTION = "Self-hosted web analytics in one binary.";
 
 	let { children } = $props();
-
-	onMount(() => document.documentElement.classList.add("started"));
 </script>
 
 <svelte:head>
