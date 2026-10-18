@@ -24,7 +24,6 @@ struct NewSegment {
 	shared: bool,
 }
 
-// the site and the person's role on it, for anyone who can see it
 fn access(web: &Web, user: i64, domain: &str) -> Reply<(u64, String)> {
 	let role = web.app.site_role(user, domain)?;
 	let site = web.app.site(domain)?;

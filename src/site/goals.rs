@@ -95,7 +95,6 @@ async fn ignore(
 	suggested(&web, &site)
 }
 
-// event names from the last 30 days that are neither goals nor ignored
 fn suggested(web: &Web, site: &Site) -> Reply {
 	let goals = web.app.goals(site.id)?;
 	let ignored = web.app.ignored_events(site.id)?;

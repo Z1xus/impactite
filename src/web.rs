@@ -86,7 +86,6 @@ impl From<tokio::task::JoinError> for Error {
 	}
 }
 
-// runs blocking storage work off the async threads
 pub async fn blocking<T: Send + 'static>(
 	work: impl FnOnce() -> std::io::Result<T> + Send + 'static,
 ) -> Reply<T> {
@@ -107,14 +106,12 @@ impl IntoResponse for Error {
 }
 
 impl Web {
-	// the site, when this person may change it
 	pub fn editable(&self, user: i64, domain: &str) -> Reply<Site> {
 		self.app
 			.editable(user, domain)
 			.ok_or_else(|| Error::forbidden("You can't change this site."))
 	}
 
-	// the site, when this reader may look at it
 	pub fn readable(&self, reader: &Reader, domain: &str) -> Reply<Site> {
 		self.app
 			.site(domain)?

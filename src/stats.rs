@@ -562,7 +562,6 @@ fn sort(rows: &mut [Row], request: &Request, grouping: &Grouping, metrics: &[Met
 	}
 }
 
-// the question as it was understood, with the range in utc timestamps
 fn echo(request: &Request, site: &Site, tz: &TimeZone, from: Date, to: Date) -> Value {
 	json!({
 		"site_id": site.domain,
@@ -579,7 +578,6 @@ fn echo(request: &Request, site: &Site, tz: &TimeZone, from: Date, to: Date) -> 
 	})
 }
 
-// one site, or a team's sites added up the way separate sites count their visitors
 fn query_sites(stats: &Stats, others: &[u64], query: Query) -> Result<Report, String> {
 	let mut report = stats.db.query(&query).map_err(|err| err.to_string())?;
 	for &other in others {

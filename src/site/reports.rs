@@ -46,7 +46,6 @@ struct NewReport {
 	threshold: u64,
 }
 
-// runs every minute, sends whatever is due
 pub async fn tick(web: &Arc<Web>) {
 	let Ok(reports) = web.app.reports() else {
 		return;
@@ -201,7 +200,6 @@ impl Note {
 		}
 	}
 
-	// the monospace block in mails and plain webhooks
 	fn table(&self) -> String {
 		let fields = self
 			.fields

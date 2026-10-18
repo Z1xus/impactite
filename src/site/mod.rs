@@ -250,7 +250,6 @@ fn manages(web: &Web, user: i64, site: &Site) -> bool {
 		.is_ok_and(|team| manager(web, user, team))
 }
 
-// the site, when this person manages its team
 fn managed(web: &Web, user: i64, domain: &str, message: &str) -> Reply<Site> {
 	web.app
 		.site(domain)?
