@@ -2,7 +2,7 @@
 	import type { Snippet } from "svelte";
 	import Meteor from "#lib/art/Meteor.svelte";
 
-	let { children }: { children: Snippet } = $props();
+	let { children }: { children?: Snippet } = $props();
 </script>
 
 <main class="grid min-h-dvh place-items-center px-6 py-16">
@@ -12,7 +12,7 @@
 			<span class="font-mono text-num tracking-tight">impactite</span>
 		</div>
 		<div class="w-full [&_p]:text-center">
-			{@render children()}
+			{@render children?.()}
 		</div>
 	</div>
 </main>

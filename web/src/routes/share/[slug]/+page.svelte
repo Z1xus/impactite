@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { ApiError, access, api } from "#lib/api.ts";
 	import Dashboard from "#lib/dashboard/Dashboard.svelte";
+	import Button from "#lib/ui/Button.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
@@ -73,6 +75,11 @@
 	</Gate>
 {:else if missing}
 	<Gate>
-		<Message tone="bad">{missing}</Message>
+		<div class="flex flex-col items-center gap-4">
+			<Message tone="bad">{missing}</Message>
+			<Button variant="quiet" href={resolve("/")}>Home</Button>
+		</div>
 	</Gate>
+{:else if !embed}
+	<Gate />
 {/if}

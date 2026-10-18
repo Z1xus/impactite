@@ -69,4 +69,6 @@
 			</Gate>
 		{/snippet}
 	</svelte:boundary>
+{:else}
+	<Gate />
 {/if}
