@@ -107,13 +107,13 @@
 	>
 		<Icon svg={calendar} size={14} class="text-dim" />
 		{rangeLabel.charAt(0).toUpperCase() + rangeLabel.slice(1)}
+		{#if view.compare !== "off" && view.period !== "all" && view.period !== "realtime"}
+			<span class="hidden text-small text-dim xl:inline"
+				>vs {COMPARE.find((item) => item.key === view.compare)?.label}</span
+			>
+		{/if}
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
-	{#if view.compare !== "off" && view.period !== "all" && view.period !== "realtime"}
-		<span class="hidden text-small text-dim xl:inline"
-			>vs {COMPARE.find((item) => item.key === view.compare)?.label}</span
-		>
-	{/if}
 	{#if picking}
 		<div
 			{@attach fit}
