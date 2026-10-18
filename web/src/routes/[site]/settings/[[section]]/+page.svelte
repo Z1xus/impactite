@@ -16,7 +16,6 @@
 	import Sharing from "#lib/settings/Sharing.svelte";
 	import Shields from "#lib/settings/Shields.svelte";
 	import Tracking from "#lib/settings/Tracking.svelte";
-	import back from "pixelarticons/svg/arrow-left.svg?raw";
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
 	import code from "pixelarticons/svg/code.svg?raw";
 	import download from "pixelarticons/svg/download.svg?raw";
@@ -30,8 +29,8 @@
 	import alert from "pixelarticons/svg/square-alert.svg?raw";
 	import target from "pixelarticons/svg/target.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
+	import Back from "#lib/ui/Back.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
-	import Icon from "#lib/ui/Icon.svelte";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
@@ -72,19 +71,10 @@
 		<Settings {sections} current={section}>
 			{#snippet title()}
 				<Title>
-					<a
-						href={resolve("/[site]", { site: domain })}
-						class="group flex items-center gap-3 transition-colors duration-100 hover:text-cyan"
-						title="Back to dashboard"
-					>
-						<Icon
-							svg={back}
-							size={14}
-							class="text-dim transition-colors duration-100 group-hover:text-cyan"
-						/>
+					<Back href={resolve("/[site]", { site: domain })} title="Back to dashboard">
 						<Glyph spec={icon("event:hostname", domain)} fallback={domain} />
 						{domain}
-					</a>
+					</Back>
 				</Title>
 			{/snippet}
 

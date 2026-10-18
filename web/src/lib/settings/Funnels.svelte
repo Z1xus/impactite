@@ -1,6 +1,5 @@
 <script lang="ts">
 	import close from "pixelarticons/svg/close.svg?raw";
-	import { resolve } from "$app/paths";
 	import { collection } from "#lib/collection.svelte.ts";
 	import { attempt } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
@@ -99,12 +98,7 @@
 		{/if}
 	{/snippet}
 	{#if goals.items && goals.items.length < 2}
-		<Note>
-			Add two <a
-				href={resolve("/[site]/settings/[[section]]", { site: domain, section: "goals" })}
-				class="text-fg transition-colors duration-100 hover:text-cyan">goals</a
-			> to build a funnel from them.
-		</Note>
+		<Note>Needs two goals.</Note>
 	{:else if funnels.items?.length === 0}
 		<Note>No funnels yet.</Note>
 	{/if}

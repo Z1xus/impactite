@@ -19,10 +19,9 @@
 </script>
 
 <Section id="collection" label="collection">
-	<Note>
-		Unchecked data is never stored for new visits. Without sessions every pageview counts as a
-		new visitor.
-	</Note>
+	{#if site.skip.includes("session")}
+		<Note tone="warn">Without sessions, every pageview counts as a new visitor.</Note>
+	{/if}
 	<Checks
 		bind:value={
 			() => COLLECTED.map((item) => item.key).filter((key) => !site.skip.includes(key)),

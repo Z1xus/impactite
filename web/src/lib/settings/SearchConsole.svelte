@@ -65,15 +65,12 @@
 		{/if}
 		{#if !google.configured}
 			<Note>
-				Search terms need a Google OAuth client with this redirect URI. Ask the server admin
-				to set IMPACTITE_GOOGLE_CLIENT_ID and IMPACTITE_GOOGLE_CLIENT_SECRET.
+				Set IMPACTITE_GOOGLE_CLIENT_ID and IMPACTITE_GOOGLE_CLIENT_SECRET with this redirect
+				URI.
 			</Note>
 			<Code code={google.redirect} />
 		{:else if !google.connected}
-			<Note>
-				Connect Google Search Console to see search terms when you filter by the Google
-				source.
-			</Note>
+			<Note>Not connected.</Note>
 		{:else if google.properties.length}
 			<Select
 				label="property"
@@ -84,7 +81,7 @@
 				data
 			/>
 		{:else}
-			<Note>This Google account has no Search Console properties.</Note>
+			<Note>No properties on this Google account.</Note>
 		{/if}
 	{/if}
 </Section>

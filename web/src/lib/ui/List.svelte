@@ -37,7 +37,7 @@
 					{#if item.avatar !== undefined}
 						{#if item.avatar === null}
 							<span
-								class="size-8 shrink-0 rounded-full border border-dashed border-edge"
+								class="size-[32px] shrink-0 rounded-full border border-dashed border-edge"
 							></span>
 						{:else}
 							<Avatar seed={item.avatar} size={32} />

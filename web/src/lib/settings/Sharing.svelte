@@ -9,7 +9,6 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
-	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
 	import { saveSite, sitePath } from "./site.ts";
@@ -111,7 +110,6 @@
 		{/snippet}
 	</List>
 	{#if embedLink}
-		<Note>Embed the dashboard in another page.</Note>
 		<Code
 			code={`<iframe src="${url(embedLink.slug)}?embed=true" width="100%" height="1600" style="border:0" loading="lazy"></iframe>`}
 		/>

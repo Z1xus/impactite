@@ -38,7 +38,7 @@
 	<Form {action} submit={run} inline danger>
 		{@render children?.()}
 		{#if confirm}
-			<Field label="type {confirm} to confirm" placeholder={confirm} bind:value={typed} />
+			<Field label="type to confirm" placeholder={confirm} bind:value={typed} />
 		{/if}
 	</Form>
 </div>

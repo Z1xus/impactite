@@ -85,6 +85,6 @@
 		})) ?? null}
 		{remove}
 	/>
-	<Note>To skip your own browser, run this in its console on your site.</Note>
+	<Note>To skip your own visits, run this in your browser console.</Note>
 	<Code code={IGNORE} />
 </Section>

@@ -55,15 +55,10 @@
 		{/if}
 	{/snippet}
 	{#if recovery}
-		<Note>
-			Two factor is on. Save these recovery codes now. Each one lets you sign in once without
-			the app.
-		</Note>
+		<Note>Save these recovery codes. Each one signs you in once without the app.</Note>
 		<Code code={recovery.join("\n")} />
 	{:else if session.me?.totp}
-		<Note>
-			Password sign in asks for a code from your authenticator app. Passkeys need no code.
-		</Note>
+		<Note>Two factor is on.</Note>
 		<Form action="turn off" submit={disable} inline>
 			<Field
 				label="code from your app or a recovery code"
@@ -77,7 +72,7 @@
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -- svg built from our own otpauth uri -->
 			<div class="w-40 shrink-0 rounded-px bg-white p-2">{@html qr}</div>
 			<div class="flex min-w-56 flex-1 flex-col gap-3">
-				<Note>Scan this with your authenticator app, or enter the key by hand.</Note>
+				<Note>Scan with your authenticator app or enter the key.</Note>
 				<Code code={pending.secret} />
 				<Form action="turn on" submit={enable} inline>
 					<Field
@@ -91,6 +86,6 @@
 			</div>
 		</div>
 	{:else}
-		<Note>Ask for a code from an authenticator app when you sign in with a password.</Note>
+		<Note>Two factor is off.</Note>
 	{/if}
 </Section>
