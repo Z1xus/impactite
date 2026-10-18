@@ -376,7 +376,7 @@
 				version++;
 			}}
 		/>
-	{:else if empty === false && ctx}
+	{:else if ctx}
 		<Overview
 			{ctx}
 			metric={realtime ? "pageviews" : metric}
