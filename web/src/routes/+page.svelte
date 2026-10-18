@@ -2,20 +2,18 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
-	import Chart from "#lib/dither/Chart.svelte";
 	import { icon } from "#lib/icons/resolve.ts";
-	import { currentTeam, refresh } from "#lib/session.svelte.ts";
+	import { currentTeam, refresh, teamTimezone } from "#lib/session.svelte.ts";
 	import { shift, today } from "#lib/period.ts";
-	import { compact, query } from "#lib/stats.ts";
+	import { query } from "#lib/stats.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
+	import Empty from "#lib/ui/Empty.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
-	import Glyph from "#lib/ui/Glyph.svelte";
-	import Num from "#lib/ui/Num.svelte";
-	import Message from "#lib/ui/Message.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
+	import SiteCard from "#lib/ui/SiteCard.svelte";
 	import Title from "#lib/ui/Title.svelte";
 	import { ZONES } from "#lib/zones.ts";
 
@@ -24,26 +22,31 @@
 	let series = $state<Record<string, number[]>>({});
 	let domain = $state("");
 
+	const targets = $derived(
+		JSON.stringify([
+			...(team && team.sites.length > 1
+				? [{ key: "all", domain: `team:${team.id}`, timezone: teamTimezone(team) }]
+				: []),
+			...(team?.sites ?? []).map((site) => ({ key: site.domain, ...site }))
+		])
+	);
+
 	$effect(() => {
-		if (team && team.sites.length > 1) {
-			const timezone = [...team.sites].sort((a, b) => a.id - b.id)[0].timezone;
-			query(`team:${team.id}`, {
+		let stale = false;
+		series = {};
+		for (const target of JSON.parse(targets) as {
+			key: string;
+			domain: string;
+			timezone: string;
+		}[])
+			query(target.domain, {
 				metrics: ["visitors"],
-				date_range: [shift(today(timezone), -27), today(timezone)],
+				date_range: [shift(today(target.timezone), -27), today(target.timezone)],
 				dimensions: ["time:day"]
 			}).then((result) => {
-				series.all = result.results.map((row) => row.metrics[0]);
+				if (!stale) series[target.key] = result.results.map((row) => row.metrics[0]);
 			});
-		}
-		for (const site of team?.sites ?? []) {
-			query(site.domain, {
-				metrics: ["visitors"],
-				date_range: [shift(today(site.timezone), -27), today(site.timezone)],
-				dimensions: ["time:day"]
-			}).then((result) => {
-				series[site.domain] = result.results.map((row) => row.metrics[0]);
-			});
-		}
+		return () => (stale = true);
 	});
 
 	let adding = $state(false);
@@ -75,76 +78,38 @@
 	</Form>
 </Dialog>
 
-{#snippet total(values: number[] | undefined)}
-	<span class="flex h-[22px] items-baseline gap-2">
-		{#if values}
-			<Num
-				value={values.reduce((sum, value) => sum + value, 0)}
-				format={compact}
-				class="text-num text-fg"
-			/>
-			<span class="label">visitors in 28 days</span>
-		{:else}
-			<span class="h-[22px] w-16 rounded-px bg-line"></span>
-		{/if}
-	</span>
-{/snippet}
-
 <Shell>
 	<div class="flex flex-col gap-6">
 		<div class="flex min-h-9 items-center justify-between gap-4">
 			<Title>{team?.personal ? "Personal" : (team?.name ?? "")}</Title>
-			{#if editable}
+			{#if editable && team?.sites.length}
 				<Button onclick={() => (adding = true)}>Add site</Button>
 			{/if}
 		</div>
 		{#if team && team.sites.length}
 			<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				{#if team.sites.length > 1}
-					{@const values = series.all}
 					<li>
-						<a
-							href={resolve("/all")}
-							class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
-						>
-							<span class="flex h-5 items-center text-fg">All sites</span>
-							{@render total(values)}
-							<Chart
-								values={values ?? []}
-								axes={false}
-								height={56}
-								format={compact}
-							/>
-						</a>
+						<SiteCard href={resolve("/all")} title="All sites" values={series.all} />
 					</li>
 				{/if}
 				{#each team.sites as site (site.id)}
-					{@const values = series[site.domain]}
 					<li>
-						<a
+						<SiteCard
 							href={resolve("/[site]", { site: site.domain })}
-							class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
-						>
-							<span class="flex h-5 min-w-0 items-center gap-2.5">
-								<Glyph
-									spec={icon("event:hostname", site.domain)}
-									fallback={site.domain}
-								/>
-								<span class="truncate text-fg">{site.domain}</span>
-							</span>
-							{@render total(values)}
-							<Chart
-								values={values ?? []}
-								axes={false}
-								height={56}
-								format={compact}
-							/>
-						</a>
+							title={site.domain}
+							glyph={icon("event:hostname", site.domain)}
+							values={series[site.domain]}
+						/>
 					</li>
 				{/each}
 			</ul>
 		{:else}
-			<Message>No sites yet.</Message>
+			<Empty text="No sites yet.">
+				{#if editable}
+					<Button onclick={() => (adding = true)}>Add site</Button>
+				{/if}
+			</Empty>
 		{/if}
 	</div>
 </Shell>

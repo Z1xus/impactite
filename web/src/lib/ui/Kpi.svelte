@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Num from "./Num.svelte";
+	import Skeleton from "./Skeleton.svelte";
 
 	let {
 		label,
@@ -32,7 +33,7 @@
 >
 	<span class="label {active ? 'text-cyan' : ''}">{label}</span>
 	{#if value === null}
-		<span class="h-[22px] w-20 rounded-px bg-line"></span>
+		<Skeleton class="h-[22px] w-20" />
 	{:else}
 		<Num {value} {format} class="text-num text-fg" />
 	{/if}

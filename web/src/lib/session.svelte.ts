@@ -1,4 +1,4 @@
-import { api, type Me } from "./api";
+import { api, type Me, type Team } from "./api";
 import { loadDisplay } from "./display.svelte.ts";
 
 export const session = $state<{
@@ -58,4 +58,9 @@ export function currentTeam() {
 
 export function findSite(domain: string) {
 	return session.me?.teams.flatMap((team) => team.sites).find((site) => site.domain === domain);
+}
+
+// the server reads a team in the timezone of its oldest site
+export function teamTimezone(team: Team) {
+	return [...team.sites].sort((a, b) => a.id - b.id)[0]?.timezone ?? "UTC";
 }

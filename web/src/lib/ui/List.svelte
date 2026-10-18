@@ -3,6 +3,7 @@
 	import close from "pixelarticons/svg/close.svg?raw";
 	import Avatar from "./Avatar.svelte";
 	import Icon from "./Icon.svelte";
+	import Skeleton from "./Skeleton.svelte";
 
 	type Key = string | number;
 
@@ -29,7 +30,7 @@
 {#if items === null || items.length}
 	<ul class="flex flex-col rounded-px border border-line bg-panel">
 		{#if items === null}
-			<li class="h-14"></li>
+			<li class="flex h-14 items-center px-4"><Skeleton class="h-3 w-40" /></li>
 		{:else}
 			{#each items as item (item.key)}
 				<li
