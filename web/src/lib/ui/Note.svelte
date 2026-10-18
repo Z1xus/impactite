@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 
-	let { children }: { children: Snippet } = $props();
+	let { tone = "dim", children }: { tone?: "dim" | "warn"; children: Snippet } = $props();
 </script>
 
-<p class="text-body text-dim">{@render children()}</p>
+<p class="text-body {tone === 'warn' ? 'text-warn' : 'text-dim'}">{@render children()}</p>

@@ -30,6 +30,7 @@
 	import NewEvents from "#lib/settings/NewEvents.svelte";
 	import Period from "./Period.svelte";
 	import Waiting from "./Waiting.svelte";
+	import Banner from "#lib/ui/Banner.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";
@@ -38,7 +39,6 @@
 	import Title from "#lib/ui/Title.svelte";
 	import Live from "#lib/ui/Live.svelte";
 	import Select from "#lib/ui/Select.svelte";
-	import Note from "#lib/ui/Note.svelte";
 
 	let {
 		domain,
@@ -190,7 +190,6 @@
 			.catch(() => (goals = []));
 	}
 
-	// the all sites view has no goals, funnels or titles of its own
 	$effect(() => {
 		if (combined) return;
 		api<Record<string, string>>(`/api/app/sites/${domain}/titles`)
@@ -289,22 +288,19 @@
 				options={sites}
 				data
 				plain
+				footer={editable
+					? {
+							label: "Site settings",
+							href: resolve("/[site]/settings/[[section]]", { site: domain }),
+							icon: sliders
+						}
+					: undefined}
 				pick={(key) =>
 					goto(key === "all" ? resolve("/all") : resolve("/[site]", { site: key }))}
-			>
-				{#snippet footer()}
-					{#if editable}
-						<a
-							href={resolve("/[site]/settings/[[section]]", { site: domain })}
-							class="flex h-9 items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
-							><Icon svg={sliders} size={14} />Site settings</a
-						>
-					{/if}
-				{/snippet}
-			</Select>
+			/>
 		{/if}
 		{#if empty === false}<Live site={domain} />{/if}
-		<div class="ml-auto flex items-center gap-2 max-sm:w-full max-sm:justify-between">
+		<div class="flex items-center gap-2 max-sm:w-full sm:ml-auto">
 			{#if layout.arranging}
 				<Button variant="quiet" class="ml-auto" onclick={() => (layout.arranging = false)}
 					>Done</Button
@@ -316,30 +312,36 @@
 				{#if view}
 					<Period {view} {go} />
 					{#if !readonly}
-						<Menu
-							label="Dashboard options"
-							icon={more}
-							plain
-							iconOnly
-							align="right"
-							items={[
-								{ label: "Edit layout", onclick: () => (layout.arranging = true) },
-								...(hasImports
-									? [
-											{
-												label: "Include imported data",
-												current: imports,
-												onclick: () => go({ imports: imports ? "0" : null })
-											}
-										]
-									: []),
-								"divider",
-								{
-									label: "Download CSV",
-									onclick: () => ctx && attempt(() => downloadCsv(ctx))
-								}
-							]}
-						/>
+						<div class="max-sm:ml-auto">
+							<Menu
+								label="Dashboard options"
+								icon={more}
+								plain
+								iconOnly
+								align="right"
+								items={[
+									{
+										label: "Edit layout",
+										onclick: () => (layout.arranging = true)
+									},
+									...(hasImports
+										? [
+												{
+													label: "Include imported data",
+													current: imports,
+													onclick: () =>
+														go({ imports: imports ? "0" : null })
+												}
+											]
+										: []),
+									"divider",
+									{
+										label: "Download CSV",
+										onclick: () => ctx && attempt(() => downloadCsv(ctx))
+									}
+								]}
+							/>
+						</div>
 					{/if}
 				{/if}
 			{/if}
@@ -357,16 +359,13 @@
 	/>
 
 	{#if editable && !combined && empty === false && newEvents.length}
-		<div
-			class="flex flex-wrap items-center justify-between gap-4 rounded-px border border-line bg-panel py-2 pr-2 pl-4"
+		<Banner
+			text={newEvents.length === 1
+				? `Your site sends ${newEvents[0].name} events, but there's no goal for them yet.`
+				: `Your site sends ${newEvents.length} kinds of events that have no goal yet.`}
 		>
-			<Note>
-				{newEvents.length === 1
-					? `Your site sends ${newEvents[0].name} events, but there's no goal for them yet.`
-					: `Your site sends ${newEvents.length} kinds of events that have no goal yet.`}
-			</Note>
 			<Button variant="quiet" onclick={() => (reviewing = true)}>Review</Button>
-		</div>
+		</Banner>
 	{/if}
 
 	{#if empty && !combined}

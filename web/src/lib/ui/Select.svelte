@@ -1,6 +1,5 @@
 <script lang="ts" generics="T extends string | number">
 	import { sentence } from "./text";
-	import type { Snippet } from "svelte";
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
@@ -28,7 +27,7 @@
 		align?: "left" | "right";
 		label?: string;
 		plain?: boolean;
-		footer?: Snippet;
+		footer?: { label: string; href: string; icon: string };
 	} = $props();
 
 	const text = "font-sans text-body";
@@ -156,12 +155,14 @@
 				{/each}
 			</ul>
 			{#if footer}
-				<div
-					class="border-t border-line p-1"
-					onclick={() => (open = false)}
-					role="presentation"
-				>
-					{@render footer()}
+				<div class="border-t border-line p-1">
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
+					<a
+						href={footer.href}
+						class="flex h-9 items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
+						><Icon svg={footer.icon} size={14} />{footer.label}</a
+					>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				</div>
 			{/if}
 		</div>

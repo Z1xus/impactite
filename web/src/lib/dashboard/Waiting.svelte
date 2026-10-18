@@ -5,6 +5,7 @@
 	import Snippet from "#lib/settings/Snippet.svelte";
 	import { display, query } from "#lib/stats.ts";
 	import { theme } from "#lib/theme.svelte.ts";
+	import Banner from "#lib/ui/Banner.svelte";
 	import Note from "#lib/ui/Note.svelte";
 
 	let { domain, landed }: { domain: string; landed: () => void } = $props();
@@ -161,7 +162,7 @@
 			aria-hidden="true"
 		></canvas>
 		{#if hit === null}
-			<span class="label">listening for the first visit on {domain}</span>
+			<span class="label" role="status">listening for the first visit on {domain}</span>
 		{:else}
 			<span class="flex flex-col gap-1">
 				<span class="text-body text-fg">First visit landed.</span>
@@ -170,20 +171,12 @@
 		{/if}
 	</div>
 	{#if hit === null}
-		<div class="flex flex-col gap-3">
-			<span class="text-body text-dim"
-				>Add this snippet to the head of every page on {domain}.</span
-			>
-			<Snippet {domain} />
-		</div>
-		<span class="text-body text-dim"
-			>Then open your site. Visits from localhost don't count.</span
-		>
+		<Snippet {domain} />
 		{#each strays as stray (stray)}
-			<span class="text-body text-warn"
-				>Visits are arriving for {stray}. Set data-domain to {domain} in the snippet, or add {stray}
-				as its own site.</span
-			>
+			<Banner
+				tone="warn"
+				text="Visits are arriving for {stray}. Set data-domain to {domain} in the snippet, or add {stray} as its own site."
+			/>
 		{/each}
 	{/if}
 </section>
