@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
-	import Danger from "#lib/account/Danger.svelte";
+	import DeleteAccount from "#lib/account/DeleteAccount.svelte";
 	import Display from "#lib/account/Display.svelte";
 	import Keys from "#lib/account/Keys.svelte";
 	import Passkeys from "#lib/account/Passkeys.svelte";
@@ -59,7 +59,7 @@
 			{:else if section === "keys"}
 				<Keys />
 			{:else if section === "danger"}
-				<Danger />
+				<DeleteAccount />
 			{/if}
 		</Settings>
 	{:else}

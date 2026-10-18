@@ -4,7 +4,7 @@
 	import { icon } from "#lib/icons/resolve.ts";
 	import { findSite } from "#lib/session.svelte.ts";
 	import Collection from "#lib/settings/Collection.svelte";
-	import Danger from "#lib/settings/Danger.svelte";
+	import SiteDanger from "#lib/settings/SiteDanger.svelte";
 	import Data from "#lib/settings/Data.svelte";
 	import Funnels from "#lib/settings/Funnels.svelte";
 	import General from "#lib/settings/General.svelte";
@@ -114,7 +114,7 @@
 				{:else if section === "guests"}
 					<Guests {domain} />
 				{:else if section === "danger"}
-					<Danger {domain} />
+					<SiteDanger {domain} />
 				{/if}
 			{/key}
 		</Settings>

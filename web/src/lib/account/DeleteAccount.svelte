@@ -4,11 +4,9 @@
 	import { api } from "#lib/api.ts";
 	import { adopt, session } from "#lib/session.svelte.ts";
 	import Danger from "#lib/ui/Danger.svelte";
-	import Field from "#lib/ui/Field.svelte";
-	import Form from "#lib/ui/Form.svelte";
 	import Section from "#lib/ui/Section.svelte";
 
-	let email = $state("");
+	const email = $derived(session.me?.email ?? "");
 
 	async function destroy() {
 		await api("/api/app/me", { email }, "DELETE");
@@ -21,13 +19,8 @@
 	<Danger
 		title="Delete account"
 		body="This is permanent. You lose your account and your personal sites."
-	>
-		<Form action="delete account" submit={destroy} inline danger>
-			<Field
-				label="type your email to confirm"
-				placeholder={session.me?.email}
-				bind:value={email}
-			/>
-		</Form>
-	</Danger>
+		action="delete account"
+		submit={destroy}
+		confirm={email}
+	/>
 </Section>
