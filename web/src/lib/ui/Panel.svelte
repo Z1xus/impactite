@@ -77,7 +77,7 @@
 		</div>
 	</header>
 	<div
-		class="flex-1 px-2 py-3 {fit ? '' : 'min-h-64'} {arranging
+		class="flex-1 px-2 py-3 {fit ? '' : 'min-h-76'} {arranging
 			? 'pointer-events-none opacity-50 select-none'
 			: ''}"
 	>

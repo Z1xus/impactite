@@ -32,7 +32,7 @@
 
 <dialog
 	bind:this={dialog}
-	class="m-auto {wide
+	class="mx-auto mt-[15dvh] mb-auto {wide
 		? 'w-[min(60rem,calc(100vw-2rem))]'
 		: 'w-[min(32rem,calc(100vw-2rem))]'} overflow-visible rounded-px border border-edge bg-raised p-0 text-fg backdrop:bg-ink/70"
 	aria-labelledby="{id}-title"
