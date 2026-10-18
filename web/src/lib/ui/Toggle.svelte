@@ -11,6 +11,17 @@
 		label?: string;
 		plain?: boolean;
 	} = $props();
+
+	function move(event: KeyboardEvent, at: number) {
+		const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+		if (!step) return;
+		event.preventDefault();
+		const next = options[(at + step + options.length) % options.length];
+		value = next.key;
+		(event.currentTarget as HTMLElement).parentElement
+			?.querySelectorAll<HTMLElement>("[role=radio]")
+			[options.indexOf(next)].focus();
+	}
 </script>
 
 <div class="flex max-w-full shrink-0 flex-col gap-2">
@@ -24,18 +35,20 @@
 		role="radiogroup"
 		aria-label={label}
 	>
-		{#each options as option (option.key)}
+		{#each options as option, at (option.key)}
 			<button
 				type="button"
 				role="radio"
 				aria-checked={value === option.key}
+				tabindex={value === option.key ? 0 : -1}
 				class="shrink-0 cursor-pointer rounded-px px-3 {plain
-					? 'font-sans text-[13px] text-dim'
-					: 'font-sans text-[14px] text-dim'} transition-colors duration-100 {value ===
+					? 'font-sans text-small text-dim'
+					: 'font-sans text-body text-dim'} transition-colors duration-100 {value ===
 				option.key
 					? 'bg-edge text-fg'
 					: 'hover:text-fg'}"
 				onclick={() => (value = option.key)}
+				onkeydown={(event) => move(event, at)}
 			>
 				{sentence(option.label)}
 			</button>
