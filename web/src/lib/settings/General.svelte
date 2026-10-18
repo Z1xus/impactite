@@ -47,7 +47,7 @@
 </script>
 
 <Section id="general" label="general">
-	<Form action="rename" submit={rename} inline>
+	<Form action="Rename" submit={rename} inline>
 		<Field label="domain" bind:value={name} required />
 	</Form>
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -14,7 +14,7 @@
 		const yes = await ask({
 			title: `Leave ${team.name}?`,
 			body: "You'll lose access to its sites.",
-			action: "leave team"
+			action: "Leave team"
 		});
 		if (!yes) return;
 		await api(`/api/app/teams/${team.id}/members/${session.me?.id}`, undefined, "DELETE");
@@ -34,7 +34,7 @@
 		<Danger
 			title="Delete team"
 			body="This is permanent. You lose the team and all its sites."
-			action="delete team"
+			action="Delete team"
 			submit={destroy}
 			confirm={team.name}
 		/>
@@ -42,7 +42,7 @@
 		<Danger
 			title="Leave team"
 			body="You lose access to its sites until someone invites you again."
-			action="leave team"
+			action="Leave team"
 			submit={leave}
 		/>
 	{/if}

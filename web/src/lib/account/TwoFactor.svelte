@@ -59,7 +59,7 @@
 		<Code code={recovery.join("\n")} />
 	{:else if session.me?.totp}
 		<Note>Two factor is on.</Note>
-		<Form action="turn off" submit={disable} inline>
+		<Form action="Turn off" submit={disable} inline>
 			<Field
 				label="code from your app or a recovery code"
 				bind:value={code}
@@ -74,7 +74,7 @@
 			<div class="flex min-w-56 flex-1 flex-col gap-3">
 				<Note>Scan with your authenticator app or enter the key.</Note>
 				<Code code={pending.secret} />
-				<Form action="turn on" submit={enable} inline>
+				<Form action="Turn on" submit={enable} inline>
 					<Field
 						label="code from your app"
 						bind:value={code}

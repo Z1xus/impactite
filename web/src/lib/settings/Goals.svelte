@@ -65,13 +65,13 @@
 			{
 				title: `Delete goal "${goals.items?.find((goal) => goal.id === id)?.name ?? ""}"?`,
 				body: "Its conversions stop showing.",
-				action: "delete goal"
+				action: "Delete goal"
 			}
 		);
 </script>
 
 <Dialog title="add goal" bind:open={adding}>
-	<Form action="add goal" submit={add}>
+	<Form action="Add goal" submit={add}>
 		<Toggle
 			label="kind"
 			bind:value={kind}
@@ -121,7 +121,7 @@
 		}
 	}
 >
-	<Form action="rename" submit={saveName}>
+	<Form action="Rename" submit={saveName}>
 		<Field label="name" maxlength={120} bind:value={newName} required />
 	</Form>
 </Dialog>

@@ -53,7 +53,7 @@
 				const yes = await ask({
 					title: "Hand over this team?",
 					body: "You become an admin.",
-					action: "hand over"
+					action: "Hand over"
 				});
 				if (!yes) return;
 				await api(`${base}/owner`, { user });
@@ -73,7 +73,7 @@
 			{
 				title: "Remove this member?",
 				body: "They lose access to the team's sites.",
-				action: "remove member"
+				action: "Remove member"
 			}
 		);
 
@@ -83,7 +83,7 @@
 				await api(`${base}/invites/${id}`, undefined, "DELETE");
 				await reload();
 			},
-			{ title: "Revoke this invite?", action: "revoke invite" }
+			{ title: "Revoke this invite?", action: "Revoke invite" }
 		);
 
 	const resend = (pending: Invite) =>
@@ -96,7 +96,7 @@
 
 <Dialog title="invite to {team.name}" bind:open={inviting}>
 	<div class="flex flex-col gap-4">
-		<Form action="send invite" submit={invite}>
+		<Form action="Send invite" submit={invite}>
 			<Field
 				label="email"
 				type="email"

@@ -21,7 +21,7 @@
 </script>
 
 <Section id="general" label="general">
-	<Form action="rename" submit={rename} inline>
+	<Form action="Rename" submit={rename} inline>
 		<Field label="name" bind:value={name} required />
 	</Form>
 </Section>

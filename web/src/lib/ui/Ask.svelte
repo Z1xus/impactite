@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { sentence } from "./text";
 	import { asking } from "#lib/ask.svelte.ts";
 	import Button from "./Button.svelte";
 	import Dialog from "./Dialog.svelte";
@@ -17,7 +16,7 @@
 		<div class="flex justify-end gap-2">
 			<Button variant="quiet" onclick={() => asking.answer(false)}>Cancel</Button>
 			<Button variant="danger" onclick={() => asking.answer(true)}>
-				{sentence(asking.question?.action ?? "")}
+				{asking.question?.action}
 			</Button>
 		</div>
 	</div>

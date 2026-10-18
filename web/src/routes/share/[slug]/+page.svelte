@@ -69,7 +69,7 @@
 	{/if}
 {:else if locked}
 	<Gate>
-		<Form block action="open dashboard" submit={() => unlock(password)}>
+		<Form block action="Open dashboard" submit={() => unlock(password)}>
 			<Field label="password" type="password" bind:value={password} required />
 		</Form>
 	</Gate>

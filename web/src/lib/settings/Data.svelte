@@ -83,7 +83,7 @@
 		attempt(() => imports.remove(id), {
 			title: "Remove this import?",
 			body: "Its imported stats are deleted.",
-			action: "remove import"
+			action: "Remove import"
 		});
 </script>
 
@@ -93,7 +93,7 @@
 		<Message>
 			Export collected events from all dates. Imported summaries are not included.
 		</Message>
-		<Form action="download" submit={() => archive(domain, format)} inline>
+		<Form action="Download" submit={() => archive(domain, format)} inline>
 			<Select
 				label="export format"
 				value={format}
@@ -116,7 +116,7 @@
 		})) ?? null}
 		{remove}
 	/>
-	<Form action="import" submit={upload} inline>
+	<Form action="Import" submit={upload} inline>
 		<Upload bind:file {accept} />
 		<Toggle
 			bind:value={source}
@@ -138,7 +138,7 @@
 					page.
 				</Message>
 			{:else if analytics.connected && analytics.properties.length}
-				<Form action="import" submit={importAnalytics} inline>
+				<Form action="Import" submit={importAnalytics} inline>
 					<Select
 						value={property}
 						options={analytics.properties}

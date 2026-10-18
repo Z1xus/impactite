@@ -46,12 +46,12 @@
 	const remove = (id: string | number) =>
 		attempt(() => funnels.remove(id), {
 			title: `Delete funnel "${funnels.items?.find((funnel) => funnel.id === id)?.name ?? ""}"?`,
-			action: "delete funnel"
+			action: "Delete funnel"
 		});
 </script>
 
 <Dialog title="add funnel" bind:open={building}>
-	<Form action="add funnel" submit={add}>
+	<Form action="Add funnel" submit={add}>
 		<Field label="name" placeholder="Checkout" bind:value={name} required />
 		{#each steps as step, i (i)}
 			<div class="flex items-end gap-2">

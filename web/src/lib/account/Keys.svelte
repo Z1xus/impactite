@@ -29,7 +29,7 @@
 		attempt(() => keys.remove(id), {
 			title: "Delete this API key?",
 			body: "Anything that uses it stops working.",
-			action: "delete key"
+			action: "Delete key"
 		});
 </script>
 
@@ -46,7 +46,7 @@
 		<Code code={fresh} />
 		<Message>Copy this key now. You won't see it again.</Message>
 	{/if}
-	<Form action="create key" submit={add} inline>
+	<Form action="Create key" submit={add} inline>
 		<Field label="key name" placeholder="grafana" bind:value={name} required />
 	</Form>
 </Section>

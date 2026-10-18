@@ -44,7 +44,7 @@
 			{
 				title: "Disconnect Search Console?",
 				body: "Search terms stop showing until you connect again.",
-				action: "disconnect"
+				action: "Disconnect"
 			}
 		);
 </script>

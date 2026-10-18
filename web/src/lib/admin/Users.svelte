@@ -24,7 +24,7 @@
 			{
 				title: "Delete this user?",
 				body: "Sites only they own are deleted too.",
-				action: "delete user"
+				action: "Delete user"
 			}
 		);
 </script>

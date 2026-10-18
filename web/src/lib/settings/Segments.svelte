@@ -20,7 +20,7 @@
 		attempt(() => segments.remove(id), {
 			title: "Delete this segment?",
 			body: "Everyone it's shared with loses it too.",
-			action: "delete segment"
+			action: "Delete segment"
 		});
 </script>
 

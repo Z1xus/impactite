@@ -25,7 +25,7 @@
 </script>
 
 <Section id="profile" label="profile">
-	<Form action="save" submit={save}>
+	<Form action="Save" submit={save}>
 		<div class="grid gap-4 sm:grid-cols-2">
 			<Field label="name" maxlength={80} bind:value={name} autocomplete="name" required />
 			<Field label="email" type="email" bind:value={email} autocomplete="email" required />

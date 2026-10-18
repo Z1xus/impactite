@@ -18,7 +18,7 @@
 </script>
 
 <Section id="password" label="password">
-	<Form action={session.me?.password ? "change password" : "set password"} submit={save}>
+	<Form action={session.me?.password ? "Change password" : "Set password"} submit={save}>
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#if session.me?.password}
 				<Field

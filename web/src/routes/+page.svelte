@@ -66,7 +66,7 @@
 </script>
 
 <Dialog title="add site" bind:open={adding}>
-	<Form action="add site" submit={add}>
+	<Form action="Add site" submit={add}>
 		<Field label="domain" placeholder="example.com" bind:value={domain} required />
 		<Select
 			label="timezone"

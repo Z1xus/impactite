@@ -69,7 +69,7 @@
 </script>
 
 <Dialog title="save segment" bind:open={saving}>
-	<Form action="save segment" submit={save}>
+	<Form action="Save segment" submit={save}>
 		<Field label="segment name" maxlength={80} bind:value={name} required />
 		{#if editable}
 			<Checks

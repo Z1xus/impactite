@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { sentence } from "./text";
 	import type { Snippet } from "svelte";
 	import Button from "./Button.svelte";
 	import Message from "./Message.svelte";
@@ -43,9 +42,7 @@
 			class="flex flex-wrap items-end gap-2 [&>*:first-child]:min-w-48 [&>*:first-child]:flex-1"
 		>
 			{@render children?.()}
-			<Button type="submit" variant={danger ? "danger" : "quiet"} {busy}
-				>{sentence(action)}</Button
-			>
+			<Button type="submit" variant={danger ? "danger" : "quiet"} {busy}>{action}</Button>
 		</div>
 	{:else}
 		{@render children?.()}
@@ -53,7 +50,7 @@
 			type="submit"
 			variant={danger ? "danger" : "primary"}
 			{busy}
-			class={block ? "w-full" : "self-end"}>{sentence(action)}</Button
+			class={block ? "w-full" : "self-end"}>{action}</Button
 		>
 	{/if}
 	<Message tone="bad">{error}</Message>

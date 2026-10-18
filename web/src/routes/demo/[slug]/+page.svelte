@@ -28,6 +28,6 @@
 
 <Gate>
 	<div bind:this={panel}>
-		<Form block action="open demo" submit={enter} />
+		<Form block action="Open demo" submit={enter} />
 	</div>
 </Gate>

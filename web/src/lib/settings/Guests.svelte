@@ -45,7 +45,7 @@
 			? drop(`${path}/${String(key).slice(1)}`, {
 					title: "Remove this guest?",
 					body: "They lose access to this site.",
-					action: "remove guest"
+					action: "Remove guest"
 				})
 			: drop(`${path}/invites/${String(key).slice(1)}`);
 </script>
@@ -68,7 +68,7 @@
 		]}
 		{remove}
 	/>
-	<Form action="invite" submit={invite} inline>
+	<Form action="Invite" submit={invite} inline>
 		<Field
 			label="email"
 			type="email"

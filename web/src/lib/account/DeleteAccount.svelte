@@ -19,7 +19,7 @@
 	<Danger
 		title="Delete account"
 		body="This is permanent. You lose your account and your personal sites."
-		action="delete account"
+		action="Delete account"
 		submit={destroy}
 		confirm={email}
 	/>

@@ -49,7 +49,7 @@
 				(await ask({
 					title: "Make the dashboard private?",
 					body: "The public link stops working.",
-					action: "make private"
+					action: "Make private"
 				}))
 			)
 				await links.remove(publicLink.id);
@@ -59,12 +59,12 @@
 		attempt(() => links.remove(id), {
 			title: "Delete this shared link?",
 			body: "Anyone with the link loses access.",
-			action: "delete link"
+			action: "Delete link"
 		});
 </script>
 
 <Dialog title="add shared link" bind:open={adding}>
-	<Form action="add link" submit={add}>
+	<Form action="Add link" submit={add}>
 		<Field label="name" placeholder="Investors" bind:value={name} required />
 		<Field label="password" type="password" placeholder="optional" bind:value={password} />
 	</Form>

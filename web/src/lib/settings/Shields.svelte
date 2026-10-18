@@ -51,7 +51,7 @@
 </script>
 
 <Dialog title="add rule" bind:open={adding}>
-	<Form action="add rule" submit={add}>
+	<Form action="Add rule" submit={add}>
 		<Toggle label="kind" bind:value={kind} options={KINDS} />
 		<div class="flex items-end gap-2">
 			<div class="flex-1">

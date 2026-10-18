@@ -62,7 +62,7 @@
 </script>
 
 <Dialog title="add report" bind:open={adding}>
-	<Form action="add report" submit={add}>
+	<Form action="Add report" submit={add}>
 		<Select label="kind" value={kind} options={KINDS} pick={(key) => (kind = key)} />
 		<div class="grid gap-4 {limit ? 'sm:grid-cols-2' : ''}">
 			<Field

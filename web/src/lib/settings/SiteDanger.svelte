@@ -31,7 +31,7 @@
 	<Danger
 		title="Remove a page"
 		body="All stats for this page are deleted permanently. Imported data is kept."
-		action="remove page"
+		action="Remove page"
 		submit={purge}
 	>
 		<Field label="page path" placeholder="/old-page" bind:value={path} />
@@ -39,14 +39,14 @@
 	<Danger
 		title="Reset stats"
 		body="All stats are deleted permanently. The site and its settings are kept."
-		action="reset stats"
+		action="Reset stats"
 		submit={wipe}
 		confirm="reset"
 	/>
 	<Danger
 		title="Delete site"
 		body="This is permanent. You lose the site and all its data."
-		action="delete site"
+		action="Delete site"
 		submit={destroy}
 		confirm={domain}
 	/>

@@ -33,7 +33,7 @@
 		attempt(() => passkeys.remove(id), {
 			title: "Remove this passkey?",
 			body: "You can't sign in with it anymore.",
-			action: "remove passkey"
+			action: "Remove passkey"
 		});
 </script>
 
