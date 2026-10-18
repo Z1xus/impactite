@@ -21,7 +21,7 @@
 	class="scroll-mt-6 rounded-px border bg-panel {danger ? 'border-bad/30' : 'border-line'}"
 >
 	<header
-		class="flex min-h-13 items-center justify-between gap-4 border-b px-5 py-2 {danger
+		class="flex min-h-13 items-center justify-between gap-4 border-b px-5 py-1.5 {danger
 			? 'border-bad/30'
 			: 'border-line'}"
 	>
