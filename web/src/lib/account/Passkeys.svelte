@@ -7,6 +7,7 @@
 	import { attempt } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import List from "#lib/ui/List.svelte";
+	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 
 	const passkeys = collection<{
@@ -58,4 +59,5 @@
 		}) ?? null}
 		{remove}
 	/>
+	{#if passkeys.items?.length === 0}<Note>No passkeys yet.</Note>{/if}
 </Section>

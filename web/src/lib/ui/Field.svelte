@@ -13,6 +13,6 @@
 	<input
 		{...rest}
 		bind:value
-		class="h-9 rounded-px border border-edge bg-panel px-3 text-fg transition-colors duration-100 outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
+		class="h-9 rounded-px border border-edge bg-panel px-3 text-body text-fg transition-colors duration-100 outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
 	/>
 </label>

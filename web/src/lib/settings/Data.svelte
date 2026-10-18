@@ -8,6 +8,7 @@
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Message from "#lib/ui/Message.svelte";
+	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
@@ -90,9 +91,7 @@
 <Section id="imports" label="data">
 	<div class="flex flex-col gap-3">
 		<span class="text-body text-fg">Export data</span>
-		<Message>
-			Export collected events from all dates. Imported summaries are not included.
-		</Message>
+		<Note>Export collected events from all dates. Imported summaries are not included.</Note>
 		<Form action="Download" submit={() => archive(domain, format)} inline>
 			<Select
 				label="export format"
@@ -133,10 +132,10 @@
 		<div class="flex flex-col gap-3 border-t border-line pt-4">
 			<span class="label">google analytics 4</span>
 			{#if analytics.importing}
-				<Message>
+				<Note>
 					Importing from Google Analytics. This takes a few minutes. You can leave this
 					page.
-				</Message>
+				</Note>
 			{:else if analytics.connected && analytics.properties.length}
 				<Form action="Import" submit={importAnalytics} inline>
 					<Select
@@ -146,13 +145,13 @@
 					/>
 				</Form>
 			{:else if analytics.connected}
-				<Message>This Google account has no Analytics properties.</Message>
+				<Note>This Google account has no Analytics properties.</Note>
 			{:else}
 				<div>
 					<Button
 						variant="quiet"
 						onclick={() => (location.href = `${sitePath(domain)}/analytics/connect`)}
-						>Connect google analytics</Button
+						>Connect Google Analytics</Button
 					>
 				</div>
 			{/if}
