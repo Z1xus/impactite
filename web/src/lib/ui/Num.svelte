@@ -17,7 +17,7 @@
 
 	$effect(() => {
 		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-		tween.set(value, { duration: still ? 0 : 320 });
+		tween.set(value, { duration: still || value === 0 ? 0 : 320 });
 	});
 </script>
 
