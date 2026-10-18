@@ -36,7 +36,6 @@
 	<div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-[11rem_minmax(0,1fr)]">
 		<div class="lg:hidden">
 			<Select
-				label="settings"
 				value={current}
 				options={sections.map((section) => ({
 					key: section.id,
