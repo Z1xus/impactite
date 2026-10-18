@@ -30,12 +30,16 @@
 		});
 	});
 
-	const team = $derived(currentTeam());
+	const team = $derived(
+		session.me?.teams.find((item) =>
+			item.sites.some((site) => site.domain === page.params.site)
+		) ?? currentTeam()
+	);
 	const workspace = $derived([
 		...(session.me?.teams ?? []).map((item) => ({
 			label: item.personal ? "Personal" : item.name,
 			icon: item.personal ? user : users,
-			current: item.id === session.team,
+			current: item.id === team?.id,
 			onclick: (): void => {
 				pickTeam(item.id);
 				goto(resolve("/"));
