@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from "svelte";
 	import { goto, preloadCode } from "$app/navigation";
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
@@ -64,7 +65,11 @@
 				api("/api/app/login", { email, password: secret, ...(asked && { code }) })
 			);
 		} catch (err) {
-			if (err instanceof ApiError && err.data.totp) asked = true;
+			if (err instanceof ApiError && err.data.totp) {
+				asked = true;
+				await tick();
+				panel?.querySelector<HTMLInputElement>("[autocomplete=one-time-code]")?.focus();
+			}
 			throw err;
 		}
 	}
@@ -87,6 +92,7 @@
 					type="email"
 					bind:value={email}
 					autocomplete="email"
+					autofocus
 					required
 				/>
 				<Field
@@ -96,15 +102,22 @@
 					autocomplete="current-password"
 					required
 				/>
-				{#if asked}
-					<Field
-						label="code"
-						placeholder="App or recovery code"
-						bind:value={code}
-						autocomplete="one-time-code"
-						required
-					/>
-				{/if}
+				<div
+					class="grid overflow-hidden motion-safe:transition-[grid-template-rows,margin] motion-safe:duration-200 {asked
+						? 'grid-rows-[1fr]'
+						: '-mt-4 grid-rows-[0fr]'}"
+					inert={!asked}
+				>
+					<div class="min-h-0">
+						<Field
+							label="code"
+							placeholder="App or recovery code"
+							bind:value={code}
+							autocomplete="one-time-code"
+							required={asked}
+						/>
+					</div>
+				</div>
 			</Form>
 		{:else if mode === "link"}
 			<Form block action="Email me a link" submit={withLink}>
@@ -113,6 +126,7 @@
 					type="email"
 					bind:value={email}
 					autocomplete="email"
+					autofocus
 					required
 				/>
 			</Form>

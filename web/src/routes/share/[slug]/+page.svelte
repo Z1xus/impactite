@@ -68,7 +68,7 @@
 {:else if locked}
 	<Gate>
 		<Form block action="Open dashboard" submit={() => unlock(password)}>
-			<Field label="password" type="password" bind:value={password} required />
+			<Field label="password" type="password" bind:value={password} autofocus required />
 		</Form>
 	</Gate>
 {:else if missing}

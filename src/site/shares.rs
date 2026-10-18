@@ -300,7 +300,7 @@ async fn open(
 		if !valid {
 			return Ok((
 				StatusCode::UNAUTHORIZED,
-				Json(json!({ "error": "Enter the password for this link.", "locked": true })),
+				Json(json!({ "error": "Wrong password.", "locked": true })),
 			)
 				.into_response());
 		}
