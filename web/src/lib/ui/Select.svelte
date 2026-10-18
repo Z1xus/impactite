@@ -31,7 +31,7 @@
 		footer?: Snippet;
 	} = $props();
 
-	const text = "font-sans text-[14px]";
+	const text = "font-sans text-body";
 
 	let open = $state(false);
 	let root: HTMLDivElement;
@@ -98,7 +98,7 @@
 	<button
 		type="button"
 		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
-			? 'font-sans text-[14px] text-dim hover:bg-raised hover:text-fg'
+			? 'font-sans text-body text-dim hover:bg-raised hover:text-fg'
 			: `border border-edge ${text} text-fg hover:border-dim`} transition-colors duration-100"
 		aria-expanded={open}
 		onclick={toggle}
@@ -123,7 +123,7 @@
 			{#if searchable}
 				<!-- svelte-ignore a11y_autofocus -->
 				<input
-					class="m-1 h-8 rounded-px border border-edge bg-panel px-2 text-[14px] text-fg outline-none placeholder:text-faint focus:border-cyan"
+					class="m-1 h-8 rounded-px border border-edge bg-panel px-2 text-body text-fg outline-none placeholder:text-faint focus:border-cyan"
 					placeholder="search"
 					autofocus
 					bind:value={query}

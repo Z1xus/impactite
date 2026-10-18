@@ -12,5 +12,5 @@
 	{onclick}
 >
 	<Icon svg={plus} size={24} />
-	<span class="text-[13px]">{label.charAt(0).toUpperCase() + label.slice(1)}</span>
+	<span class="text-small">{label.charAt(0).toUpperCase() + label.slice(1)}</span>
 </button>

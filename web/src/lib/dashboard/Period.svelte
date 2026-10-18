@@ -102,7 +102,7 @@
 		type="button"
 		aria-expanded={picking !== null}
 		aria-label="Date range"
-		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-2 font-sans text-[14px] text-fg hover:bg-raised"
+		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-2 font-sans text-body text-fg hover:bg-raised"
 		onclick={() => (picking = picking ? null : "menu")}
 	>
 		<Icon svg={calendar} size={14} class="text-dim" />
@@ -110,7 +110,7 @@
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
 	{#if view.compare !== "off" && view.period !== "all" && view.period !== "realtime"}
-		<span class="hidden text-[13px] text-dim xl:inline"
+		<span class="hidden text-small text-dim xl:inline"
 			>vs {COMPARE.find((item) => item.key === view.compare)?.label}</span
 		>
 	{/if}
@@ -127,7 +127,7 @@
 						{/if}
 						<button
 							type="button"
-							class="flex h-8 cursor-pointer items-center justify-between gap-6 rounded-px px-3 text-left text-[14px] hover:bg-line {selected ===
+							class="flex h-8 cursor-pointer items-center justify-between gap-6 rounded-px px-3 text-left text-body hover:bg-line {selected ===
 							item.key
 								? 'text-cyan'
 								: 'text-fg'}"

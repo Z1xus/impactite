@@ -89,7 +89,7 @@
 
 <Section id="imports" label="data">
 	<div class="flex flex-col gap-3">
-		<span class="text-[14px] text-fg">Export data</span>
+		<span class="text-body text-fg">Export data</span>
 		<Message>
 			Export collected events from all dates. Imported summaries are not included.
 		</Message>
@@ -107,7 +107,7 @@
 			/>
 		</Form>
 	</div>
-	<span class="border-t border-line pt-4 text-[14px] text-fg">Import data</span>
+	<span class="border-t border-line pt-4 text-body text-fg">Import data</span>
 	<List
 		items={imports.items?.map((item) => ({
 			key: item.id,

@@ -84,7 +84,7 @@
 			style:left="{hover.x}px"
 			style:top="{hover.y - 8}px"
 		>
-			<span class="text-[13px] text-fg">{label(hover.code)}</span>
+			<span class="text-small text-fg">{label(hover.code)}</span>
 			<span class="label text-cyan">{format(values[hover.code] ?? 0)}</span>
 		</div>
 	{/if}

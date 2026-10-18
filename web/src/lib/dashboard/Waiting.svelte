@@ -164,23 +164,23 @@
 			<span class="label">listening for the first visit on {domain}</span>
 		{:else}
 			<span class="flex flex-col gap-1">
-				<span class="text-[14px] text-fg">First visit landed.</span>
+				<span class="text-body text-fg">First visit landed.</span>
 				{#if first}<Note>{first}</Note>{/if}
 			</span>
 		{/if}
 	</div>
 	{#if hit === null}
 		<div class="flex flex-col gap-3">
-			<span class="text-[14px] text-dim"
+			<span class="text-body text-dim"
 				>Add this snippet to the head of every page on {domain}.</span
 			>
 			<Snippet {domain} />
 		</div>
-		<span class="text-[14px] text-dim"
+		<span class="text-body text-dim"
 			>Then open your site. Visits from localhost don't count.</span
 		>
 		{#each strays as stray (stray)}
-			<span class="text-[14px] text-warn"
+			<span class="text-body text-warn"
 				>Visits are arriving for {stray}. Set data-domain to {domain} in the snippet, or add {stray}
 				as its own site.</span
 			>

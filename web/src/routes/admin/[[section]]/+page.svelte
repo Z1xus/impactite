@@ -123,7 +123,7 @@
 							<Button variant="quiet" onclick={testMail}>Send test mail</Button>
 						{/if}
 					{/snippet}
-					<span class="text-[14px] {info.mail ? 'text-fg' : 'text-dim'}">
+					<span class="text-body {info.mail ? 'text-fg' : 'text-dim'}">
 						{info.mail
 							? "Mail is set up."
 							: "Mail is off. Start the server with --mail to send invites and sign-in links."}

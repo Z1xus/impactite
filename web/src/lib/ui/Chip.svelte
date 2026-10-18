@@ -30,7 +30,7 @@
 		{#if icon}
 			<Glyph spec={icon} />
 		{/if}
-		<span class="max-w-60 truncate text-[13px] text-fg">{value}</span>
+		<span class="max-w-60 truncate text-small text-fg">{value}</span>
 	</button>
 	<button
 		type="button"

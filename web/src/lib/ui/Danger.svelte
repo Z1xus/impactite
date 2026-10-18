@@ -7,7 +7,7 @@
 
 <div class="flex flex-col gap-4 border-b border-line pb-4 last:border-0 last:pb-0">
 	<div class="flex flex-col gap-1">
-		<span class="text-[14px] text-fg">{title}</span>
+		<span class="text-body text-fg">{title}</span>
 		<Note>{body}</Note>
 	</div>
 	{@render children()}

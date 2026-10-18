@@ -38,14 +38,14 @@
 			style:border-color={color}
 		></span>
 		{#if missing}
-			<span class="font-mono text-[11px] leading-none text-dim">{letter}</span>
+			<span class="font-mono text-label leading-none text-dim">{letter}</span>
 		{:else if spec?.kind === "brand"}
 			<svg width="12" height="12" viewBox="0 0 24 24" fill={color}>
 				<path d={spec.path} />
 			</svg>
 		{:else if spec?.kind === "image"}
 			{#if eager && !loaded && letter}
-				<span class="absolute font-mono text-[11px] leading-none text-dim">{letter}</span>
+				<span class="absolute font-mono text-label leading-none text-dim">{letter}</span>
 			{/if}
 			<img
 				src={access.share && spec.url.startsWith("/api/")

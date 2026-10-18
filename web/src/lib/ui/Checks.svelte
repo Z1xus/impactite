@@ -21,7 +21,7 @@
 			type="button"
 			role="checkbox"
 			aria-checked={on}
-			class="flex h-9 cursor-pointer items-center gap-2.5 rounded-px border px-3 font-sans text-[14px] transition-colors duration-100 {data
+			class="flex h-9 cursor-pointer items-center gap-2.5 rounded-px border px-3 font-sans text-body transition-colors duration-100 {data
 				? 'tracking-normal normal-case'
 				: ''} {on
 				? 'border-cyan/70 bg-cyan/10 text-fg'

@@ -10,7 +10,7 @@
 >
 	<Icon svg={icon} size={12} class="shrink-0 text-dim" />
 	{#if file}
-		<span class="truncate text-[14px] text-fg">{file.name}</span>
+		<span class="truncate text-body text-fg">{file.name}</span>
 	{:else}
 		<span class="label">choose file</span>
 	{/if}

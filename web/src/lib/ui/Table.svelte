@@ -71,14 +71,14 @@
 								{#if row.icon !== undefined}
 									<Glyph spec={row.icon} fallback={row.label} />
 								{/if}
-								<span class="truncate text-[14px] text-fg group-hover:text-cyan"
+								<span class="truncate text-body text-fg group-hover:text-cyan"
 									>{row.label}</span
 								>
 							</button>
 						</td>
 						{#each columns as column, i (column.key)}
 							<td
-								class="py-2 pl-4 text-right num text-[13px] whitespace-nowrap text-dim"
+								class="py-2 pl-4 text-right num text-small whitespace-nowrap text-dim"
 							>
 								{column.format(row.values[i])}
 							</td>

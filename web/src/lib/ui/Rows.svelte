@@ -38,7 +38,7 @@
 
 <ul class="flex flex-col transition-opacity duration-150 {loading ? 'opacity-60' : ''}">
 	{#if columns && rows?.length}
-		<li class="flex h-6 items-start justify-end gap-4 px-4 label text-[10px] text-faint">
+		<li class="flex h-6 items-start justify-end gap-4 px-4 label text-faint">
 			{#each columns as column, i (column)}
 				<span class={i === columns.length - 1 ? "min-w-12 text-right" : "w-14 text-right"}
 					>{column}</span
@@ -78,9 +78,9 @@
 						style:width="{(row.value / max) * 100}%"
 					></span>
 					<span class="relative flex min-w-0 items-center gap-1.5 pl-2">
-						<span class="truncate text-[14px] text-fg">{row.label}</span>
+						<span class="truncate text-body text-fg">{row.label}</span>
 						{#if row.note}
-							<span class="min-w-0 shrink-[2] truncate text-[13px] text-dim"
+							<span class="min-w-0 shrink-[2] truncate text-small text-dim"
 								>{row.note}</span
 							>
 						{/if}

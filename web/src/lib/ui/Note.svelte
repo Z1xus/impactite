@@ -4,4 +4,4 @@
 	let { children }: { children: Snippet } = $props();
 </script>
 
-<p class="text-[14px] text-dim">{@render children()}</p>
+<p class="text-body text-dim">{@render children()}</p>

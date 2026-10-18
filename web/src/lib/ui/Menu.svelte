@@ -74,8 +74,8 @@
 	<button
 		type="button"
 		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap text-fg transition-colors duration-100 {plain
-			? 'font-sans text-[14px] hover:bg-raised'
-			: 'border border-edge font-sans text-[14px] hover:border-dim'} {data
+			? 'font-sans text-body hover:bg-raised'
+			: 'border border-edge font-sans text-body hover:border-dim'} {data
 			? 'tracking-normal normal-case'
 			: ''}"
 		aria-expanded={open}
@@ -112,7 +112,7 @@
 							tabindex="0"
 							href={item.href}
 							type={item.href ? undefined : "button"}
-							class="flex h-9 w-full cursor-pointer items-center gap-2.5 px-3 text-left font-sans text-[14px] whitespace-nowrap transition-colors duration-75 hover:bg-line {item.current
+							class="flex h-9 w-full cursor-pointer items-center gap-2.5 px-3 text-left font-sans text-body whitespace-nowrap transition-colors duration-75 hover:bg-line {item.current
 								? 'text-cyan'
 								: 'text-fg'}"
 							onclick={() => {

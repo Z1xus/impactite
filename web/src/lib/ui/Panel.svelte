@@ -36,7 +36,7 @@
 			{#each tabs as item (item.key)}
 				<button
 					type="button"
-					class="h-full shrink-0 cursor-pointer border-b font-sans text-[13px] transition-colors duration-100 {tab ===
+					class="h-full shrink-0 cursor-pointer border-b font-sans text-small transition-colors duration-100 {tab ===
 					item.key
 						? 'border-cyan text-fg'
 						: 'border-transparent hover:text-fg'}"

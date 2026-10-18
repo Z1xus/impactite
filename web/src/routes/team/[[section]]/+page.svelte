@@ -53,7 +53,7 @@
 		[
 			...(manager ? [{ id: "general", label: "general", icon: sliders }] : []),
 			{ id: "members", label: "members", icon: users },
-			{ id: "danger", label: "danger", icon: alert }
+			{ id: "danger", label: "danger", icon: alert, danger: true }
 		].map((item) => ({ ...item, href: resolve("/team/[[section]]", { section: item.id }) }))
 	);
 
