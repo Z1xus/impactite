@@ -1,11 +1,9 @@
-<script lang="ts">
+<script lang="ts" generics="K extends string | number">
 	import type { Snippet } from "svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
 	import Avatar from "./Avatar.svelte";
 	import Icon from "./Icon.svelte";
 	import Skeleton from "./Skeleton.svelte";
-
-	type Key = string | number;
 
 	let {
 		items,
@@ -14,7 +12,7 @@
 	}: {
 		items:
 			| {
-					key: Key;
+					key: K;
 					title: string;
 					meta?: string[];
 					removable?: boolean;
@@ -22,8 +20,8 @@
 					avatar?: number | null;
 			  }[]
 			| null;
-		remove?: (key: Key) => void;
-		control?: Snippet<[Key]>;
+		remove?: (key: K) => void;
+		control?: Snippet<[K]>;
 	} = $props();
 </script>
 

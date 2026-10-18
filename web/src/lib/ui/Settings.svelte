@@ -3,12 +3,15 @@
 	import { goto } from "$app/navigation";
 	import { sentence } from "./text";
 	import Icon from "./Icon.svelte";
+	import Section from "./Section.svelte";
 	import Select from "./Select.svelte";
+	import Skeleton from "./Skeleton.svelte";
 
 	let {
 		sections,
 		current,
 		title,
+		loading = false,
 		children
 	}: {
 		sections: {
@@ -21,6 +24,7 @@
 		}[];
 		current: string;
 		title: Snippet;
+		loading?: boolean;
 		children: Snippet;
 	} = $props();
 </script>
@@ -74,7 +78,13 @@
 			{/each}
 		</nav>
 		<div class="flex max-w-3xl flex-col gap-6">
-			{@render children()}
+			{#if loading}
+				<Section label={sections.find((section) => section.id === current)?.label ?? ""}>
+					<Skeleton class="h-9 w-full" />
+				</Section>
+			{:else}
+				{@render children()}
+			{/if}
 		</div>
 	</div>
 </div>
