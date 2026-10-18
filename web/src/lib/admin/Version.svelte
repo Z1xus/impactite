@@ -11,14 +11,14 @@
 <Section id="version" label="version">
 	{#snippet actions()}
 		{#if info && info.update.enabled}
-			<Button variant="text" busy={checking || info.update.checking} onclick={check}>
+			<Button variant="plain" busy={checking || info.update.checking} onclick={check}>
 				{checking || info.update.checking ? "Checking…" : "Check now"}
 			</Button>
 		{/if}
 	{/snippet}
 	{#if info.update.latest}
 		<div class="flex flex-col gap-4">
-			<div class="flex items-baseline justify-between gap-4 text-[14px]">
+			<div class="flex items-baseline justify-between gap-4 text-body">
 				<span class="text-fg">
 					impactite {info.update.latest.version} is available.
 					<span class="text-dim">You're on {info.version}.</span>
@@ -30,7 +30,7 @@
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			</div>
 			<div
-				class="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-4 gap-y-2 rounded-px border border-line bg-panel px-3 py-3 text-[14px] text-fg"
+				class="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-4 gap-y-2 rounded-px border border-line bg-panel px-3 py-3 text-body text-fg"
 			>
 				{#each info.update.latest.changes as change (change.version)}
 					{#each change.lines as line, i (i)}

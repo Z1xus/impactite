@@ -32,7 +32,7 @@
 			{ id: "passkeys", label: "passkeys", icon: key, group: "sign in" },
 			{ id: "sessions", label: "sessions", icon: laptop, group: "sign in" },
 			{ id: "keys", label: "API keys", icon: code, group: "developers" },
-			{ id: "danger", label: "danger", icon: alert }
+			{ id: "danger", label: "danger", icon: alert, danger: true }
 		].map((item) => ({ ...item, href: resolve("/settings/[[section]]", { section: item.id }) }))
 	);
 </script>

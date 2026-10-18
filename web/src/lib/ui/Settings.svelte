@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
-	import { page } from "$app/state";
 	import { goto } from "$app/navigation";
 	import { sentence } from "./text";
 	import Icon from "./Icon.svelte";
@@ -12,18 +11,18 @@
 		title,
 		children
 	}: {
-		sections: { id: string; label: string; icon?: string; group?: string; href: string }[];
+		sections: {
+			id: string;
+			label: string;
+			icon?: string;
+			group?: string;
+			href: string;
+			danger?: boolean;
+		}[];
 		current: string;
 		title: Snippet;
 		children: Snippet;
 	} = $props();
-
-	$effect(() => {
-		if (page.params.section || !page.url.hash) return;
-		const legacy = sections.find((item) => item.id === page.url.hash.slice(1));
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- section hrefs are resolved by callers
-		if (legacy) goto(`${legacy.href}${page.url.search}`, { replaceState: true });
-	});
 </script>
 
 <div class="flex flex-col gap-8">
@@ -48,30 +47,25 @@
 		</div>
 		<nav aria-label="settings" class="hidden min-w-0 flex-col gap-1 lg:sticky lg:top-6 lg:flex">
 			{#each sections as section, i (section.id)}
+				{@const active = current === section.id}
 				{#if section.group !== sections[i - 1]?.group}
-					<span class="px-3 pb-1 label text-[10px] text-faint {i ? 'pt-4' : ''}"
+					<span class="px-3 pb-1 label text-faint {i ? 'mt-4' : ''}"
 						>{section.group ?? ""}</span
 					>
 				{/if}
 				<!-- eslint-disable svelte/no-navigation-without-resolve -- hrefs come resolved from callers -->
 				<a
 					href={section.href}
-					aria-current={current === section.id ? "page" : undefined}
-					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 font-sans text-[14px] transition-colors duration-100 hover:bg-raised {section.id ===
-					'danger'
-						? 'text-bad'
-						: 'hover:text-fg'} {current === section.id ? 'bg-raised' : ''} {current ===
-						section.id && section.id !== 'danger'
-						? 'text-fg'
-						: ''}"
+					aria-current={active ? "page" : undefined}
+					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 font-sans text-body transition-colors duration-100 hover:bg-raised {active
+						? 'bg-raised'
+						: ''} {section.danger ? 'text-bad' : active ? 'text-fg' : 'hover:text-fg'}"
 				>
 					{#if section.icon}
 						<Icon
 							svg={section.icon}
 							size={12}
-							class={current === section.id && section.id !== "danger"
-								? "text-cyan"
-								: ""}
+							class={active && !section.danger ? "text-cyan" : ""}
 						/>
 					{/if}
 					{sentence(section.label)}

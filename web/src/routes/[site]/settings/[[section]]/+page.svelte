@@ -57,7 +57,7 @@
 			...(owner
 				? [
 						{ id: "guests", label: "guests", icon: users, group: "share" },
-						{ id: "danger", label: "danger", icon: alert }
+						{ id: "danger", label: "danger", icon: alert, danger: true }
 					]
 				: [])
 		].map((item) => ({

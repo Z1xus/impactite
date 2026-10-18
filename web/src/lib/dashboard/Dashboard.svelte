@@ -296,7 +296,7 @@
 					{#if editable}
 						<a
 							href={resolve("/[site]/settings/[[section]]", { site: domain })}
-							class="flex h-9 items-center gap-2 px-3 text-[14px] text-dim hover:bg-line hover:text-fg"
+							class="flex h-9 items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
 							><Icon svg={sliders} size={14} />Site settings</a
 						>
 					{/if}
@@ -310,7 +310,7 @@
 					>Done</Button
 				>
 			{:else if empty === false}
-				<Button variant="text" onclick={() => (editing = null)}
+				<Button variant="plain" onclick={() => (editing = null)}
 					><Icon svg={funnel} size={14} />Filter</Button
 				>
 				{#if view}
