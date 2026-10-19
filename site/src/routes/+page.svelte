@@ -58,13 +58,13 @@
 	<link rel="prefetch" href={DEMO} />
 </svelte:head>
 
-<div id="top" class="mx-auto flex max-w-6xl flex-col px-6 pb-8" {@attach appear}>
+<div id="top" class="mx-auto flex max-w-6xl flex-col gutter pb-8" {@attach appear}>
 	<header class="flex h-16 items-center justify-between">
 		<a href="#top" class="flex h-control items-center gap-2 font-mono text-body">
 			<Logo />
-			impactite
+			<span class="max-[23rem]:hidden">impactite</span>
 		</a>
-		<nav class="flex items-center gap-6">
+		<nav class="flex items-center gap-4 sm:gap-6">
 			<a href="#speed" class="hidden h-control items-center label hover:text-fg sm:flex"
 				>speed</a
 			>
@@ -169,7 +169,7 @@
 			<p class="text-body text-dim" data-appear>
 				1M pageviews each on one machine. Plausible CE 3.2.1, GoatCounter 2.7.0, Ryzen 5
 				7600X.
-				<a href={BENCH} class="text-cyan hover:text-fg">Source</a>
+				<a href={BENCH} class="-m-3 p-3 text-cyan hover:text-fg">Source</a>
 			</p>
 		</section>
 
@@ -218,10 +218,10 @@
 				impactite
 			</span>
 			<span class="flex flex-wrap items-center gap-x-6 gap-y-2 whitespace-nowrap">
-				<a href="{REPO}/blob/main/LICENSE" class="label hover:text-fg"
+				<a href="{REPO}/blob/main/LICENSE" class="-my-4 py-4 label hover:text-fg"
 					>agpl 3.0, tracker mit</a
 				>
-				<a href="{REPO}/blob/main/COMMERCIAL.md" class="label hover:text-fg"
+				<a href="{REPO}/blob/main/COMMERCIAL.md" class="-my-4 py-4 label hover:text-fg"
 					>commercial license</a
 				>
 			</span>
