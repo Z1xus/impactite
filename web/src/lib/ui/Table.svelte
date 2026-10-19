@@ -20,18 +20,30 @@
 		pick?: (key: string) => void;
 	} = $props();
 
+	const reveal = [
+		"",
+		"@max-[21rem]:hidden",
+		"@max-[27rem]:hidden",
+		"@max-[33rem]:hidden",
+		"@max-[39rem]:hidden"
+	];
+
 	function order(key: string) {
 		sort = [key, sort[0] === key && sort[1] === "desc" ? "asc" : "desc"];
 	}
 </script>
 
-<div class="overflow-x-auto">
+<div class="@container overflow-x-auto">
 	<table class="w-full border-collapse text-left">
 		<thead>
 			<tr class="border-b border-line">
 				<th class="w-full min-w-36 py-2 pr-4 font-normal"></th>
-				{#each columns as column (column.key)}
-					<th class="py-2 pl-4 text-right font-normal whitespace-nowrap">
+				{#each columns as column, i (column.key)}
+					<th
+						class="{reveal[
+							Math.min(i, 4)
+						]} py-2 pl-4 text-right font-normal whitespace-nowrap"
+					>
 						<button
 							type="button"
 							class="inline-flex items-center gap-1 label hover:text-fg {sort[0] ===
@@ -78,7 +90,9 @@
 						</td>
 						{#each columns as column, i (column.key)}
 							<td
-								class="py-2 pl-4 text-right num text-small whitespace-nowrap text-dim"
+								class="{reveal[
+									Math.min(i, 4)
+								]} py-2 pl-4 text-right num text-small whitespace-nowrap text-dim"
 							>
 								{column.format(row.values[i])}
 							</td>

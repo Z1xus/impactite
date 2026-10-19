@@ -66,7 +66,9 @@
 								class="flex flex-wrap gap-x-3 gap-y-1 label leading-4 tracking-normal normal-case"
 							>
 								{#each item.meta as part, i (i)}
-									{#if i}<span class="h-2.5 w-px self-center bg-edge"></span>{/if}
+									{#if i}<span
+											class="h-2.5 w-px self-center bg-edge max-sm:hidden"
+										></span>{/if}
 									<span class="max-w-full truncate" title={part}>{part}</span>
 								{/each}
 							</span>
