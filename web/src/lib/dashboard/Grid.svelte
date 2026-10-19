@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from "svelte";
 	import { flip } from "svelte/animate";
 	import AddPanel from "#lib/ui/AddPanel.svelte";
 	import Card from "./Card.svelte";
@@ -10,6 +11,7 @@
 
 	let dragging = $state<string | null>(null);
 	let dropTarget = $state<string | null>(null);
+	let moved = $state("");
 
 	const panels = $derived<PanelSpec[]>([
 		...PANELS,
@@ -76,6 +78,25 @@
 		}
 	}
 
+	async function nudge(event: KeyboardEvent, id: string) {
+		const step = ["ArrowLeft", "ArrowUp"].includes(event.key)
+			? -1
+			: ["ArrowRight", "ArrowDown"].includes(event.key)
+				? 1
+				: 0;
+		if (!step || event.target !== event.currentTarget) return;
+		event.preventDefault();
+		const ids = arranged.map((panel) => panel.id);
+		const from = ids.indexOf(id);
+		const to = from + step;
+		if (to < 0 || to >= ids.length) return;
+		ids.splice(to, 0, ...ids.splice(from, 1));
+		layout.setOrder(ids);
+		moved = `${id} moved to position ${to + 1} of ${ids.length}`;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-panel="${id}"]`)?.focus();
+	}
+
 	function end() {
 		dragging = null;
 		dropTarget = null;
@@ -94,6 +115,7 @@
 >
 	{#each visible as panel (panel.id)}
 		{@const hidden = layout.isHidden(panel.id)}
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 		<div
 			role="listitem"
 			data-panel={panel.id}
@@ -104,6 +126,9 @@
 				? 'select-none'
 				: ''} {dropTarget === panel.id ? 'outline -outline-offset-1 outline-cyan' : ''}"
 			draggable={layout.arranging && !hidden}
+			tabindex={layout.arranging && !hidden ? 0 : undefined}
+			aria-label={layout.arranging && !hidden ? panel.id : undefined}
+			onkeydown={(event) => layout.arranging && nudge(event, panel.id)}
 			ondragstart={(event) => start(event, panel.id)}
 			ondragend={end}
 		>
@@ -120,3 +145,4 @@
 		</div>
 	{/each}
 </div>
+<p class="sr-only" role="status">{moved}</p>
