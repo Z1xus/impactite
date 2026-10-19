@@ -259,3 +259,13 @@
 	background-size: 4px 4px;
 	mask-image: linear-gradient(90deg, #000, transparent 70%);
 }
+
+@utility fade-x {
+	mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 var(--fade-start),
+		#000 calc(100% - var(--fade-end)),
+		transparent
+	);
+}
