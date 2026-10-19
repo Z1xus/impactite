@@ -42,13 +42,17 @@
 	let landed = $state(true);
 	let metric = $state(0);
 	let tabs = $state({ left: "visit:source", right: "event:page" });
+	const local = (spec: ReturnType<typeof icon>) =>
+		spec?.kind === "image"
+			? { ...spec, url: spec.url.replace("/api/app/icon/", "/icons/") + ".png" }
+			: spec;
 	const rowsOf = (side: "left" | "right") =>
 		PANELS[side].rows[tabs[side]].map(([label, value]) => ({
 			key: label,
 			label,
 			value: landed ? value : 0,
 			...(ICONIC.has(tabs[side]) && {
-				icon: icon(tabs[side], label),
+				icon: local(icon(tabs[side], label)),
 				fallback: LETTERED.has(tabs[side]) ? label : undefined
 			})
 		}));
