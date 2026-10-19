@@ -75,35 +75,29 @@
 		text = "";
 	}
 
-	function add(event: KeyboardEvent) {
-		if (event.key !== "Enter") return;
-		event.preventDefault();
-		const value = text.trim();
-		// goals are a fixed list, so typing only searches it
-		if (goal) values = suggestions[0] ? [suggestions[0]] : values;
-		else if (value) values = [...new Set([...values, value])];
-		text = "";
-	}
-
 	const chosen = $derived.by(() => {
 		const typed = text.trim();
-		if (goal) return [...values, typed].filter((value) => goals.includes(value)).slice(-1);
+		if (goal) {
+			const match = [...values, typed].filter((value) => goals.includes(value)).slice(-1);
+			return match.length || !typed || !suggestions[0] ? match : [suggestions[0]];
+		}
 		return values.length ? values : typed ? [typed] : [];
 	});
 
-	function submit() {
+	function submit(event: SubmitEvent) {
+		event.preventDefault();
 		if (chosen.length) apply({ op: goal ? "is" : op, dim, values: chosen });
 	}
 </script>
 
-<div class="flex flex-col gap-5">
+<form class="flex flex-col gap-5" onsubmit={submit}>
 	<div class="flex flex-wrap items-center gap-2">
 		<Select value={dim} {options} pick={pickDim} />
 		{#if !goal}
 			<Toggle bind:value={op} options={OPS} />
 		{/if}
 	</div>
-	<Field label={goal ? "goal" : "value"} placeholder="search" bind:value={text} onkeydown={add} />
+	<Field label={goal ? "goal" : "value"} placeholder="search" bind:value={text} autofocus />
 	<Checks
 		data
 		bind:value={() => values, (next) => (values = goal ? next.slice(-1) : next)}
@@ -114,10 +108,12 @@
 	/>
 	<div class="flex items-center justify-between">
 		{#if initial}
-			<Button variant="plain" onclick={() => remove(initial.dim)}>Remove filter</Button>
+			<Button variant="plain" type="button" onclick={() => remove(initial.dim)}
+				>Remove filter</Button
+			>
 		{:else}
 			<span></span>
 		{/if}
-		<Button onclick={submit} disabled={!chosen.length}>Apply</Button>
+		<Button type="submit" disabled={!chosen.length}>Apply</Button>
 	</div>
-</div>
+</form>

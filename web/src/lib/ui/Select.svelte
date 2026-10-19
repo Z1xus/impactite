@@ -3,6 +3,7 @@
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
+	import { dismiss } from "./popover.ts";
 	import { fit } from "./fit.ts";
 	import Icon from "./Icon.svelte";
 
@@ -34,6 +35,7 @@
 
 	let open = $state(false);
 	let root: HTMLDivElement;
+	let trigger: HTMLButtonElement;
 	let list = $state<HTMLUListElement>();
 	let query = $state("");
 	let active = $state(0);
@@ -58,6 +60,7 @@
 
 	function choose(key: T) {
 		open = false;
+		trigger.focus();
 		pick(key);
 	}
 
@@ -69,36 +72,44 @@
 			}
 			return;
 		}
-		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
 			event.preventDefault();
+			const last = Math.max(0, shownOptions.length - 1);
 			const step = event.key === "ArrowDown" ? 1 : -1;
-			active = (active + step + shownOptions.length) % Math.max(1, shownOptions.length);
+			active =
+				event.key === "Home"
+					? 0
+					: event.key === "End"
+						? last
+						: (active + step + shownOptions.length) % Math.max(1, shownOptions.length);
 			list?.children[active]?.scrollIntoView({ block: "nearest" });
 		} else if (event.key === "Enter" && shownOptions[active]) {
 			event.preventDefault();
 			choose(shownOptions[active].key);
 		}
 	}
-
-	function outside(event: PointerEvent) {
-		if (open && !root.contains(event.target as Node)) open = false;
-	}
 </script>
 
-<svelte:window
-	onpointerdown={outside}
-	onkeydown={(event) => event.key === "Escape" && (open = false)}
-/>
-
-<div class="relative flex flex-col gap-2" bind:this={root} onkeydown={keys} role="presentation">
+<div
+	class="relative flex flex-col gap-2"
+	bind:this={root}
+	{@attach dismiss(
+		() => open,
+		() => (open = false)
+	)}
+	onkeydown={keys}
+	role="presentation"
+>
 	{#if label}
 		<span class="label">{label}</span>
 	{/if}
 	<button
+		bind:this={trigger}
 		type="button"
-		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
+		class="flex h-control items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
 			? 'font-sans text-body text-dim hover:bg-raised hover:text-fg'
-			: `border border-edge ${text} text-fg hover:border-dim`} transition-colors duration-100"
+			: `border border-edge ${text} text-fg hover:border-dim`}"
+		aria-haspopup="listbox"
 		aria-expanded={open}
 		onclick={toggle}
 	>
@@ -115,9 +126,7 @@
 	{#if open}
 		<div
 			{@attach fit}
-			class="absolute top-full {align === 'right'
-				? 'right-0'
-				: 'left-0'} z-20 mt-1 flex max-h-96 min-w-full flex-col rounded-px border border-edge bg-raised"
+			class="popover {align === 'right' ? 'right-0' : 'left-0'} flex min-w-full flex-col"
 		>
 			{#if searchable}
 				<!-- svelte-ignore a11y_autofocus -->
@@ -129,12 +138,15 @@
 					oninput={() => (active = 0)}
 				/>
 			{/if}
-			<ul class="overflow-y-auto py-1" bind:this={list}>
+			<ul class="min-h-0 overflow-y-auto py-1" role="listbox" bind:this={list}>
 				{#each shownOptions as option, i (option.key)}
-					<li>
+					<li role="presentation">
 						<button
 							type="button"
-							class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left {text} whitespace-nowrap transition-colors duration-75 hover:bg-line {i ===
+							role="option"
+							tabindex="-1"
+							aria-selected={option.key === value}
+							class="flex w-full items-center gap-2 px-3 py-2 text-left {text} whitespace-nowrap hover:bg-line {i ===
 							active
 								? 'bg-line'
 								: ''} {option.key === value ? 'text-cyan' : 'text-fg'}"
@@ -159,7 +171,7 @@
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
 					<a
 						href={footer.href}
-						class="flex h-9 items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
+						class="flex h-control items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
 						><Icon svg={footer.icon} size={14} />{footer.label}</a
 					>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->

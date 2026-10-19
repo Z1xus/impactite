@@ -19,11 +19,12 @@
 			mounted = true;
 			dialog.showModal();
 			tick().then(() =>
-				dialog
-					.querySelector<HTMLElement>(
-						"[autofocus], input:not([type=checkbox]):not([type=radio]), textarea, select, [role=radio], button:not([aria-label=close])"
+				(
+					dialog.querySelector<HTMLElement>("[autofocus]") ??
+					dialog.querySelector<HTMLElement>(
+						"input:not([type=checkbox]):not([type=radio]), textarea, select, [role=radio], button:not([aria-label=close])"
 					)
-					?.focus()
+				)?.focus()
 			);
 		}
 		if (!open && dialog.open) dialog.close();
@@ -48,7 +49,7 @@
 				<h2 id="{id}-title" class="label text-fg">{title}</h2>
 				<button
 					type="button"
-					class="-mr-2.5 grid h-9 w-9 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
+					class="-mr-2.5 grid h-control w-control place-items-center text-dim hover:text-fg"
 					aria-label="close"
 					title="close"
 					onclick={() => (open = false)}

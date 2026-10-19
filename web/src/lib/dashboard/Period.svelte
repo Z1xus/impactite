@@ -1,5 +1,6 @@
 <script lang="ts">
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
+	import { tick } from "svelte";
 	import calendar from "pixelarticons/svg/calendar.svg?raw";
 	import left from "pixelarticons/svg/chevron-left.svg?raw";
 	import right from "pixelarticons/svg/chevron-right.svg?raw";
@@ -7,6 +8,7 @@
 	import Calendar from "#lib/ui/Calendar.svelte";
 	import Checks from "#lib/ui/Checks.svelte";
 	import { fit } from "#lib/ui/fit.ts";
+	import { dismiss } from "#lib/ui/popover.ts";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Select from "#lib/ui/Select.svelte";
 
@@ -21,8 +23,8 @@
 	];
 	const CLEAR = { period: null, date: null, from: null, to: null, interval: null };
 
-	let picking = $state<"menu" | "range" | "compare" | null>(null);
 	let root: HTMLDivElement;
+	let picking = $state<"menu" | "range" | "compare" | null>(null);
 
 	const back = $derived(step(view, -1));
 	const forward = $derived(step(view, 1));
@@ -33,6 +35,22 @@
 			return params.period === view.period && (params.date ?? view.today) === view.date;
 		})?.key ?? "custom"
 	);
+
+	async function arrows(event: KeyboardEvent) {
+		const target = event.target as HTMLElement;
+		const down = event.key === "ArrowDown";
+		if (!down && event.key !== "ArrowUp") return;
+		const trigger = target.hasAttribute("aria-expanded");
+		if (!trigger && !target.closest("[data-presets]")) return;
+		event.preventDefault();
+		if (trigger && !picking) {
+			picking = "menu";
+			await tick();
+		}
+		const items = [...root.querySelectorAll<HTMLElement>("[data-presets] button")];
+		const at = items.indexOf(target);
+		items.at(trigger && !down ? -1 : (at + (down ? 1 : -1)) % items.length)?.focus();
+	}
 
 	function choose(key: string) {
 		if (key === "custom") picking = "range";
@@ -63,22 +81,26 @@
 		else if (event.key === "x") compare(view.compare === "off" ? "previous" : "off");
 		else if (event.key === "ArrowLeft" && back) go({ date: back });
 		else if (event.key === "ArrowRight" && forward) go({ date: forward });
-		else if (event.key === "Escape") picking = null;
-	}
-
-	function outside(event: PointerEvent) {
-		if (picking && !root.contains(event.target as Node)) picking = null;
 	}
 </script>
 
-<svelte:window onkeydown={keydown} onpointerdown={outside} />
+<svelte:window onkeydown={keydown} />
 
-<div class="relative flex flex-wrap items-center gap-2" bind:this={root}>
+<div
+	class="relative flex flex-wrap items-center gap-2"
+	bind:this={root}
+	onkeydown={arrows}
+	role="presentation"
+	{@attach dismiss(
+		() => picking !== null,
+		() => (picking = null)
+	)}
+>
 	{#if back || forward}
 		<div class="flex">
 			<button
 				type="button"
-				class="grid h-9 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
+				class="grid h-control w-8 place-items-center text-dim enabled:hover:text-fg"
 				aria-label="earlier"
 				title="earlier"
 				disabled={!back}
@@ -88,7 +110,7 @@
 			</button>
 			<button
 				type="button"
-				class="grid h-9 w-7 cursor-pointer place-items-center text-dim hover:text-fg disabled:cursor-default disabled:opacity-30"
+				class="grid h-control w-8 place-items-center text-dim enabled:hover:text-fg"
 				aria-label="later"
 				title="later"
 				disabled={!forward}
@@ -102,7 +124,7 @@
 		type="button"
 		aria-expanded={picking !== null}
 		aria-label="Date range"
-		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-2 font-sans text-body text-fg hover:bg-raised"
+		class="flex h-control items-center gap-2 rounded-px px-2 font-sans text-body text-fg hover:bg-raised"
 		onclick={() => (picking = picking ? null : "menu")}
 	>
 		<Icon svg={calendar} size={14} class="text-dim" />
@@ -115,19 +137,16 @@
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
 	{#if picking}
-		<div
-			{@attach fit}
-			class="absolute top-full right-0 z-30 mt-1 rounded-px border border-edge bg-raised p-3"
-		>
+		<div {@attach fit} class="popover right-0 p-3">
 			{#if picking === "menu"}
-				<div class="flex min-w-60 flex-col">
+				<div class="flex min-w-60 flex-col" data-presets>
 					{#each [...PRESETS, { key: "custom", label: "Custom range", hotkey: "c" }] as item (item.key)}
 						{#if ["7d", "month", "all"].includes(item.key)}
 							<span class="my-1 border-t border-line"></span>
 						{/if}
 						<button
 							type="button"
-							class="flex h-8 cursor-pointer items-center justify-between gap-6 rounded-px px-3 text-left text-body hover:bg-line {selected ===
+							class="flex h-control items-center justify-between gap-6 rounded-px px-3 text-left text-body hover:bg-line {selected ===
 							item.key
 								? 'text-cyan'
 								: 'text-fg'}"

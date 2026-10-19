@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { tick } from "svelte";
 	import { preloadData } from "$app/navigation";
 	import { sentence } from "./text";
 	import chevron from "pixelarticons/svg/chevron-down.svg?raw";
 	import check from "pixelarticons/svg/check.svg?raw";
+	import { dismiss } from "./popover.ts";
 	import { fit } from "./fit.ts";
 	import Avatar from "./Avatar.svelte";
 	import Icon from "./Icon.svelte";
@@ -39,6 +41,7 @@
 
 	let open = $state(false);
 	let root: HTMLDivElement;
+	let trigger: HTMLButtonElement;
 
 	$effect(() => {
 		if (!open) return;
@@ -47,37 +50,54 @@
 		}
 	});
 
-	function arrows(event: KeyboardEvent) {
-		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-		event.preventDefault();
-		if (!open) {
-			open = true;
-			return;
-		}
-		const entries = [...root.querySelectorAll<HTMLElement>("[role=menuitem]")];
-		const down = event.key === "ArrowDown";
-		const at = entries.indexOf(document.activeElement as HTMLElement);
-		entries.at((at < 0 && !down ? -1 : at + (down ? 1 : -1)) % entries.length)?.focus();
+	function entries() {
+		return [...root.querySelectorAll<HTMLElement>("[role=menuitem]")];
 	}
 
-	function outside(event: PointerEvent) {
-		if (open && !root.contains(event.target as Node)) open = false;
+	async function arrows(event: KeyboardEvent) {
+		const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+		if (!keys.includes(event.key)) return;
+		event.preventDefault();
+		const first = event.key === "ArrowDown" || event.key === "Home";
+		if (!open) {
+			open = true;
+			await tick();
+			entries()
+				.at(first ? 0 : -1)
+				?.focus();
+			return;
+		}
+		const list = entries();
+		const at = list.indexOf(document.activeElement as HTMLElement);
+		const next =
+			event.key === "Home"
+				? 0
+				: event.key === "End"
+					? -1
+					: (at < 0 && !first ? -1 : at + (first ? 1 : -1)) % list.length;
+		list.at(next)?.focus();
 	}
 </script>
 
-<svelte:window
-	onpointerdown={outside}
-	onkeydown={(event) => event.key === "Escape" && (open = false)}
-/>
-
-<div class="relative min-w-0" bind:this={root} onkeydown={arrows} role="presentation">
+<div
+	class="relative min-w-0"
+	bind:this={root}
+	{@attach dismiss(
+		() => open,
+		() => (open = false)
+	)}
+	onkeydown={arrows}
+	role="presentation"
+>
 	<button
+		bind:this={trigger}
 		type="button"
-		class="flex h-9 cursor-pointer items-center gap-2 rounded-px px-3 whitespace-nowrap text-fg transition-colors duration-100 {plain
+		class="flex h-control items-center gap-2 rounded-px px-3 whitespace-nowrap text-fg {plain
 			? 'font-sans text-body hover:bg-raised'
 			: 'border border-edge font-sans text-body hover:border-dim'} {data
 			? 'tracking-normal normal-case'
 			: ''}"
+		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-label={iconOnly ? label : undefined}
 		onclick={() => (open = !open)}
@@ -96,9 +116,7 @@
 		<ul
 			role="menu"
 			{@attach fit}
-			class="absolute top-full {align === 'right'
-				? 'right-0'
-				: 'left-0'} z-30 mt-1 min-w-52 rounded-px border border-edge bg-raised py-1"
+			class="popover {align === 'right' ? 'right-0' : 'left-0'} min-w-52 py-1"
 		>
 			{#each items as item, i (i)}
 				{#if item === "divider"}
@@ -109,14 +127,15 @@
 						<svelte:element
 							this={item.href ? "a" : "button"}
 							role="menuitem"
-							tabindex="0"
+							tabindex="-1"
 							href={item.href}
 							type={item.href ? undefined : "button"}
-							class="flex h-9 w-full cursor-pointer items-center gap-2.5 px-3 text-left font-sans text-body whitespace-nowrap transition-colors duration-75 hover:bg-line {item.current
+							class="flex h-control w-full items-center gap-2.5 px-3 text-left font-sans text-body whitespace-nowrap hover:bg-line {item.current
 								? 'text-cyan'
 								: 'text-fg'}"
 							onclick={() => {
 								open = false;
+								trigger.focus();
 								item.onclick?.();
 							}}
 						>
