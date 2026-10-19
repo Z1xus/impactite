@@ -62,10 +62,6 @@
 	}
 }
 
-[data-landed] {
-	clip-path: inset(0 -24px -24px);
-}
-
 @keyframes rise {
 	from {
 		opacity: 0;

@@ -15,11 +15,10 @@ export function impact(stage: HTMLElement, landed: (value: boolean) => void) {
 
 	const CELL = 4;
 	const canvas = document.createElement("canvas");
-	canvas.className = "pixelated pointer-events-none absolute inset-0 z-10 h-full w-full";
-	stage.append(canvas);
-	const box = stage.getBoundingClientRect();
+	canvas.className = "pixelated pointer-events-none fixed inset-0 z-10 h-full w-full";
+	document.body.append(canvas);
 	const target = rock.getBoundingClientRect();
-	const [w, h] = [Math.ceil(box.width / CELL), Math.ceil(box.height / CELL)];
+	const [w, h] = [Math.ceil(innerWidth / CELL), Math.ceil(innerHeight / CELL)];
 	canvas.width = w;
 	canvas.height = h;
 	const g = canvas.getContext("2d");
@@ -30,21 +29,16 @@ export function impact(stage: HTMLElement, landed: (value: boolean) => void) {
 		return;
 	}
 	const [fg, cyan, deep] = ["--color-fg", "--color-cyan", "--color-cyan-deep"].map(css);
-	const end = [
-		(target.left - box.left + target.width / 2) / CELL,
-		(target.top - box.top + target.height / 2) / CELL
-	];
+	const end = [(target.left + target.width / 2) / CELL, (target.top + target.height / 2) / CELL];
 	const radius = target.width / CELL / 2;
-	// beside the headline it falls from the upper middle, below it on phones it comes straight
-	// at the viewer, so it never crosses the text
-	const beside = target.left - box.left > box.width * 0.45;
-	const start = beside ? [end[0] - 30, -radius] : end;
+	// down a slanted line from the top edge of the screen, the same on every width
+	const start = [end[0] - Math.max(end[1] + radius, 40) * 0.4, -radius];
 	const along = (t: number) => [
 		start[0] + (end[0] - start[0]) * t,
 		start[1] + (end[1] - start[1]) * t
 	];
 
-	const [DELAY, FALL, RING] = [250, 650, 900];
+	const [DELAY, FALL, RING] = [250, 900, 900];
 	const debris = Array.from({ length: 48 }, () => {
 		const angle = Math.random() * Math.PI * 2;
 		const speed = radius * (1.2 + Math.random() * 2.4);
@@ -68,13 +62,13 @@ export function impact(stage: HTMLElement, landed: (value: boolean) => void) {
 			rock.style.opacity = "1";
 			rock.style.transform = `translate(${(head[0] - end[0]) * CELL}px, ${
 				(head[1] - end[1]) * CELL
-			}px) scale(${0.35 + 0.65 * t})`;
+			}px) scale(${0.6 + 0.4 * t})`;
 			// a tapered stream behind the rock, longer as it speeds up
-			const size = radius * (0.35 + 0.65 * t);
+			const size = radius * (0.6 + 0.4 * t);
 			const [ux, uy] = [start[0] - end[0], start[1] - end[1]];
-			const unit = Math.hypot(ux, uy) || 1;
+			const unit = Math.hypot(ux, uy);
 			const [dx, dy] = [ux / unit, uy / unit];
-			const length = beside ? 30 + 90 * t : 0;
+			const length = 30 + 90 * t;
 			for (let j = 0; j < length; j++) {
 				const rest = 1 - j / length;
 				const half = 1 + size * 0.45 * rest;
