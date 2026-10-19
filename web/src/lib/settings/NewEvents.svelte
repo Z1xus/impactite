@@ -75,7 +75,7 @@
 			<h3 class="label text-dim">suggested goals</h3>
 			<Button variant="quiet" onclick={addAll}>Add all</Button>
 		</div>
-		<div class="max-h-[50vh] overflow-y-auto">
+		<div class="-mr-3 max-h-[50vh] overflow-y-auto pr-3">
 			<List
 				items={events.map((event) => ({
 					key: event.name,
