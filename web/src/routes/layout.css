@@ -18,6 +18,7 @@
 	--color-raised: #0f161a;
 	--color-line: #172127;
 	--color-edge: #24323a;
+	--color-control: #506872;
 	--color-fg: #e3eef0;
 	--color-dim: #8798a0;
 	--color-faint: #6e818b;
@@ -63,6 +64,7 @@
 		--color-raised: #e8eef1;
 		--color-line: #e2e8eb;
 		--color-edge: #c9d3d8;
+		--color-control: #76898f;
 		--color-fg: #0c1518;
 		--color-dim: #52626a;
 		--color-faint: #606d74;

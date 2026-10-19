@@ -25,7 +25,7 @@
 				? 'tracking-normal normal-case'
 				: ''} {on
 				? 'border-cyan/70 bg-cyan/10 text-fg'
-				: 'border-edge hover:border-dim hover:text-fg'}"
+				: 'border-control hover:border-dim hover:text-fg'}"
 			onclick={() => flip(option.key)}
 		>
 			<span

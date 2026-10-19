@@ -31,7 +31,7 @@
 	<div
 		class="flex h-control w-fit max-w-full shrink-0 [scrollbar-width:none] overflow-x-auto rounded-px {plain
 			? ''
-			: 'ring-1 ring-edge ring-inset'}"
+			: 'ring-1 ring-control ring-inset'}"
 		role="radiogroup"
 		aria-label={label}
 	>

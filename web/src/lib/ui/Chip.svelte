@@ -19,7 +19,7 @@
 	} = $props();
 </script>
 
-<span class="inline-flex h-control items-center gap-1 rounded-px border border-edge pl-2.5">
+<span class="inline-flex h-control items-center gap-1 rounded-px border border-control pl-2.5">
 	<button type="button" class="flex min-w-0 items-center gap-2" inert={!edit} onclick={edit}>
 		<span class="label">{label}</span>
 		{#if icon}

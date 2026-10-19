@@ -117,7 +117,7 @@
 		type="button"
 		class="flex h-control items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
 			? 'font-sans text-body text-dim hover:bg-raised hover:text-fg'
-			: `border border-edge ${text} text-fg hover:border-dim`}"
+			: `border border-control ${text} text-fg hover:border-dim`}"
 		aria-haspopup="listbox"
 		aria-expanded={open}
 		disabled={pending}
@@ -141,7 +141,7 @@
 			{#if searchable}
 				<!-- svelte-ignore a11y_autofocus -->
 				<input
-					class="m-1 h-8 rounded-px border border-edge bg-panel px-2 text-body text-fg outline-none placeholder:text-faint focus:border-cyan"
+					class="m-1 h-8 rounded-px border border-control bg-panel px-2 text-body text-fg outline-none placeholder:text-faint focus:border-cyan"
 					placeholder="search"
 					autofocus
 					bind:value={query}

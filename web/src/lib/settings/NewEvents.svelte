@@ -89,7 +89,7 @@
 									placeholder="EUR"
 									maxlength={3}
 									aria-label="currency for {event.name}"
-									class="h-control w-16 rounded-px border border-edge bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
+									class="h-control w-16 rounded-px border border-control bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
 								/>
 							{/if}
 							<Button variant="quiet" onclick={() => add(event)}>Add</Button>
