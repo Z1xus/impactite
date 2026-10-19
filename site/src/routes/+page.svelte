@@ -107,7 +107,7 @@
 						<Button href={DEMO} variant="quiet">Live demo</Button>
 					</div>
 				</div>
-				<div class="relative z-20 justify-self-center" data-rock>
+				<div class="relative z-20 w-[200px] justify-self-center md:w-[340px]" data-rock>
 					<Meteor size={340} pixel={4} />
 				</div>
 			</section>
@@ -140,12 +140,7 @@
 							bind:tab={tabs[side]}
 							expand={() => (location.href = DEMO)}
 						>
-							<Rows
-								rows={rowsOf(side)}
-								format={compact}
-								columns={["visitors"]}
-								limit={5}
-							/>
+							<Rows rows={rowsOf(side)} format={compact} columns={["visitors"]} />
 						</Panel>
 					{/each}
 				</div>

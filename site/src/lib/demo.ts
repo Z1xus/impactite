@@ -48,22 +48,22 @@ export const STATS: {
 export const TOOLS = ["impactite", "plausible", "goatcounter"];
 
 export const FEATURES = [
-	{ icon: target, label: "goals and custom events" },
-	{ icon: filter, label: "funnels" },
-	{ icon: coins, label: "revenue tracking" },
-	{ icon: search, label: "google search keywords" },
-	{ icon: link, label: "shareable dashboards" },
-	{ icon: mail, label: "email and slack reports" },
-	{ icon: bell, label: "traffic alerts" },
-	{ icon: grid, label: "all sites in one view" },
-	{ icon: upload, label: "import from ga4 and umami" },
-	{ icon: download, label: "full data export" },
-	{ icon: cloud, label: "daily exports to s3" },
-	{ icon: shield, label: "bot and ip filtering" },
-	{ icon: globe, label: "no cookies" },
-	{ icon: key, label: "passkeys and two factor" },
-	{ icon: lock, label: "single sign-on" },
-	{ icon: users, label: "teams and guest access" }
+	{ icon: target, label: "Goals and custom events" },
+	{ icon: filter, label: "Funnels" },
+	{ icon: coins, label: "Revenue tracking" },
+	{ icon: search, label: "Google search keywords" },
+	{ icon: link, label: "Shareable dashboards" },
+	{ icon: mail, label: "Email and Slack reports" },
+	{ icon: bell, label: "Traffic alerts" },
+	{ icon: grid, label: "All sites in one view" },
+	{ icon: upload, label: "Import from GA4 and Umami" },
+	{ icon: download, label: "Full data export" },
+	{ icon: cloud, label: "Daily exports to S3" },
+	{ icon: shield, label: "Bot and IP filtering" },
+	{ icon: globe, label: "No cookies" },
+	{ icon: key, label: "Passkeys and two-factor" },
+	{ icon: lock, label: "Single sign-on" },
+	{ icon: users, label: "Teams and guest access" }
 ];
 
 // 28 days of the demo site, with the day it hit the front page
@@ -104,19 +104,30 @@ export const PANELS = {
 				["Direct / None", 2506],
 				["Hacker News", 586],
 				["Twitter", 521],
-				["Reddit", 517]
+				["Reddit", 517],
+				["GitHub", 402],
+				["Bing", 236],
+				["DuckDuckGo", 198]
 			],
 			"visit:channel": [
 				["Organic Search", 4180],
 				["Direct", 2506],
 				["Organic Social", 1038],
 				["Referral", 1004],
-				["Email", 420]
+				["Email", 420],
+				["Paid Search", 212],
+				["Organic Video", 96],
+				["Display", 41]
 			],
 			"visit:utm_source": [
 				["newsletter", 420],
 				["github", 312],
-				["mastodon", 118]
+				["mastodon", 118],
+				["producthunt", 96],
+				["lobsters", 74],
+				["devto", 61],
+				["youtube", 38],
+				["bluesky", 27]
 			]
 		} as Record<string, [string, number][]>
 	},
@@ -133,25 +144,40 @@ export const PANELS = {
 				["/pricing", 2185],
 				["/blog/crater", 2165],
 				["/docs", 1524],
-				["/docs/install", 1360]
+				["/docs/install", 1360],
+				["/blog", 902],
+				["/docs/api", 611],
+				["/changelog", 388]
 			],
 			"visit:entry_page": [
 				["/", 5021],
 				["/blog/crater", 1840],
 				["/docs/install", 902],
 				["/pricing", 611],
-				["/docs", 400]
+				["/docs", 400],
+				["/blog", 312],
+				["/changelog", 190],
+				["/docs/api", 142]
 			],
 			"visit:exit_page": [
 				["/docs/install", 2210],
 				["/", 2012],
 				["/pricing", 1630],
 				["/blog/crater", 1402],
-				["/docs", 980]
+				["/docs", 980],
+				["/blog", 640],
+				["/docs/api", 402],
+				["/changelog", 236]
 			],
 			"event:hostname": [
-				["impactite.dev", 8890],
-				["docs.impactite.dev", 1622]
+				["impactite.dev", 5810],
+				["docs.impactite.dev", 1622],
+				["blog.impactite.dev", 1104],
+				["demo.impactite.dev", 842],
+				["status.impactite.dev", 410],
+				["app.impactite.dev", 318],
+				["cdn.impactite.dev", 264],
+				["play.impactite.dev", 142]
 			]
 		} as Record<string, [string, number][]>
 	}
