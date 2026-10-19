@@ -15,7 +15,7 @@ export function ask(question: Question): Promise<boolean> {
 			asking.question = null;
 			asking.answer = () => {};
 			resolve(yes);
-			setTimeout(() => opener?.focus());
+			setTimeout(() => opener?.focus({ preventScroll: true }));
 		};
 	});
 }

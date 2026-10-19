@@ -8,7 +8,7 @@ export function dismiss(isOpen: () => boolean, close: () => void) {
 			if (event.key !== "Escape" || !isOpen()) return;
 			event.stopImmediatePropagation();
 			close();
-			trigger()?.focus();
+			trigger()?.focus({ preventScroll: true });
 		};
 		const out = (event: FocusEvent) => {
 			const next = event.relatedTarget as Node | null;

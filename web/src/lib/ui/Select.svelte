@@ -65,7 +65,7 @@
 
 	async function choose(key: T) {
 		open = false;
-		trigger.focus();
+		trigger.focus({ preventScroll: true });
 		const result = pick(key);
 		if (!(result instanceof Promise)) return;
 		pending = true;
@@ -73,7 +73,7 @@
 			await result;
 		} finally {
 			pending = false;
-			trigger.focus();
+			trigger.focus({ preventScroll: true });
 		}
 	}
 

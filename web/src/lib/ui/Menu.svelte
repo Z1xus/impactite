@@ -139,7 +139,7 @@
 								: 'text-fg'}"
 							onclick={() => {
 								open = false;
-								trigger.focus();
+								trigger.focus({ preventScroll: true });
 								item.onclick?.();
 							}}
 						>

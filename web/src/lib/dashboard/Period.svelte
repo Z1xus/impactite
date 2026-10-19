@@ -63,7 +63,7 @@
 
 	function close() {
 		picking = null;
-		toggle.focus();
+		toggle.focus({ preventScroll: true });
 	}
 
 	function choose(key: string) {

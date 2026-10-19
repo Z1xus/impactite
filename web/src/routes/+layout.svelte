@@ -5,6 +5,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { ApiError } from "#lib/api.ts";
+	import { keepScroll } from "#lib/scroll.ts";
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import { toast } from "#lib/toast.svelte.ts";
 	import Failed from "#lib/ui/Failed.svelte";
@@ -16,6 +17,8 @@
 	const open = ["/setup", "/login", "/invite", "/signup", "/share", "/demo"];
 	const auth = [...open, "/email"];
 
+	keepScroll();
+
 	$effect(() => {
 		refresh();
 	});
@@ -24,7 +27,9 @@
 		if (
 			!document.startViewTransition ||
 			matchMedia("(prefers-reduced-motion: reduce)").matches ||
-			navigation.from?.url.pathname === navigation.to?.url.pathname
+			navigation.from?.url.pathname === navigation.to?.url.pathname ||
+			// a scrolled page would fade into one at the top
+			(scrollY > 0 && navigation.type !== "popstate")
 		)
 			return;
 		return new Promise((done) => {

@@ -53,7 +53,7 @@
 		</span>
 		<Chart {values} axes={false} height={96} format={compact} />
 	{:else}
-		<Skeleton class="h-[44px] w-full" />
+		<Skeleton class="h-[39px] w-full" />
 		<Skeleton class="h-[96px] w-full" />
 	{/if}
 </a>
