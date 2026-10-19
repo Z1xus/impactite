@@ -31,22 +31,102 @@ export class ApiError extends Error {
 // a share link token, sent so anonymous viewers can read one site
 export const access = { share: "" };
 
+type Reply = { status: number; body: unknown };
+type Waiting = {
+	path: string;
+	method: string;
+	body: unknown;
+	done: (reply: Reply) => void;
+	fail: (err: unknown) => void;
+};
+
+const READS = new Set(["/api/app/query", "/api/app/props"]);
+let waiting: Waiting[] = [];
+
+async function send(
+	path: string,
+	method: string,
+	body?: BodyInit,
+	json = false,
+	retries = 0
+): Promise<Reply> {
+	try {
+		const res = await fetch(path, {
+			method,
+			headers: {
+				...(json && { "content-type": "application/json" }),
+				...(access.share && { "x-share": access.share })
+			},
+			body,
+			signal: retries ? AbortSignal.timeout(20_000) : undefined
+		});
+		return {
+			status: res.status,
+			body: res.status === 204 ? undefined : await res.json().catch(() => ({}))
+		};
+	} catch (err) {
+		if (!retries) throw err;
+		await new Promise((resolve) => setTimeout(resolve, 600));
+		return send(path, method, body, json, retries - 1);
+	}
+}
+
+// calls made in the same moment travel in one request
+async function flush() {
+	const calls = waiting;
+	waiting = [];
+	try {
+		if (calls.length === 1) {
+			const [{ path, method, body, done }] = calls;
+			done(
+				await send(
+					path,
+					method,
+					body === undefined ? undefined : JSON.stringify(body),
+					body !== undefined,
+					2
+				)
+			);
+			return;
+		}
+		const { body } = await send(
+			"/api/app/batch",
+			"POST",
+			JSON.stringify(calls.map(({ path, method, body }) => ({ path, method, body }))),
+			true,
+			2
+		);
+		calls.forEach((call, i) => call.done((body as Reply[])[i]));
+	} catch (err) {
+		calls.forEach((call) => call.fail(err));
+	}
+}
+
+function read(path: string, method: string, body: unknown) {
+	return new Promise<Reply>((done, fail) => {
+		if (!waiting.length) setTimeout(flush, 4);
+		waiting.push({ path, method, body, done, fail });
+	});
+}
+
 export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
 	const json = body !== undefined && !(body instanceof Blob);
-	const res = await fetch(path, {
-		method: method ?? (body === undefined ? "GET" : "POST"),
-		headers: {
-			...(json && { "content-type": "application/json" }),
-			...(access.share && { "x-share": access.share })
-		},
-		body: json ? JSON.stringify(body) : (body as Blob | undefined)
-	});
-	if (res.status === 204) return undefined as T;
-	const data = await res.json().catch(() => ({}));
-	if (!res.ok) {
+	const verb = method ?? (body === undefined ? "GET" : "POST");
+	const reply =
+		(verb === "GET" || READS.has(path)) && !(body instanceof Blob)
+			? await read(path, verb, body)
+			: await send(
+					path,
+					verb,
+					json ? JSON.stringify(body) : (body as Blob | undefined),
+					json
+				);
+	if (reply.status === 204) return undefined as T;
+	const data = reply.body as Record<string, unknown> | null;
+	if (reply.status < 200 || reply.status > 299) {
 		// the plausible style query errors start with a json pointer like `#/filters: `
 		const message = String(data?.error ?? "Something went wrong.").replace(/^#\/\S*: /, "");
-		throw new ApiError(res.status, message, data ?? {});
+		throw new ApiError(reply.status, message, data ?? {});
 	}
 	return data as T;
 }

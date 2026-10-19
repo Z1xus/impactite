@@ -9,6 +9,7 @@ use axum::routing::{get, post};
 use crate::api;
 use crate::assets;
 use crate::auth::{accounts, admin, keys, passkeys, prefs, profile, sso, teams, totp};
+use crate::batch;
 use crate::export;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
@@ -32,7 +33,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 		);
 		scripts = scripts.route(&format!("{alias}/{{file}}"), get(tracker::script));
 	}
-	events
+	let app = events
 		.with_state(ingest)
 		.layer(map_response(cors))
 		.merge(
@@ -69,7 +70,11 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.with_state(web),
 		)
 		.merge(scripts)
-		.fallback(assets::serve)
+		.fallback(assets::serve);
+	let batch = Router::new()
+		.route("/api/app/batch", post(batch::batch))
+		.with_state(app.clone());
+	app.merge(batch)
 }
 
 async fn preflight() -> Response {
