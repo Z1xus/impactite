@@ -41,7 +41,7 @@
 					: 'text-dim'}"
 			>
 				<Count value={row.value} {on} {digits} delay={i * 180} />
-				<span class="text-label text-faint">{unit}</span>
+				<span class="text-label text-dim">{unit}</span>
 			</span>
 		</li>
 	{/each}

@@ -38,7 +38,7 @@ export function impact(stage: HTMLElement, landed: (value: boolean) => void) {
 	// beside the headline it falls from the upper middle, below it on phones it comes straight
 	// at the viewer, so it never crosses the text
 	const beside = target.left - box.left > box.width * 0.45;
-	const start = beside ? [end[0] - 150, -radius] : end;
+	const start = beside ? [end[0] - 30, -radius] : end;
 	const along = (t: number) => [
 		start[0] + (end[0] - start[0]) * t,
 		start[1] + (end[1] - start[1]) * t

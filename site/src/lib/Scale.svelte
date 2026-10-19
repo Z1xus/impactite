@@ -25,6 +25,7 @@
 			bind:value={position}
 			aria-valuetext={count(monthly)}
 			class="range"
+			style:--fill="{position}%"
 		/>
 	</label>
 	<dl class="grid grid-cols-2 gap-6 sm:grid-cols-3">
