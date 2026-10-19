@@ -93,12 +93,12 @@
 
 <div class="min-h-dvh">
 	<header class="relative z-40 border-b border-line [view-transition-name:shell]">
-		<div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-6">
+		<div class="mx-auto flex h-14 max-w-6xl items-center gap-2 gutter sm:gap-3">
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
 				href={session.me ? resolve("/") : page.url.pathname}
 				aria-label="impactite"
-				class="-mr-1 -ml-2 flex h-control items-center gap-2 px-2 font-mono text-body text-fg"
+				class="-mr-1 -ml-2 flex h-control min-w-control items-center justify-center gap-2 px-2 font-mono text-body text-fg"
 			>
 				<Logo />
 				<span class="hidden sm:inline">impactite</span>
@@ -124,7 +124,9 @@
 			</div>
 		</div>
 	</header>
-	<main class="mx-auto max-w-6xl px-6 py-8">
+	<main
+		class="mx-auto max-w-6xl gutter py-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-8 sm:pb-[max(2rem,env(safe-area-inset-bottom))]"
+	>
 		{@render children()}
 	</main>
 </div>

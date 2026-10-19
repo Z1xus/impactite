@@ -158,7 +158,7 @@
 							role="option"
 							tabindex="-1"
 							aria-selected={option.key === value}
-							class="flex w-full items-center gap-2 px-3 py-2 text-left {text} whitespace-nowrap hover:bg-line {i ===
+							class="flex w-full items-center gap-2 px-3 py-2 text-left pointer-coarse:py-3 {text} whitespace-nowrap hover:bg-line {i ===
 							active
 								? 'bg-line'
 								: ''} {option.key === value ? 'text-cyan' : 'text-fg'}"

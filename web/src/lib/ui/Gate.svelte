@@ -5,7 +5,9 @@
 	let { children }: { children?: Snippet } = $props();
 </script>
 
-<main class="grid min-h-dvh place-content-center justify-items-center px-6 py-16">
+<main
+	class="grid min-h-dvh place-content-center justify-items-center gutter py-8 [@media(min-height:700px)]:py-16"
+>
 	<div class="flex w-full max-w-sm flex-col items-center gap-10">
 		<div class="flex flex-col items-center gap-6">
 			<Meteor size={168} pixel={3} />

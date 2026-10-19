@@ -93,7 +93,7 @@
 								target="_blank"
 								rel="noopener noreferrer"
 								aria-label="open {row.label}"
-								class="pointer-events-auto -mx-1.5 -my-1.5 grid size-control shrink-0 place-items-center text-dim opacity-0 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100 pointer-coarse:hidden"
+								class="pointer-events-auto -mx-1.5 -my-1.5 grid size-control shrink-0 place-items-center text-dim opacity-0 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100 pointer-coarse:opacity-100"
 							>
 								<Icon svg={external} size={12} />
 							</a>

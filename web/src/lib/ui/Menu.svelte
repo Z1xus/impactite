@@ -101,7 +101,7 @@
 			: ''}"
 		aria-haspopup="menu"
 		aria-expanded={open}
-		aria-label={iconOnly ? label : undefined}
+		aria-label={iconOnly || avatar ? label : undefined}
 		onclick={() => (open = !open)}
 	>
 		{#if avatar}
@@ -110,7 +110,9 @@
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
 		{#if !iconOnly}
-			<span class="max-w-32 truncate sm:max-w-56">{data ? label : sentence(label)}</span>
+			<span class="max-w-32 truncate sm:max-w-56 {avatar ? 'hidden sm:inline' : ''}"
+				>{data ? label : sentence(label)}</span
+			>
 			<Icon svg={chevron} size={12} class="text-dim" />
 		{/if}
 	</button>
