@@ -7,6 +7,8 @@
 	import users from "pixelarticons/svg/users.svg?raw";
 	import { api } from "#lib/api.ts";
 	import { adopt, currentTeam, pickTeam, refresh, session } from "#lib/session.svelte.ts";
+	import { ready } from "#lib/ready.ts";
+	import { sparks } from "#lib/sparks.ts";
 	import { toast } from "#lib/toast.svelte.ts";
 	import Dialog from "./Dialog.svelte";
 	import Field from "./Field.svelte";
@@ -42,7 +44,9 @@
 			label: item.personal ? "Personal" : item.name,
 			icon: item.personal ? user : users,
 			current: item.id === team?.id,
-			onclick: (): void => {
+			warm: (): void => void sparks(item),
+			onclick: async (): Promise<void> => {
+				await ready(sparks(item));
 				pickTeam(item.id);
 				goto(resolve("/"));
 			}

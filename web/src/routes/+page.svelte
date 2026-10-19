@@ -1,12 +1,14 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { currentTeam, refresh, teamTimezone } from "#lib/session.svelte.ts";
-	import { shift, today } from "#lib/period.ts";
+	import { sparks } from "#lib/sparks.ts";
+	import { swap } from "#lib/swap.ts";
+	import type { Team } from "#lib/api.ts";
 	import { warm } from "#lib/dashboard/warm.ts";
-	import { query } from "#lib/stats.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Empty from "#lib/ui/Empty.svelte";
@@ -19,46 +21,33 @@
 	import Title from "#lib/ui/Title.svelte";
 	import { ZONES } from "#lib/zones.ts";
 
-	const team = $derived(currentTeam());
-	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
-	let series = $state<Record<string, number[]>>({});
-	let domain = $state("");
-	let failed = $state(false);
+	const current = $derived(currentTeam());
+	const snapshot = $derived(JSON.stringify(current));
+	let shown = $state.raw<{
+		team: Team;
+		series: Record<string, number[]>;
+		failed: boolean;
+	} | null>(null);
 	let tries = $state(0);
 
-	const targets = $derived(
-		JSON.stringify([
-			...(team && team.sites.length > 1
-				? [{ key: "all", domain: `team:${team.id}`, timezone: teamTimezone(team) }]
-				: []),
-			...(team?.sites ?? []).map((site) => ({ key: site.domain, ...site }))
-		])
-	);
+	const team = $derived(shown?.team);
+	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
 
 	$effect(() => {
-		let stale = false;
+		void snapshot;
 		void tries;
-		failed = false;
-		series = {};
-		for (const target of JSON.parse(targets) as {
-			key: string;
-			domain: string;
-			timezone: string;
-		}[])
-			query(target.domain, {
-				metrics: ["visitors"],
-				date_range: [shift(today(target.timezone), -27), today(target.timezone)],
-				dimensions: ["time:day"]
-			})
-				.then((result) => {
-					if (!stale) series[target.key] = result.results.map((row) => row.metrics[0]);
-				})
-				.catch(() => {
-					if (!stale) failed = true;
-				});
+		const next = untrack(() => current);
+		if (!next) return;
+		let stale = false;
+		sparks(next).then((result) => {
+			if (stale) return;
+			if (shown) swap(() => (shown = { team: next, ...result }));
+			else shown = { team: next, ...result };
+		});
 		return () => (stale = true);
 	});
 
+	let domain = $state("");
 	let adding = $state(false);
 	let timezone = $state(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
@@ -106,7 +95,7 @@
 				<Button onclick={() => (adding = true)}>Add site</Button>
 			{/if}
 		</div>
-		{#if failed}
+		{#if shown?.failed}
 			<Empty compact retry={() => tries++} />
 		{/if}
 		{#if !team || team.sites.length}
@@ -121,7 +110,7 @@
 							<SiteCard
 								href={resolve("/all")}
 								title="All sites"
-								values={series.all}
+								values={shown?.series.all}
 								warm={() => warm(`team:${team.id}`, teamTimezone(team))}
 							/>
 						</li>
@@ -132,7 +121,7 @@
 								href={resolve("/[site]", { site: site.domain })}
 								title={site.domain}
 								glyph={icon("event:hostname", site.domain)}
-								values={series[site.domain]}
+								values={shown?.series[site.domain]}
 								warm={() => warm(site.domain, site.timezone)}
 							/>
 						</li>

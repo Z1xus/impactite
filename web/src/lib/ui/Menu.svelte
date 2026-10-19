@@ -14,6 +14,7 @@
 				label: string;
 				href?: string;
 				onclick?: () => void;
+				warm?: () => void;
 				icon?: string;
 				current?: boolean;
 		  }
@@ -137,6 +138,8 @@
 							class="flex h-control w-full items-center gap-2.5 px-3 text-left font-sans text-body whitespace-nowrap hover:bg-line {item.current
 								? 'text-cyan'
 								: 'text-fg'}"
+							onpointerenter={item.warm}
+							onfocus={item.warm}
 							onclick={() => {
 								open = false;
 								trigger.focus({ preventScroll: true });
