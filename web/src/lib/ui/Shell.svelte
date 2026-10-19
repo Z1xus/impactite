@@ -11,6 +11,7 @@
 	import Dialog from "./Dialog.svelte";
 	import Field from "./Field.svelte";
 	import Form from "./Form.svelte";
+	import Logo from "./Logo.svelte";
 	import Menu from "./Menu.svelte";
 	import Skeleton from "./Skeleton.svelte";
 	import Ask from "./Ask.svelte";
@@ -96,9 +97,10 @@
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
 				href={session.me ? resolve("/") : page.url.pathname}
+				aria-label="impactite"
 				class="-mr-1 -ml-2 flex h-control items-center gap-2 px-2 font-mono text-body text-fg"
 			>
-				<img src="/favicon.svg" alt="impactite" width="22" height="22" class="pixelated" />
+				<Logo />
 				<span class="hidden sm:inline">impactite</span>
 			</a>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->

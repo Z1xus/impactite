@@ -4,6 +4,7 @@
 	import Meteor from "#lib/art/Meteor.svelte";
 	import Chart from "#lib/dither/Chart.svelte";
 	import Button from "#lib/ui/Button.svelte";
+	import Logo from "#lib/ui/Logo.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
 	import Kpis from "#lib/ui/Kpis.svelte";
@@ -60,7 +61,7 @@
 <div id="top" class="mx-auto flex max-w-6xl flex-col px-6" {@attach appear}>
 	<header class="flex h-16 items-center justify-between">
 		<a href="#top" class="flex h-control items-center gap-2 font-mono text-body">
-			<img src="/favicon.svg" alt="" width="22" height="22" />
+			<Logo />
 			impactite
 		</a>
 		<nav class="flex items-center gap-6">
@@ -79,7 +80,7 @@
 				class="flex h-control items-center gap-1.5 label hover:text-fg"
 				aria-label="source on github{data.stars === null ? '' : `, ${data.stars} stars`}"
 			>
-				<Icon svg={github} size={14} />
+				<Icon svg={github} size={12} />
 				{#if data.stars !== null}
 					<Icon svg={star} size={12} />
 					<span class="num">{compact(data.stars)}</span>
@@ -187,7 +188,7 @@
 				data-appear
 				style:--delay="{i * 40}ms"
 			>
-				<Icon svg={feature.icon} size={14} class="text-cyan" />
+				<Icon svg={feature.icon} size={16} class="text-dim" />
 				<span class="text-body">{feature.label}</span>
 			</div>
 		{/each}
@@ -202,7 +203,7 @@
 		data-appear
 	>
 		<span class="flex items-center gap-2 font-mono text-small text-dim">
-			<img src="/favicon.svg" alt="" width="16" height="16" />
+			<Logo size={16} />
 			impactite
 		</span>
 		<span class="flex flex-wrap items-center gap-x-6 gap-y-2 whitespace-nowrap">
