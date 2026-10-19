@@ -2,7 +2,6 @@
 	import { collection } from "#lib/collection.svelte.ts";
 	import { attempt } from "#lib/toast.svelte.ts";
 	import List from "#lib/ui/List.svelte";
-	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import { sitePath } from "./site.ts";
 
@@ -25,7 +24,6 @@
 </script>
 
 <Section id="segments" label="segments">
-	{#if segments.items?.length === 0}<Note>No saved segments.</Note>{/if}
 	<List
 		items={segments.items?.map((segment) => ({
 			key: segment.id,
@@ -33,6 +31,8 @@
 			meta: [segment.shared ? "shared" : "personal"],
 			removable: segment.mine || owner
 		})) ?? null}
+		source={segments}
+		empty="No segments yet."
 		{remove}
 	/>
 </Section>

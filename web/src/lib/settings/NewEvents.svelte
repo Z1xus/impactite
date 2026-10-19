@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { api } from "#lib/api.ts";
 	import { number } from "#lib/display.svelte.ts";
-	import { attempt } from "#lib/toast.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Note from "#lib/ui/Note.svelte";
@@ -41,12 +41,14 @@
 		attempt(async () => {
 			await create(event);
 			changed?.();
+			toast("Added.");
 		});
 
 	const addAll = () =>
 		attempt(async () => {
 			try {
 				for (const event of [...events]) await create(event);
+				toast("Added.");
 			} finally {
 				changed?.();
 			}

@@ -7,7 +7,6 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
-	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import { sitePath } from "./site.ts";
@@ -58,11 +57,16 @@
 		adding = false;
 	}
 
-	const remove = (id: string | number) => attempt(() => reports.remove(id));
+	const remove = (id: string | number) =>
+		attempt(() => reports.remove(id), {
+			title: "Delete this report?",
+			body: "It stops being sent.",
+			action: "Delete report"
+		});
 </script>
 
 <Dialog title="add report" bind:open={adding}>
-	<Form action="Add report" submit={add}>
+	<Form action="Add report" done="Added." submit={add}>
 		<Select label="kind" value={kind} options={KINDS} pick={(key) => (kind = key)} />
 		<div class="grid gap-4 {limit ? 'sm:grid-cols-2' : ''}">
 			<Field
@@ -91,9 +95,6 @@
 	{#snippet actions()}
 		<Button variant="quiet" onclick={() => (adding = true)}>Add report</Button>
 	{/snippet}
-	{#if reports.items?.length === 0}
-		<Note>No reports or alerts yet.</Note>
-	{/if}
 	<List
 		items={reports.items?.map((report) => ({
 			key: report.id,
@@ -103,6 +104,8 @@
 					report.kind
 			]
 		})) ?? null}
+		source={reports}
+		empty="No reports yet."
 		{remove}
 	/>
 </Section>

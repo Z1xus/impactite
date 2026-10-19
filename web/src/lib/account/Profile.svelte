@@ -20,7 +20,7 @@
 		if (result?.pending) {
 			email = session.me?.email ?? email;
 			toast(`We sent a link to ${result.pending} to confirm the change.`);
-		} else toast("Profile saved.");
+		} else toast("Saved.");
 	}
 </script>
 

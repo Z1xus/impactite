@@ -40,13 +40,15 @@
 			title: key.name,
 			meta: [`${key.prefix}…`, `added ${date(key.created)}`]
 		})) ?? null}
+		source={keys}
+		empty="No keys yet."
 		{remove}
 	/>
 	{#if fresh}
 		<Code code={fresh} />
 		<Message>Copy this key now. You won't see it again.</Message>
 	{/if}
-	<Form action="Create key" submit={add} inline>
+	<Form action="Add key" done="Added." submit={add} inline>
 		<Field label="key name" placeholder="grafana" bind:value={name} required />
 	</Form>
 </Section>

@@ -2,9 +2,10 @@
 	import type { Site } from "#lib/api.ts";
 	import { collection } from "#lib/collection.svelte.ts";
 	import { ask } from "#lib/ask.svelte.ts";
-	import { attempt, copy, toast } from "#lib/toast.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Code from "#lib/ui/Code.svelte";
+	import Copy from "#lib/ui/Copy.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
@@ -53,6 +54,8 @@
 				}))
 			)
 				await links.remove(publicLink.id);
+			else return;
+			toast("Saved.");
 		});
 
 	const remove = (id: string | number) =>
@@ -64,7 +67,7 @@
 </script>
 
 <Dialog title="add shared link" bind:open={adding}>
-	<Form action="Add link" submit={add}>
+	<Form action="Add link" done="Added." submit={add}>
 		<Field label="name" placeholder="Investors" bind:value={name} required />
 		<Field label="password" type="password" placeholder="optional" bind:value={password} />
 	</Form>
@@ -96,16 +99,14 @@
 				title: link.name,
 				meta: [url(link.slug), ...(link.locked ? ["password"] : [])]
 			})) ?? null}
+		source={links}
+		empty="No links yet."
 		{remove}
 	>
 		{#snippet control(key)}
 			{@const link = links.items?.find((link) => link.id === key)}
 			{#if link}
-				<Button
-					variant="plain"
-					onclick={async () => (await copy(url(link.slug))) && toast("Link copied.")}
-					>Copy</Button
-				>
+				<Copy text={url(link.slug)} />
 			{/if}
 		{/snippet}
 	</List>

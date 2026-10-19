@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from "#lib/api.ts";
-	import { attempt } from "#lib/toast.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
@@ -22,14 +22,30 @@
 	let email = $state("");
 	let role = $state<"viewer" | "editor">("viewer");
 	let link = $state("");
+	let failed = $state(false);
+
+	const source = {
+		get failed() {
+			return failed;
+		},
+		load
+	};
+
+	function load() {
+		failed = false;
+		return api<People>(path)
+			.then((result) => (people = result))
+			.catch(() => (failed = true));
+	}
 
 	$effect(() => {
-		api<People>(path).then((result) => (people = result));
+		load();
 	});
 
 	async function invite() {
 		const result = await api<{ link: string; sent: boolean }>(path, { email, role });
 		link = result.sent ? "" : result.link;
+		if (result.sent) toast("Invite sent.");
 		email = "";
 		people = await api<People>(path);
 	}
@@ -47,7 +63,11 @@
 					body: "They lose access to this site.",
 					action: "Remove guest"
 				})
-			: drop(`${path}/invites/${String(key).slice(1)}`);
+			: drop(`${path}/invites/${String(key).slice(1)}`, {
+					title: "Revoke this invite?",
+					body: "The link stops working.",
+					action: "Revoke invite"
+				});
 </script>
 
 <Section id="guests" label="guests">
@@ -66,6 +86,8 @@
 				meta: ["invited", item.role]
 			}))
 		]}
+		{source}
+		empty="No guests yet."
 		{remove}
 	/>
 	<Form action="Invite" submit={invite} inline>

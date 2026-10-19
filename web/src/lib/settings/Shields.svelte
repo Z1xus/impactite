@@ -47,11 +47,16 @@
 		value = (await api<{ ip: string }>("/api/app/ip")).ip;
 	}
 
-	const remove = (id: string | number) => attempt(() => shields.remove(id));
+	const remove = (id: string | number) =>
+		attempt(() => shields.remove(id), {
+			title: "Delete this rule?",
+			body: "It stops applying.",
+			action: "Delete rule"
+		});
 </script>
 
 <Dialog title="add rule" bind:open={adding}>
-	<Form action="Add rule" submit={add}>
+	<Form action="Add rule" done="Added." submit={add}>
 		<Toggle label="kind" bind:value={kind} options={KINDS} />
 		<div class="flex items-end gap-2">
 			<div class="flex-1">
@@ -74,15 +79,14 @@
 	{#snippet actions()}
 		<Button variant="quiet" onclick={() => (adding = true)}>Add rule</Button>
 	{/snippet}
-	{#if shields.items?.length === 0}
-		<Note>Every visit counts.</Note>
-	{/if}
 	<List
 		items={shields.items?.map((rule) => ({
 			key: rule.id,
 			title: rule.value,
 			meta: [KINDS.find((item) => item.key === rule.kind)?.meta ?? rule.kind]
 		})) ?? null}
+		source={shields}
+		empty="No rules yet."
 		{remove}
 	/>
 	<Note>To skip your own visits, run this in your browser console.</Note>

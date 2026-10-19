@@ -8,7 +8,6 @@
 	import Form from "#lib/ui/Form.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import List from "#lib/ui/List.svelte";
-	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import { sitePath } from "./site.ts";
@@ -45,13 +44,14 @@
 
 	const remove = (id: string | number) =>
 		attempt(() => funnels.remove(id), {
-			title: `Delete funnel "${funnels.items?.find((funnel) => funnel.id === id)?.name ?? ""}"?`,
+			title: "Delete this funnel?",
+			body: "Its report stops showing.",
 			action: "Delete funnel"
 		});
 </script>
 
 <Dialog title="add funnel" bind:open={building}>
-	<Form action="Add funnel" submit={add}>
+	<Form action="Add funnel" done="Added." submit={add}>
 		<Field label="name" placeholder="Checkout" bind:value={name} required />
 		{#each steps as step, i (i)}
 			<div class="flex items-end gap-2">
@@ -97,17 +97,16 @@
 			<Button variant="quiet" onclick={start}>Add funnel</Button>
 		{/if}
 	{/snippet}
-	{#if goals.items && goals.items.length < 2}
-		<Note>Needs two goals.</Note>
-	{:else if funnels.items?.length === 0}
-		<Note>No funnels yet.</Note>
-	{/if}
 	<List
 		items={funnels.items?.map((funnel) => ({
 			key: funnel.id,
 			title: funnel.name,
 			meta: funnel.steps.map((id, i) => `${i + 1}. ${goalName(id)}`)
 		})) ?? null}
+		source={funnels}
+		empty={goals.items && goals.items.length < 2
+			? "Add two goals to build a funnel."
+			: "No funnels yet."}
 		{remove}
 	/>
 </Section>

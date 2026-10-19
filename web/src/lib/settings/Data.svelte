@@ -33,7 +33,6 @@
 	let format = $state("impactite");
 	let source = $state<Source>("impactite");
 	let file = $state<File | null>(null);
-	let imported = $state("");
 	let analytics = $state.raw<Analytics | null>(null);
 	let property = $state("");
 
@@ -70,21 +69,20 @@
 
 	async function upload() {
 		if (!file) throw new Error("Choose an export file.");
-		imported = "";
 		const result = await api<{ imported: string }>(
 			`${sitePath(domain)}/imports?source=${source}`,
 			file
 		);
-		imported = `Imported ${result.imported}.`;
+		toast(`Imported ${result.imported}.`);
 		file = null;
 		await imports.load();
 	}
 
 	const remove = (id: string | number) =>
 		attempt(() => imports.remove(id), {
-			title: "Remove this import?",
+			title: "Delete this import?",
 			body: "Its imported stats are deleted.",
-			action: "Remove import"
+			action: "Delete import"
 		});
 </script>
 
@@ -113,6 +111,8 @@
 			title: `${item.first} to ${item.last}`,
 			meta: [item.source]
 		})) ?? null}
+		source={imports}
+		empty="No imports yet."
 		{remove}
 	/>
 	<Form action="Import" submit={upload} inline>
@@ -127,7 +127,6 @@
 			]}
 		/>
 	</Form>
-	<Message tone="cyan">{imported}</Message>
 	{#if analytics?.available}
 		<div class="flex flex-col gap-3 border-t border-line pt-4">
 			<span class="label">google analytics 4</span>

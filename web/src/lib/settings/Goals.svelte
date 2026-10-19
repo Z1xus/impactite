@@ -7,7 +7,6 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
-	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
 	import { sitePath } from "./site.ts";
@@ -63,7 +62,7 @@
 				review?.load();
 			},
 			{
-				title: `Delete goal "${goals.items?.find((goal) => goal.id === id)?.name ?? ""}"?`,
+				title: "Delete this goal?",
 				body: "Its conversions stop showing.",
 				action: "Delete goal"
 			}
@@ -71,7 +70,7 @@
 </script>
 
 <Dialog title="add goal" bind:open={adding}>
-	<Form action="Add goal" submit={add}>
+	<Form action="Add goal" done="Added." submit={add}>
 		<Toggle
 			label="kind"
 			bind:value={kind}
@@ -121,7 +120,7 @@
 		}
 	}
 >
-	<Form action="Rename" submit={saveName}>
+	<Form action="Rename" done="Saved." submit={saveName}>
 		<Field label="name" maxlength={120} bind:value={newName} required />
 	</Form>
 </Dialog>
@@ -131,9 +130,6 @@
 		<Button variant="quiet" onclick={() => (adding = true)}>Add goal</Button>
 	{/snippet}
 	<NewEvents bind:this={review} bind:events={suggestions} {domain} changed={goals.load} />
-	{#if goals.items?.length === 0 && !suggestions.length}
-		<Note>No goals yet.</Note>
-	{/if}
 	<List
 		items={goals.items?.map((goal) => ({
 			key: goal.id,
@@ -144,6 +140,8 @@
 				...(goal.scroll ? [`scrolled ${goal.scroll}%`] : [])
 			]
 		})) ?? null}
+		source={goals}
+		empty={suggestions.length ? undefined : "No goals yet."}
 		{remove}
 	>
 		{#snippet control(key)}

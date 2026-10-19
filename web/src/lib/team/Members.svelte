@@ -3,7 +3,7 @@
 	import { ask } from "#lib/ask.svelte.ts";
 	import { date } from "#lib/display.svelte.ts";
 	import { refresh, session } from "#lib/session.svelte.ts";
-	import { attempt } from "#lib/toast.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Code from "#lib/ui/Code.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
@@ -38,6 +38,7 @@
 			role: as
 		});
 		link = result.sent ? "" : result.link;
+		if (result.sent) toast("Invite sent.");
 		await reload();
 	}
 
@@ -83,7 +84,11 @@
 				await api(`${base}/invites/${id}`, undefined, "DELETE");
 				await reload();
 			},
-			{ title: "Revoke this invite?", action: "Revoke invite" }
+			{
+				title: "Revoke this invite?",
+				body: "The link stops working.",
+				action: "Revoke invite"
+			}
 		);
 
 	const resend = (pending: Invite) =>
@@ -96,7 +101,7 @@
 
 <Dialog title="invite to {team.name}" bind:open={inviting}>
 	<div class="flex flex-col gap-4">
-		<Form action="Send invite" submit={invite}>
+		<Form action="Invite" submit={invite}>
 			<Field
 				label="email"
 				type="email"

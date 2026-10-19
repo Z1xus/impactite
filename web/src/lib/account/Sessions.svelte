@@ -20,12 +20,24 @@
 	});
 
 	const endOthers = () =>
-		attempt(async () => {
-			await api("/api/app/me/sessions", undefined, "DELETE");
-			await sessions.load();
-		});
+		attempt(
+			async () => {
+				await api("/api/app/me/sessions", undefined, "DELETE");
+				await sessions.load();
+			},
+			{
+				title: "Sign out other devices?",
+				body: "They need to sign in again.",
+				action: "Sign out others"
+			}
+		);
 
-	const remove = (id: string | number) => attempt(() => sessions.remove(id));
+	const remove = (id: string | number) =>
+		attempt(() => sessions.remove(id), {
+			title: "End this session?",
+			body: "That device needs to sign in again.",
+			action: "End session"
+		});
 </script>
 
 <Section id="sessions" label="sessions">
@@ -43,6 +55,7 @@
 				: [`seen ${date(item.seen || item.created)}`, `since ${date(item.created)}`],
 			removable: !item.current
 		})) ?? null}
+		source={sessions}
 		{remove}
 	/>
 </Section>

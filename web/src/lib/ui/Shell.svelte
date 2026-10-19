@@ -51,7 +51,7 @@
 			? [{ label: "Team settings", href: resolve("/team/[[section]]", {}) }]
 			: []),
 		{
-			label: "New team",
+			label: "Add team",
 			onclick: (): void => {
 				creating = true;
 			}
@@ -82,8 +82,8 @@
 	}
 </script>
 
-<Dialog title="new team" bind:open={creating}>
-	<Form action="Create team" submit={create}>
+<Dialog title="add team" bind:open={creating}>
+	<Form action="Add team" submit={create}>
 		<Field label="name" placeholder="Acme" maxlength={80} bind:value={name} required />
 	</Form>
 </Dialog>

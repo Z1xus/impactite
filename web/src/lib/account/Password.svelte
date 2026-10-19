@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { api } from "#lib/api.ts";
 	import { refresh, session } from "#lib/session.svelte.ts";
-	import { toast } from "#lib/toast.svelte.ts";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Section from "#lib/ui/Section.svelte";
@@ -13,12 +12,15 @@
 		await api("/api/app/me/password", { current, password: next }, "PUT");
 		await refresh();
 		current = next = "";
-		toast("Password saved.");
 	}
 </script>
 
 <Section id="password" label="password">
-	<Form action={session.me?.password ? "Change password" : "Set password"} submit={save}>
+	<Form
+		action={session.me?.password ? "Change password" : "Set password"}
+		done="Saved."
+		submit={save}
+	>
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#if session.me?.password}
 				<Field

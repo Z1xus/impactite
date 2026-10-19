@@ -4,7 +4,6 @@
 	import { resolve } from "$app/paths";
 	import { api, type Site } from "#lib/api.ts";
 	import { refresh, session } from "#lib/session.svelte.ts";
-	import { toast } from "#lib/toast.svelte.ts";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Section from "#lib/ui/Section.svelte";
@@ -41,13 +40,12 @@
 		const next = session.me?.teams
 			.flatMap((team) => team.sites)
 			.find((item) => item.id === site.id)?.domain;
-		toast("Saved.");
 		if (next) await goto(resolve("/[site]/settings/[[section]]", { site: next }));
 	}
 </script>
 
 <Section id="general" label="general">
-	<Form action="Rename" submit={rename} inline>
+	<Form action="Rename" done="Saved." submit={rename} inline>
 		<Field label="domain" bind:value={name} required />
 	</Form>
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

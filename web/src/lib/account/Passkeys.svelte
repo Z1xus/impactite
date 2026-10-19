@@ -4,10 +4,9 @@
 	import { date } from "#lib/display.svelte.ts";
 	import { create } from "#lib/passkey.ts";
 	import { session } from "#lib/session.svelte.ts";
-	import { attempt } from "#lib/toast.svelte.ts";
+	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import List from "#lib/ui/List.svelte";
-	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 
 	const passkeys = collection<{
@@ -28,13 +27,14 @@
 				{}
 			);
 			await passkeys.add({ challenge, credential: await create(options) });
+			toast("Added.");
 		});
 
 	const remove = (id: string | number) =>
 		attempt(() => passkeys.remove(id), {
-			title: "Remove this passkey?",
+			title: "Delete this passkey?",
 			body: "You can't sign in with it anymore.",
-			action: "Remove passkey"
+			action: "Delete passkey"
 		});
 </script>
 
@@ -57,7 +57,8 @@
 				]
 			};
 		}) ?? null}
+		source={passkeys}
+		empty="No passkeys yet."
 		{remove}
 	/>
-	{#if passkeys.items?.length === 0}<Note>No passkeys yet.</Note>{/if}
 </Section>
