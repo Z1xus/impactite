@@ -74,7 +74,7 @@
 						aria-label="remove step"
 						title="remove step"
 						onclick={() => (steps = steps.filter((_, j) => j !== i))}
-						><Icon svg={close} size={14} /></Button
+						><Icon svg={close} size={12} /></Button
 					>
 				{/if}
 			</div>

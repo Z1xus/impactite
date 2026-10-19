@@ -14,7 +14,7 @@
 >
 	<Icon
 		svg={back}
-		size={14}
+		size={16}
 		class="text-dim transition-colors duration-100 group-hover:text-cyan"
 	/>
 	{@render children()}

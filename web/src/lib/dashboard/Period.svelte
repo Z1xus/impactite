@@ -142,7 +142,7 @@
 		class="flex h-control items-center gap-2 rounded-px px-2 font-sans text-body text-fg hover:bg-raised"
 		onclick={() => (picking = picking ? null : "menu")}
 	>
-		<Icon svg={calendar} size={14} class="text-dim" />
+		<Icon svg={calendar} size={12} class="text-dim" />
 		{rangeLabel.charAt(0).toUpperCase() + rangeLabel.slice(1)}
 		{#if view.compare !== "off" && view.period !== "all" && view.period !== "realtime"}
 			<span class="hidden text-small text-dim xl:inline"

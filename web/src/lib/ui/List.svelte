@@ -89,7 +89,7 @@
 							disabled={removing === item.key}
 							onclick={() => drop(item.key)}
 						>
-							<Icon svg={close} size={14} />
+							<Icon svg={close} size={12} />
 						</button>
 					{/if}
 				</li>

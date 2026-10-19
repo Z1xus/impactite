@@ -35,7 +35,7 @@
 				aria-label="dismiss"
 				onclick={() => dismiss(item.id)}
 			>
-				<Icon svg={close} size={14} />
+				<Icon svg={close} size={12} />
 			</button>
 		</div>
 	{/each}

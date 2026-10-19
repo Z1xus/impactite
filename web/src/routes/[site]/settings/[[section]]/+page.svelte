@@ -27,7 +27,7 @@
 	import shield from "pixelarticons/svg/shield.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import alert from "pixelarticons/svg/square-alert.svg?raw";
-	import target from "pixelarticons/svg/target.svg?raw";
+	import goal from "pixelarticons/svg/flag.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
 	import Back from "#lib/ui/Back.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
@@ -46,7 +46,7 @@
 			{ id: "tracking", label: "tracking", icon: code, group: "site" },
 			{ id: "collection", label: "collection", icon: eye, group: "site" },
 			{ id: "shields", label: "shields", icon: shield, group: "site" },
-			{ id: "goals", label: "goals", icon: target, group: "measure" },
+			{ id: "goals", label: "goals", icon: goal, group: "measure" },
 			{ id: "funnels", label: "funnels", icon: filter, group: "measure" },
 			{ id: "segments", label: "segments", icon: bookmark, group: "measure" },
 			{ id: "data", label: "data", icon: download, group: "measure" },
