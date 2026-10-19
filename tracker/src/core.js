@@ -19,6 +19,7 @@ const ignored = (url) => {
 		return (
 			(/^(localhost|127\.|\[::1\])/.test(l.hostname) && !t.local) ||
 			navigator.webdriver ||
+			localStorage.impactite_ignore == "true" ||
 			localStorage.plausible_ignore == "true" ||
 			t.skip.some((test) => test(url))
 		);

@@ -37,7 +37,7 @@
 			return "localhost";
 		if (!gc.allow_local && l.protocol === "file:") return "localhost";
 		try {
-			if (localStorage.getItem("skipgc") === "t") return "disabled with #toggle-goatcounter";
+			if (localStorage.getItem("skipgc") === "t" || localStorage.impactite_ignore == "true") return "disabled with #toggle-goatcounter";
 		} catch {}
 		return false;
 	};
