@@ -24,6 +24,7 @@
 	const CLEAR = { period: null, date: null, from: null, to: null, interval: null };
 
 	let root: HTMLDivElement;
+	let toggle: HTMLButtonElement;
 	let picking = $state<"menu" | "range" | "compare" | null>(null);
 
 	const back = $derived(step(view, -1));
@@ -39,7 +40,8 @@
 	async function arrows(event: KeyboardEvent) {
 		const target = event.target as HTMLElement;
 		const down = event.key === "ArrowDown";
-		if (!down && event.key !== "ArrowUp") return;
+		const edge = event.key === "Home" || event.key === "End";
+		if (!down && !edge && event.key !== "ArrowUp") return;
 		const trigger = target.hasAttribute("aria-expanded");
 		if (!trigger && !target.closest("[data-presets]")) return;
 		event.preventDefault();
@@ -49,13 +51,25 @@
 		}
 		const items = [...root.querySelectorAll<HTMLElement>("[data-presets] button")];
 		const at = items.indexOf(target);
-		items.at(trigger && !down ? -1 : (at + (down ? 1 : -1)) % items.length)?.focus();
+		const next = edge
+			? event.key === "Home"
+				? 0
+				: -1
+			: trigger && !down
+				? -1
+				: (at + (down ? 1 : -1)) % items.length;
+		items.at(next)?.focus();
+	}
+
+	function close() {
+		picking = null;
+		toggle.focus();
 	}
 
 	function choose(key: string) {
 		if (key === "custom") picking = "range";
 		else {
-			picking = null;
+			close();
 			go({ ...CLEAR, ...preset(key, view) });
 		}
 	}
@@ -121,6 +135,7 @@
 		</div>
 	{/if}
 	<button
+		bind:this={toggle}
 		type="button"
 		aria-expanded={picking !== null}
 		aria-label="Date range"
@@ -185,7 +200,7 @@
 					to={view.period === "custom" ? view.to : view.today}
 					max={view.today}
 					pick={(from, to) => {
-						picking = null;
+						close();
 						go({ ...CLEAR, period: "custom", from, to });
 					}}
 				/>
@@ -195,7 +210,7 @@
 					to={view.compareTo}
 					max={view.today}
 					pick={(from, to) => {
-						picking = null;
+						close();
 						go({ compare: "custom", compare_from: from, compare_to: to });
 					}}
 				/>

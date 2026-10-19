@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from "svelte";
+	import { tick, untrack } from "svelte";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -218,9 +218,15 @@
 			(keys) => (propKeys = keys)
 		);
 	});
+
+	async function done() {
+		layout.arranging = false;
+		await tick();
+		document.querySelector<HTMLElement>('[aria-label="Dashboard options"]')?.focus();
+	}
 </script>
 
-<svelte:window onkeydown={(event) => event.key === "Escape" && (layout.arranging = false)} />
+<svelte:window onkeydown={(event) => event.key === "Escape" && layout.arranging && done()} />
 
 <Dialog
 	title={editing ? "edit filter" : "filter"}
@@ -311,8 +317,11 @@
 		{#if empty === false}<Live site={domain} />{/if}
 		<div class="flex items-center gap-2 max-sm:w-full sm:ml-auto">
 			{#if layout.arranging}
-				<Button variant="quiet" class="ml-auto" onclick={() => (layout.arranging = false)}
-					>Done</Button
+				<Button
+					variant="quiet"
+					class="ml-auto"
+					onclick={done}
+					{@attach (button: HTMLElement) => button.focus()}>Done</Button
 				>
 			{:else if empty === false}
 				<Button variant="plain" onclick={() => (editing = null)}

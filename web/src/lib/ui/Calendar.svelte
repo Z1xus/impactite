@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { display } from "#lib/display.svelte.ts";
-	import { tick, untrack } from "svelte";
+	import { onMount, tick, untrack } from "svelte";
 	import left from "pixelarticons/svg/chevron-left.svg?raw";
 	import right from "pixelarticons/svg/chevron-right.svg?raw";
 	import Icon from "./Icon.svelte";
@@ -68,6 +68,8 @@
 		await tick();
 		grid.querySelector<HTMLElement>(`[data-day="${next}"]`)?.focus();
 	}
+
+	onMount(() => grid.querySelector<HTMLElement>(`[data-day="${cursor}"]`)?.focus());
 
 	function choose(day: string) {
 		if (!start) {

@@ -39,6 +39,7 @@
 					class="h-full shrink-0 border-b px-2 font-sans text-small {tab === item.key
 						? 'border-cyan text-fg'
 						: 'border-transparent hover:text-fg'}"
+					aria-pressed={tab === item.key}
 					onclick={() => (tab = item.key)}
 				>
 					{item.key === "utm"
