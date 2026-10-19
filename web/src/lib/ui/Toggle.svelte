@@ -27,7 +27,7 @@
 		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<div
-		class="flex h-control w-fit max-w-full shrink-0 [scrollbar-width:none] overflow-x-auto rounded-px ring-1 ring-control ring-inset"
+		class="flex min-h-control w-fit max-w-full shrink-0 flex-wrap rounded-px ring-1 ring-control ring-inset"
 		role="radiogroup"
 		aria-label={label}
 	>
@@ -37,7 +37,7 @@
 				role="radio"
 				aria-checked={value === option.key}
 				tabindex={value === option.key ? 0 : -1}
-				class="shrink-0 rounded-px px-2.5 font-sans text-body text-dim sm:px-3 {value ===
+				class="h-control flex-auto rounded-px px-2 font-sans text-body whitespace-nowrap text-dim sm:px-3 {value ===
 				option.key
 					? 'bg-edge text-fg'
 					: 'hover:text-fg'}"
