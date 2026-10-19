@@ -1,18 +1,12 @@
 <script lang="ts">
 	import check from "pixelarticons/svg/check.svg?raw";
 	import copy from "pixelarticons/svg/copy.svg?raw";
-	import { copy as write } from "#lib/toast.svelte.ts";
+	import { copier } from "#lib/toast.svelte.ts";
 	import Icon from "./Icon.svelte";
 
 	let { code }: { code: string } = $props();
 
-	let copied = $state(false);
-
-	async function copyCode() {
-		if (!(await write(code))) return;
-		copied = true;
-		setTimeout(() => (copied = false), 1200);
-	}
+	const clipboard = copier();
 </script>
 
 <div class="flex items-start gap-2 rounded-px border border-line bg-panel py-2.5 pr-2 pl-3">
@@ -23,10 +17,10 @@
 	<button
 		type="button"
 		class="-my-1.5 grid size-control shrink-0 place-items-center text-dim hover:text-fg"
-		aria-label="copy"
-		title="copy"
-		onclick={copyCode}
+		aria-label={clipboard.copied ? "copied" : "copy"}
+		title={clipboard.copied ? "copied" : "copy"}
+		onclick={() => clipboard.copy(code)}
 	>
-		<Icon svg={copied ? check : copy} size={12} />
+		<Icon svg={clipboard.copied ? check : copy} size={12} />
 	</button>
 </div>

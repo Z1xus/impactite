@@ -21,7 +21,7 @@
 	}: {
 		value: T;
 		options: { key: T; label: string; glyph?: Spec | null }[];
-		pick: (key: T) => void;
+		pick: (key: T) => unknown;
 		data?: boolean;
 		icon?: string;
 		text?: string;
@@ -34,6 +34,7 @@
 	const text = "font-sans text-body";
 
 	let open = $state(false);
+	let pending = $state(false);
 	let root: HTMLDivElement;
 	let trigger: HTMLButtonElement;
 	let list = $state<HTMLUListElement>();
@@ -58,10 +59,18 @@
 		);
 	}
 
-	function choose(key: T) {
+	async function choose(key: T) {
 		open = false;
 		trigger.focus();
-		pick(key);
+		const result = pick(key);
+		if (!(result instanceof Promise)) return;
+		pending = true;
+		try {
+			await result;
+		} finally {
+			pending = false;
+			trigger.focus();
+		}
 	}
 
 	function keys(event: KeyboardEvent) {
@@ -111,6 +120,7 @@
 			: `border border-edge ${text} text-fg hover:border-dim`}"
 		aria-haspopup="listbox"
 		aria-expanded={open}
+		disabled={pending}
 		onclick={toggle}
 	>
 		{#if current?.glyph !== undefined}

@@ -43,3 +43,17 @@ export async function copy(text: string) {
 		return done;
 	}
 }
+
+export function copier() {
+	let copied = $state(false);
+	return {
+		get copied() {
+			return copied;
+		},
+		async copy(text: string) {
+			if (!(await copy(text))) return;
+			copied = true;
+			setTimeout(() => (copied = false), 1200);
+		}
+	};
+}

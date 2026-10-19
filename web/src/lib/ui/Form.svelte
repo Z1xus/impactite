@@ -1,11 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import { toast } from "#lib/toast.svelte.ts";
 	import Button from "./Button.svelte";
 	import Message from "./Message.svelte";
 
 	let {
 		action,
 		submit,
+		done,
 		inline = false,
 		block = false,
 		danger = false,
@@ -13,6 +15,7 @@
 	}: {
 		action: string;
 		submit: () => Promise<unknown>;
+		done?: string;
 		inline?: boolean;
 		block?: boolean;
 		danger?: boolean;
@@ -28,6 +31,7 @@
 		error = "";
 		try {
 			await submit();
+			if (done) toast(done);
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Something went wrong.";
 		} finally {
