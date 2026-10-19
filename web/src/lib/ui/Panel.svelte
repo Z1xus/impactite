@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
+	import up from "pixelarticons/svg/chevron-up.svg?raw";
+	import down from "pixelarticons/svg/chevron-down.svg?raw";
 	import expand from "pixelarticons/svg/scale.svg?raw";
 	import Icon from "./Icon.svelte";
 	import { sentence } from "./text";
@@ -12,6 +14,7 @@
 		expand: open,
 		arranging = false,
 		hide,
+		move,
 		fit = false,
 		children
 	}: {
@@ -22,6 +25,7 @@
 		// layout editing shows a close button and the whole panel drags
 		arranging?: boolean;
 		hide?: () => void;
+		move?: (step: number) => void;
 		fit?: boolean;
 		children: Snippet;
 	} = $props();
@@ -61,6 +65,19 @@
 				>
 					<Icon svg={expand} size={16} />
 				</button>
+			{/if}
+			{#if arranging && move}
+				{#each [{ step: -1, svg: up, label: "move up" }, { step: 1, svg: down, label: "move down" }] as item (item.label)}
+					<button
+						type="button"
+						aria-label={item.label}
+						title={item.label}
+						class="hidden size-control place-items-center text-dim hover:text-fg pointer-coarse:grid"
+						onclick={() => move(item.step)}
+					>
+						<Icon svg={item.svg} size={12} />
+					</button>
+				{/each}
 			{/if}
 			{#if arranging && hide}
 				<button

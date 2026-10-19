@@ -15,8 +15,15 @@
 		panel,
 		ctx,
 		arranging,
-		hide
-	}: { panel: PanelSpec; ctx: Context; arranging: boolean; hide: () => void } = $props();
+		hide,
+		move
+	}: {
+		panel: PanelSpec;
+		ctx: Context;
+		arranging: boolean;
+		hide: () => void;
+		move: (step: number) => void;
+	} = $props();
 
 	type Ranked = Parameters<typeof Rows>[1]["rows"];
 	type Where = ReturnType<typeof toQueryFilters>;
@@ -235,6 +242,7 @@
 	{arranging}
 	fit={panel.id === "goals"}
 	{hide}
+	{move}
 	{tabs}
 	bind:tab={() => tab, (next) => (chosen = next)}
 	expand={tab === "funnels"

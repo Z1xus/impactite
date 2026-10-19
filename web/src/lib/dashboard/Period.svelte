@@ -151,70 +151,74 @@
 		{/if}
 		<Icon svg={chevron} size={12} class="text-dim" />
 	</button>
-	{#if picking}
-		<div {@attach fit} class="popover right-0 p-3">
-			{#if picking === "menu"}
-				<div class="flex min-w-60 flex-col" data-presets>
-					{#each [...PRESETS, { key: "custom", label: "Custom range", hotkey: "c" }] as item (item.key)}
-						{#if ["7d", "month", "all"].includes(item.key)}
-							<span class="my-1 border-t border-line"></span>
-						{/if}
-						<button
-							type="button"
-							class="flex h-control items-center justify-between gap-6 rounded-px px-3 text-left text-body hover:bg-line {selected ===
-							item.key
-								? 'text-cyan'
-								: 'text-fg'}"
-							onclick={() => choose(item.key)}
-						>
-							{item.label.charAt(0).toUpperCase() + item.label.slice(1)}
-							{#if item.hotkey}
-								<kbd class="label text-faint">{item.hotkey}</kbd>
+	{#key picking}
+		{#if picking}
+			<div {@attach fit} class="popover right-0 p-3">
+				{#if picking === "menu"}
+					<div class="flex min-w-60 flex-col" data-presets>
+						{#each [...PRESETS, { key: "custom", label: "Custom range", hotkey: "c" }] as item (item.key)}
+							{#if ["7d", "month", "all"].includes(item.key)}
+								<span class="my-1 border-t border-line"></span>
 							{/if}
-						</button>
-					{/each}
-				</div>
-				{#if view.period !== "all" && view.period !== "realtime"}
-					<div class="mt-3 flex flex-col gap-3 border-t border-line pt-3">
-						<Select
-							label="compare with"
-							value={view.compare}
-							options={COMPARE}
-							pick={compare}
-							data
-						/>
-						{#if view.compare === "previous" || view.compare === "year"}
-							<Checks
-								bind:value={
-									() => (view.weekday ? ["weekday"] : []),
-									(value) => go({ match: value.length ? "weekday" : null })
-								}
-								options={[{ key: "weekday", label: "match weekday" }]}
-							/>
-						{/if}
+							<button
+								type="button"
+								class="flex h-control items-center justify-between gap-6 rounded-px px-3 text-left text-body hover:bg-line {selected ===
+								item.key
+									? 'text-cyan'
+									: 'text-fg'}"
+								onclick={() => choose(item.key)}
+							>
+								{item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+								{#if item.hotkey}
+									<kbd class="label text-faint pointer-coarse:hidden"
+										>{item.hotkey}</kbd
+									>
+								{/if}
+							</button>
+						{/each}
 					</div>
+					{#if view.period !== "all" && view.period !== "realtime"}
+						<div class="mt-3 flex flex-col gap-3 border-t border-line pt-3">
+							<Select
+								label="compare with"
+								value={view.compare}
+								options={COMPARE}
+								pick={compare}
+								data
+							/>
+							{#if view.compare === "previous" || view.compare === "year"}
+								<Checks
+									bind:value={
+										() => (view.weekday ? ["weekday"] : []),
+										(value) => go({ match: value.length ? "weekday" : null })
+									}
+									options={[{ key: "weekday", label: "match weekday" }]}
+								/>
+							{/if}
+						</div>
+					{/if}
+				{:else if picking === "range"}
+					<Calendar
+						from={view.period === "custom" ? view.from : view.today}
+						to={view.period === "custom" ? view.to : view.today}
+						max={view.today}
+						pick={(from, to) => {
+							close();
+							go({ ...CLEAR, period: "custom", from, to });
+						}}
+					/>
+				{:else}
+					<Calendar
+						from={view.compareFrom}
+						to={view.compareTo}
+						max={view.today}
+						pick={(from, to) => {
+							close();
+							go({ compare: "custom", compare_from: from, compare_to: to });
+						}}
+					/>
 				{/if}
-			{:else if picking === "range"}
-				<Calendar
-					from={view.period === "custom" ? view.from : view.today}
-					to={view.period === "custom" ? view.to : view.today}
-					max={view.today}
-					pick={(from, to) => {
-						close();
-						go({ ...CLEAR, period: "custom", from, to });
-					}}
-				/>
-			{:else}
-				<Calendar
-					from={view.compareFrom}
-					to={view.compareTo}
-					max={view.today}
-					pick={(from, to) => {
-						close();
-						go({ compare: "custom", compare_from: from, compare_to: to });
-					}}
-				/>
-			{/if}
-		</div>
-	{/if}
+			</div>
+		{/if}
+	{/key}
 </div>

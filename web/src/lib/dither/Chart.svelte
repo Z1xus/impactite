@@ -186,6 +186,11 @@
 	const tipLeft = $derived(hover === null ? 0 : (hover / Math.max(1, values.length - 1)) * width);
 </script>
 
+<svelte:window
+	onpointerdown={(event) =>
+		hover !== null && !box.contains(event.target as Node) && (hover = null)}
+/>
+
 <div class="flex gap-3">
 	{#if axes}
 		<div class="relative min-w-11" style:height="{height}px">
@@ -204,10 +209,11 @@
 	<div class="relative min-w-0 flex-1">
 		<div
 			bind:this={box}
-			class="relative"
+			class="relative touch-pan-y"
 			style:height="{height}px"
+			onpointerdown={move}
 			onpointermove={move}
-			onpointerleave={() => (hover = null)}
+			onpointerleave={(event) => event.pointerType === "mouse" && (hover = null)}
 			role="img"
 			aria-label="chart"
 		>

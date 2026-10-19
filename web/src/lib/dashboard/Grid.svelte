@@ -78,7 +78,7 @@
 		}
 	}
 
-	async function nudge(event: KeyboardEvent, id: string) {
+	function nudge(event: KeyboardEvent, id: string) {
 		const step = ["ArrowLeft", "ArrowUp"].includes(event.key)
 			? -1
 			: ["ArrowRight", "ArrowDown"].includes(event.key)
@@ -86,6 +86,10 @@
 				: 0;
 		if (!step || event.target !== event.currentTarget) return;
 		event.preventDefault();
+		return shift(id, step);
+	}
+
+	async function shift(id: string, step: number) {
 		const ids = arranged.map((panel) => panel.id);
 		const from = ids.indexOf(id);
 		const to = from + step;
@@ -140,6 +144,7 @@
 					{ctx}
 					arranging={layout.arranging}
 					hide={() => layout.hide(panel.id)}
+					move={(step) => shift(panel.id, step)}
 				/>
 			{/if}
 		</div>

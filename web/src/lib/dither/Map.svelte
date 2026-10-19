@@ -56,7 +56,11 @@
 		ctx.putImageData(image, 0, 0);
 	});
 
+	let tapped = $state<string | null>(null);
+	let touch = false;
+
 	function locate(event: PointerEvent) {
+		touch = event.pointerType !== "mouse";
 		const box = canvas.getBoundingClientRect();
 		const col = Math.floor(((event.clientX - box.left) / box.width) * COLS);
 		const row = Math.floor(((event.clientY - box.top) / box.height) * ROWS);
@@ -74,9 +78,15 @@
 		height={ROWS * CELL}
 		class="block w-full pixelated {hover ? 'cursor-pointer' : ''}"
 		aria-label="visitors by country"
+		onpointerdown={locate}
 		onpointermove={locate}
-		onpointerleave={() => (hover = null)}
-		onclick={() => hover && pick(hover.code)}
+		onpointerleave={(event) => event.pointerType === "mouse" && (hover = null)}
+		onclick={() => {
+			if (!hover) return;
+			const again = tapped === hover.code;
+			tapped = hover.code;
+			if (!touch || again) pick(hover.code);
+		}}
 	></canvas>
 	{#if hover}
 		<div
