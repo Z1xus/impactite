@@ -1,7 +1,9 @@
 <script lang="ts">
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
+	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { api, get } from "#lib/api.ts";
+	import { attempt } from "#lib/toast.svelte.ts";
 	import { ICONIC, icon } from "#lib/icons/resolve.ts";
 	import { OPS, dimLabel, display, encodeFilter, type Filter } from "#lib/stats.ts";
 	import Checks from "#lib/ui/Checks.svelte";
@@ -52,7 +54,20 @@
 
 	function pick(key: string) {
 		if (key === "save") saving = true;
-		else apply(segments.find((item) => String(item.id) === key)?.filters ?? []);
+		else if (key === "delete" && active) {
+			const { id } = active;
+			attempt(
+				async () => {
+					await api(`/api/app/sites/${domain}/segments/${id}`, undefined, "DELETE");
+					segments = segments.filter((segment) => segment.id !== id);
+				},
+				{
+					title: `Delete ${active.name}?`,
+					body: "Everyone it's shared with loses it too.",
+					action: "Delete segment"
+				}
+			);
+		} else apply(segments.find((item) => String(item.id) === key)?.filters ?? []);
 	}
 
 	async function save() {
@@ -109,8 +124,21 @@
 					})),
 					...(filters.length && !active
 						? [{ key: "save", label: "Save as segment" }]
+						: []),
+					...(active && (active.mine || editable)
+						? [{ key: "delete", label: "Delete segment" }]
 						: [])
 				]}
+				footer={editable
+					? {
+							label: "Manage segments",
+							href: resolve("/[site]/settings/[[section]]", {
+								site: domain,
+								section: "segments"
+							}),
+							icon: bookmark
+						}
+					: undefined}
 				{pick}
 			/>
 		{/if}
