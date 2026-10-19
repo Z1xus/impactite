@@ -59,7 +59,7 @@
 </svelte:head>
 
 <div id="top" class="mx-auto flex max-w-6xl flex-col gutter pb-8" {@attach appear}>
-	<header class="flex h-16 items-center justify-between">
+	<header class="relative z-30 flex h-16 items-center justify-between">
 		<a href="#top" class="flex h-control items-center gap-2 font-mono text-body">
 			<Logo />
 			<span class="max-[23rem]:hidden">impactite</span>
@@ -94,7 +94,7 @@
 			use:impact={(value) => (landed = value)}
 		>
 			<section class="grid items-center gap-8 md:grid-cols-[1fr_auto] md:gap-12">
-				<div class="shown flex flex-col gap-6" data-appear>
+				<div class="shown relative z-30 flex flex-col gap-6" data-appear>
 					<h1 class="font-mono text-big tracking-tight md:text-display">
 						Analytics<br />that land.
 					</h1>
