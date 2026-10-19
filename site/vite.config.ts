@@ -17,6 +17,7 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes("node_modules") ? undefined : true
 			},
 			adapter: adapter({ precompress: true }),
+			inlineStyleThreshold: 60_000,
 			alias: { "#lib": shared }
 		})
 	]
