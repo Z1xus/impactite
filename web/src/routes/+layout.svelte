@@ -8,11 +8,13 @@
 	import { refresh, session } from "#lib/session.svelte.ts";
 	import { toast } from "#lib/toast.svelte.ts";
 	import Failed from "#lib/ui/Failed.svelte";
+	import Gate from "#lib/ui/Gate.svelte";
 	import type { LayoutProps } from "./$types";
 
 	let { children }: LayoutProps = $props();
 
 	const open = ["/setup", "/login", "/invite", "/signup", "/share", "/demo"];
+	const auth = [...open, "/email"];
 
 	$effect(() => {
 		refresh();
@@ -20,6 +22,7 @@
 
 	// where this visitor has to go instead, so a page never loads for someone it isn't for
 	const redirect = $derived.by((): "/setup" | "/login" | "/" | null => {
+		if (!session.ready) return null;
 		const path = page.url.pathname;
 		// shared dashboards stay readable before anyone has set the server up
 		if (session.setup)
@@ -32,8 +35,15 @@
 	});
 
 	$effect(() => {
-		if (session.ready && redirect) goto(resolve(redirect));
+		if (redirect) goto(resolve(redirect));
 	});
+
+	// app pages draw their own skeleton before the session is known, auth pages wait behind the gate
+	const shown = $derived(
+		auth.some((prefix) => page.url.pathname.startsWith(prefix))
+			? session.ready && !redirect
+			: !redirect || !session.me
+	);
 </script>
 
 <!-- a failed background request shows once instead of failing silently -->
@@ -51,7 +61,7 @@
 	<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
 </svelte:head>
 
-{#if session.ready && !redirect}
+{#if shown}
 	<svelte:boundary>
 		{@render children()}
 		<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -- the snippet signature puts reset second -->
@@ -59,4 +69,6 @@
 			<Failed text="Something went wrong." retry={reset} />
 		{/snippet}
 	</svelte:boundary>
+{:else}
+	<Gate />
 {/if}

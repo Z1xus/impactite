@@ -7,6 +7,7 @@
 	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
+	import Skeleton from "#lib/ui/Skeleton.svelte";
 	import { sitePath } from "./site.ts";
 
 	let { domain }: { domain: string } = $props();
@@ -24,9 +25,7 @@
 	const failed = new URLSearchParams(location.search).get("google") === "failed";
 
 	$effect(() => {
-		api<Google>(path)
-			.then((result) => (google = result))
-			.catch(() => (google = null));
+		api<Google>(path).then((result) => (google = result));
 	});
 
 	const choose = (property: string) =>
@@ -83,5 +82,7 @@
 		{:else}
 			<Note>No properties on this Google account.</Note>
 		{/if}
+	{:else}
+		<Skeleton class="h-9 w-full" />
 	{/if}
 </Section>

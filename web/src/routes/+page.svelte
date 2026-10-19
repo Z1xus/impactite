@@ -12,6 +12,7 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Select from "#lib/ui/Select.svelte";
+	import Skeleton from "#lib/ui/Skeleton.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 	import SiteCard from "#lib/ui/SiteCard.svelte";
 	import Title from "#lib/ui/Title.svelte";
@@ -81,28 +82,44 @@
 <Shell>
 	<div class="flex flex-col gap-6">
 		<div class="flex min-h-9 items-center justify-between gap-4">
-			<Title>{team?.personal ? "Personal" : (team?.name ?? "")}</Title>
+			<Title>
+				{#if team}
+					{team.personal ? "Personal" : team.name}
+				{:else}
+					<Skeleton class="h-6 w-40" />
+				{/if}
+			</Title>
 			{#if editable && team?.sites.length}
 				<Button onclick={() => (adding = true)}>Add site</Button>
 			{/if}
 		</div>
-		{#if team && team.sites.length}
+		{#if !team || team.sites.length}
 			<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				{#if team.sites.length > 1}
-					<li>
-						<SiteCard href={resolve("/all")} title="All sites" values={series.all} />
-					</li>
+				{#if !team}
+					{#each [0, 1, 2] as placeholder (placeholder)}
+						<li><SiteCard /></li>
+					{/each}
+				{:else}
+					{#if team.sites.length > 1}
+						<li>
+							<SiteCard
+								href={resolve("/all")}
+								title="All sites"
+								values={series.all}
+							/>
+						</li>
+					{/if}
+					{#each team.sites as site (site.id)}
+						<li>
+							<SiteCard
+								href={resolve("/[site]", { site: site.domain })}
+								title={site.domain}
+								glyph={icon("event:hostname", site.domain)}
+								values={series[site.domain]}
+							/>
+						</li>
+					{/each}
 				{/if}
-				{#each team.sites as site (site.id)}
-					<li>
-						<SiteCard
-							href={resolve("/[site]", { site: site.domain })}
-							title={site.domain}
-							glyph={icon("event:hostname", site.domain)}
-							values={series[site.domain]}
-						/>
-					</li>
-				{/each}
 			</ul>
 		{:else}
 			<Empty text="No sites yet.">

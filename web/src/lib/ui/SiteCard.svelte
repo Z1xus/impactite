@@ -11,7 +11,7 @@
 		title,
 		glyph,
 		values
-	}: { href: string; title: string; glyph?: Spec | null; values?: number[] } = $props();
+	}: { href?: string; title?: string; glyph?: Spec | null; values?: number[] } = $props();
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
@@ -20,8 +20,12 @@
 	class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
 >
 	<span class="flex h-5 min-w-0 items-center gap-2.5 text-fg">
-		{#if glyph !== undefined}<Glyph spec={glyph} fallback={title} />{/if}
-		<span class="truncate">{title}</span>
+		{#if title === undefined}
+			<Skeleton class="h-4 w-32" />
+		{:else}
+			{#if glyph !== undefined}<Glyph spec={glyph} fallback={title} />{/if}
+			<span class="truncate">{title}</span>
+		{/if}
 	</span>
 	<span class="flex h-[22px] items-baseline gap-2">
 		{#if values}

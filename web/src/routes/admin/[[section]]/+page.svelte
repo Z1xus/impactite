@@ -10,6 +10,7 @@
 	import Signup from "#lib/admin/Signup.svelte";
 	import Users from "#lib/admin/Users.svelte";
 	import Version from "#lib/admin/Version.svelte";
+	import { session } from "#lib/session.svelte.ts";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
@@ -26,7 +27,7 @@
 	);
 
 	$effect(() => {
-		load();
+		if (session.me?.admin) load();
 	});
 </script>
 

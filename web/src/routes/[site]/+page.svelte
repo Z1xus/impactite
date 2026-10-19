@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import Dashboard from "#lib/dashboard/Dashboard.svelte";
-	import { findSite } from "#lib/session.svelte.ts";
+	import { findSite, session } from "#lib/session.svelte.ts";
+	import Loading from "#lib/dashboard/Loading.svelte";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 
@@ -14,7 +15,9 @@
 		{#key domain}
 			<Dashboard {domain} timezone={site.timezone} />
 		{/key}
-	{:else}
+	{:else if session.me}
 		<Missing />
+	{:else}
+		<Loading />
 	{/if}
 </Shell>

@@ -2,7 +2,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { icon } from "#lib/icons/resolve.ts";
-	import { findSite } from "#lib/session.svelte.ts";
+	import { findSite, session } from "#lib/session.svelte.ts";
 	import Collection from "#lib/settings/Collection.svelte";
 	import SiteDanger from "#lib/settings/SiteDanger.svelte";
 	import Data from "#lib/settings/Data.svelte";
@@ -39,7 +39,7 @@
 	const domain = $derived(page.params.site ?? "");
 	const section = $derived(page.params.section ?? "general");
 	const site = $derived(findSite(domain));
-	const owner = $derived(["owner", "admin"].includes(site?.role ?? ""));
+	const owner = $derived(!site || ["owner", "admin"].includes(site.role));
 	const sections = $derived(
 		[
 			{ id: "general", label: "general", icon: sliders, group: "site" },
@@ -67,8 +67,8 @@
 </script>
 
 <Shell>
-	{#if site && sections.some((item) => item.id === section)}
-		<Settings {sections} current={section}>
+	{#if (site || !session.me) && sections.some((item) => item.id === section)}
+		<Settings {sections} current={section} loading={!site}>
 			{#snippet title()}
 				<Title>
 					<Back href={resolve("/[site]", { site: domain })} title="Back to dashboard">
@@ -78,35 +78,37 @@
 				</Title>
 			{/snippet}
 
-			{#key domain}
-				{#if section === "general"}
-					<General {domain} {site} {owner} />
-				{:else if section === "tracking"}
-					<Tracking {domain} />
-				{:else if section === "collection"}
-					<Collection {domain} {site} />
-				{:else if section === "shields"}
-					<Shields {domain} />
-				{:else if section === "goals"}
-					<Goals {domain} />
-				{:else if section === "funnels"}
-					<Funnels {domain} />
-				{:else if section === "segments"}
-					<Segments {domain} {owner} />
-				{:else if section === "imports"}
-					<Data {domain} />
-				{:else if section === "search-console"}
-					<SearchConsole {domain} />
-				{:else if section === "sharing"}
-					<Sharing {domain} {site} />
-				{:else if section === "reports"}
-					<Reports {domain} />
-				{:else if section === "guests"}
-					<Guests {domain} />
-				{:else if section === "danger"}
-					<SiteDanger {domain} />
-				{/if}
-			{/key}
+			{#if site}
+				{#key domain}
+					{#if section === "general"}
+						<General {domain} {site} {owner} />
+					{:else if section === "tracking"}
+						<Tracking {domain} />
+					{:else if section === "collection"}
+						<Collection {domain} {site} />
+					{:else if section === "shields"}
+						<Shields {domain} />
+					{:else if section === "goals"}
+						<Goals {domain} />
+					{:else if section === "funnels"}
+						<Funnels {domain} />
+					{:else if section === "segments"}
+						<Segments {domain} {owner} />
+					{:else if section === "imports"}
+						<Data {domain} />
+					{:else if section === "search-console"}
+						<SearchConsole {domain} />
+					{:else if section === "sharing"}
+						<Sharing {domain} {site} />
+					{:else if section === "reports"}
+						<Reports {domain} />
+					{:else if section === "guests"}
+						<Guests {domain} />
+					{:else if section === "danger"}
+						<SiteDanger {domain} />
+					{/if}
+				{/key}
+			{/if}
 		</Settings>
 	{:else}
 		<Missing />

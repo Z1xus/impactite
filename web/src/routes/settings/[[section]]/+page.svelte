@@ -17,6 +17,7 @@
 	import phone from "pixelarticons/svg/phone.svg?raw";
 	import alert from "pixelarticons/svg/square-alert.svg?raw";
 	import user from "pixelarticons/svg/user.svg?raw";
+	import { session } from "#lib/session.svelte.ts";
 	import Missing from "#lib/ui/Missing.svelte";
 	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
@@ -39,7 +40,7 @@
 
 <Shell>
 	{#if sections.some((item) => item.id === section)}
-		<Settings {sections} current={section}>
+		<Settings {sections} current={section} loading={!session.me}>
 			{#snippet title()}
 				<Title>Account</Title>
 			{/snippet}

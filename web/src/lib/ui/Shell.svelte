@@ -12,6 +12,7 @@
 	import Field from "./Field.svelte";
 	import Form from "./Form.svelte";
 	import Menu from "./Menu.svelte";
+	import Skeleton from "./Skeleton.svelte";
 	import Ask from "./Ask.svelte";
 	import Toasts from "./Toasts.svelte";
 
@@ -106,6 +107,8 @@
 					icon={team.personal ? user : users}
 					items={workspace}
 				/>
+			{:else if !session.ready}
+				<Skeleton class="h-9 w-32" />
 			{/if}
 			<div class="ml-auto flex items-center gap-3">
 				{@render actions?.()}
@@ -117,6 +120,8 @@
 						align="right"
 						items={account}
 					/>
+				{:else if !session.ready}
+					<Skeleton class="h-9 w-28" />
 				{/if}
 			</div>
 		</div>

@@ -12,6 +12,7 @@
 	import TeamDanger from "#lib/team/TeamDanger.svelte";
 	import type { Team } from "#lib/team/types.ts";
 	import Missing from "#lib/ui/Missing.svelte";
+	import Skeleton from "#lib/ui/Skeleton.svelte";
 	import Settings from "#lib/ui/Settings.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 	import Title from "#lib/ui/Title.svelte";
@@ -19,7 +20,7 @@
 	const current = $derived(currentTeam());
 	const id = $derived(session.team);
 	const owner = $derived(current?.role === "owner");
-	const manager = $derived(owner || current?.role === "admin");
+	const manager = $derived(!current || owner || current.role === "admin");
 	const section = $derived(page.params.section ?? (manager ? "general" : "members"));
 	const sections = $derived(
 		[
@@ -47,7 +48,13 @@
 	{:else}
 		<Settings {sections} current={section} loading={!team}>
 			{#snippet title()}
-				<Title>{team?.name ?? current?.name}</Title>
+				<Title>
+					{#if current}
+						{team?.name ?? current.name}
+					{:else}
+						<Skeleton class="h-6 w-40" />
+					{/if}
+				</Title>
 			{/snippet}
 
 			{#if team}
