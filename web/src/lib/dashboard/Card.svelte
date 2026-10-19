@@ -50,16 +50,15 @@
 			? chosenFunnel
 			: (ctx.funnels[0]?.id ?? 0)
 	);
-	const drill = $derived(drilled(ctx.filters, tab));
-	const dim = $derived(
-		tab === "props"
+	const dimOf = (key: string) =>
+		key === "props"
 			? `event:props:${prop}`
-			: tab === "utm"
+			: key === "utm"
 				? utm
-				: tab === "map"
+				: key === "map"
 					? "visit:country"
-					: (drill?.dim ?? tab)
-	);
+					: (drilled(ctx.filters, key)?.dim ?? key);
+	const dim = $derived(dimOf(tab));
 	const goalView = $derived(dim === "event:goal" || ctx.converting);
 	const searching = $derived.by(() => {
 		const source = ctx.filters.find((item) => item.dim === "visit:source");
@@ -86,18 +85,25 @@
 		])
 	);
 
-	function regular(where: Where) {
+	function request(at: string, key: string, where: Where) {
 		return cached(
 			ctx.domain,
 			{
-				metrics: goalView ? ["visitors", "conversion_rate"] : ["visitors"],
+				metrics:
+					at === "event:goal" || ctx.converting
+						? ["visitors", "conversion_rate"]
+						: ["visitors"],
 				date_range: ctx.dates.current,
-				dimensions: [dim],
+				dimensions: [at],
 				filters: where,
-				pagination: { limit: tab === "map" ? 300 : 9 }
+				pagination: { limit: key === "map" ? 300 : 9 }
 			},
 			ctx.imports
-		).then((result) =>
+		);
+	}
+
+	function regular(where: Where) {
+		return request(dim, tab, where).then((result) =>
 			result.results.map((row) => {
 				const value = row.dimensions[0];
 				const label = display(dim, value);
@@ -245,6 +251,10 @@
 	{hide}
 	{move}
 	{tabs}
+	warm={(key) => {
+		if (key !== "funnels")
+			request(dimOf(key), key, toQueryFilters(ctx.filters)).catch(() => {});
+	}}
 	bind:tab={() => tab, (next) => (chosen = next)}
 	expand={tab === "funnels"
 		? undefined

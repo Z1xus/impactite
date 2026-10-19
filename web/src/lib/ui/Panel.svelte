@@ -10,6 +10,7 @@
 	let {
 		tabs,
 		tab = $bindable(),
+		warm,
 		actions,
 		expand: open,
 		arranging = false,
@@ -20,6 +21,7 @@
 	}: {
 		tabs: { key: string; label: string }[];
 		tab: string;
+		warm?: (key: string) => void;
 		actions?: Snippet;
 		expand?: () => void;
 		// layout editing shows a close button and the whole panel drags
@@ -93,6 +95,8 @@
 						? 'border-cyan text-fg'
 						: 'border-transparent hover:text-fg'}"
 					aria-pressed={tab === item.key}
+					onpointerenter={() => warm?.(item.key)}
+					onfocus={() => warm?.(item.key)}
 					onclick={() => (tab = item.key)}
 				>
 					{sentence(item.label)}

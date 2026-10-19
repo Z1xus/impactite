@@ -1,4 +1,4 @@
-import { api } from "#lib/api.ts";
+import { get } from "#lib/api.ts";
 import type { Admin } from "./types.ts";
 
 export const admin = $state<{ info: Admin | null; failed: boolean }>({ info: null, failed: false });
@@ -6,7 +6,7 @@ export const admin = $state<{ info: Admin | null; failed: boolean }>({ info: nul
 export async function load() {
 	admin.failed = false;
 	try {
-		admin.info = await api<Admin>("/api/app/admin");
+		admin.info = await get<Admin>("/api/app/admin");
 	} catch (err) {
 		if (admin.info) throw err;
 		admin.failed = true;

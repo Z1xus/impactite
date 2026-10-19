@@ -6,11 +6,13 @@
 		totals,
 		previous,
 		active,
+		warm,
 		pick
 	}: {
 		totals: number[] | null;
 		previous: number[] | null;
 		active: number;
+		warm?: (index: number) => void;
 		pick: (index: number) => void;
 	} = $props();
 </script>
@@ -25,6 +27,7 @@
 			before={previous ? format(item.key, previous[i]) : undefined}
 			format={(value) => format(item.key, value)}
 			active={active === i}
+			warm={() => warm?.(i)}
 			pick={() => pick(i)}
 		/>
 	{/each}

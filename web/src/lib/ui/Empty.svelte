@@ -11,7 +11,7 @@
 	}: { text?: string; retry?: () => unknown; compact?: boolean; children?: Snippet } = $props();
 </script>
 
-<div class="flex flex-col items-center gap-4 {compact ? 'py-4' : 'py-24'}">
+<div data-empty class="flex flex-col items-center gap-4 {compact ? 'py-4' : 'py-24'}">
 	<Note>{text}</Note>
 	{#if retry}
 		<Button variant="quiet" onclick={retry}>Retry</Button>

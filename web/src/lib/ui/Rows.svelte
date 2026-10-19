@@ -48,11 +48,15 @@
 	{#if rows === null}
 		{#each { length: limit }, i (i)}
 			<li class="flex h-8 items-center px-2">
-				<span class="h-3 rounded-px dither opacity-85" style:width="{70 - i * 7}%"></span>
+				<span
+					data-skeleton
+					class="h-3 rounded-px dither opacity-85"
+					style:width="{70 - i * 7}%"
+				></span>
 			</li>
 		{/each}
 	{:else if rows.length === 0}
-		<li class="flex h-8 items-center px-2 label">none</li>
+		<li data-empty class="flex h-8 items-center px-2 label">none</li>
 	{:else}
 		{#each rows.slice(0, limit) as row, i (i)}
 			<li class="group relative flex h-8 items-center gap-2.5 px-2 pointer-coarse:h-control">

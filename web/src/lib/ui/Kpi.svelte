@@ -10,6 +10,7 @@
 		active = false,
 		unit = "%",
 		before,
+		warm,
 		pick
 	}: {
 		label: string;
@@ -19,6 +20,7 @@
 		active?: boolean;
 		unit?: string;
 		before?: string;
+		warm?: () => void;
 		pick: () => void;
 	} = $props();
 </script>
@@ -29,6 +31,8 @@
 		? 'border-cyan'
 		: 'border-transparent hover:border-edge'}"
 	title={before && `Previous period: ${before}`}
+	onpointerenter={warm}
+	onfocus={warm}
 	onclick={pick}
 >
 	<span class="label {active ? 'text-cyan' : ''}">{label}</span>

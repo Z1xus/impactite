@@ -3,7 +3,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import { api } from "#lib/api.ts";
+	import { get } from "#lib/api.ts";
 	import { attempt } from "#lib/toast.svelte.ts";
 	import { ICONIC, icon } from "#lib/icons/resolve.ts";
 	import more from "pixelarticons/svg/more-vertical.svg?raw";
@@ -13,6 +13,7 @@
 	import {
 		METRICS,
 		cached,
+		propKeys,
 		newEvents,
 		decodeFilter,
 		encodeFilter,
@@ -109,7 +110,7 @@
 	let revenue = $state(false);
 	let funnels = $state.raw<Funnel[]>([]);
 	let titles = $state.raw<Record<string, string>>({});
-	let propKeys = $state.raw<string[]>([]);
+	let propNames = $state.raw<string[]>([]);
 
 	function navigate(change: (params: URLSearchParams) => void) {
 		const params = new URLSearchParams(page.url.search);
@@ -119,12 +120,19 @@
 		goto(`${page.url.pathname}?${params}`, { reset: false });
 	}
 
-	const go = (change: Record<string, string | null>) =>
-		navigate((params) => {
-			for (const [key, value] of Object.entries(change))
-				if (value === null) params.delete(key);
-				else params.set(key, value);
-		});
+	const assign = (to: Record<string, string | null>) => (params: URLSearchParams) => {
+		for (const [key, value] of Object.entries(to))
+			if (value === null) params.delete(key);
+			else params.set(key, value);
+	};
+
+	const go = (to: Record<string, string | null>) => navigate(assign(to));
+
+	function ahead(to: Record<string, string | null>) {
+		const params = new URLSearchParams(page.url.search);
+		assign(to)(params);
+		warm(domain, timezone, params, layout.table);
+	}
 
 	const applyFilters = (raw: string[]) =>
 		navigate((params) => {
@@ -156,7 +164,7 @@
 			converting,
 			titles,
 			goals,
-			propKeys,
+			propKeys: propNames,
 			funnels,
 			add: (dim, value) => setFilter({ op: "is", dim, values: [value] }),
 			expand: (dim, title) => (details = { dim, title })
@@ -195,7 +203,7 @@
 	});
 
 	function loadGoals() {
-		api<{ goals: { name: string; currency: string }[] }>(`/api/app/sites/${domain}/goals`)
+		get<{ goals: { name: string; currency: string }[] }>(`/api/app/sites/${domain}/goals`)
 			.then((result) => {
 				goals = result.goals.map((goal) => goal.name);
 				revenue = result.goals.some((goal) => goal.currency);
@@ -205,10 +213,10 @@
 
 	$effect(() => {
 		if (combined) return;
-		api<Record<string, string>>(`/api/app/sites/${domain}/titles`)
+		get<Record<string, string>>(`/api/app/sites/${domain}/titles`)
 			.then((result) => (titles = result))
 			.catch(() => (titles = {}));
-		api<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`)
+		get<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`)
 			.then((result) => (funnels = result.funnels))
 			.catch(() => (funnels = []));
 		untrack(loadGoals);
@@ -217,10 +225,7 @@
 	$effect(() => {
 		void version;
 		if (!dates || empty) return;
-		const range = dates.current === "30m" ? "day" : dates.current;
-		api<string[]>("/api/app/props", { site_id: domain, date_range: range }).then(
-			(keys) => (propKeys = keys)
-		);
+		propKeys(domain, dates.current).then((keys) => (propNames = keys));
 	});
 
 	async function done() {
@@ -246,7 +251,7 @@
 			{domain}
 			range={dates.current}
 			{goals}
-			{propKeys}
+			propKeys={propNames}
 			initial={editing ?? null}
 			apply={setFilter}
 			remove={removeFilter}
@@ -338,7 +343,7 @@
 					><Icon svg={funnel} size={12} />Filter</Button
 				>
 				{#if view}
-					<Period {view} {go} />
+					<Period {view} {go} warm={ahead} />
 					{#if !readonly}
 						<div class="max-sm:ml-auto">
 							<Menu

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from "#lib/api.ts";
+	import { api, get } from "#lib/api.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
@@ -33,7 +33,7 @@
 
 	function load() {
 		failed = false;
-		return api<People>(path)
+		return get<People>(path)
 			.then((result) => (people = result))
 			.catch(() => (failed = true));
 	}

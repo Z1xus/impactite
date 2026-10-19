@@ -79,10 +79,19 @@
 		])
 	);
 
-	function load() {
-		const { dates, domain, imports } = ctx;
+	const ask = (body: Record<string, unknown>) => cached(ctx.domain, body, ctx.imports);
+
+	function ahead(at: number) {
+		const { current, previous, grain, overlay } = ctx.dates;
 		const where = toQueryFilters(ctx.filters);
-		const ask = (body: Record<string, unknown>) => cached(domain, body, imports);
+		const body = { metrics: [KEYS[at]], dimensions: [grain], filters: where };
+		if (!table) ask({ ...body, date_range: current }).catch(() => {});
+		if (!table && previous && overlay) ask({ ...body, date_range: previous }).catch(() => {});
+	}
+
+	function load() {
+		const { dates, imports } = ctx;
+		const where = toQueryFilters(ctx.filters);
 		const { previous, grain } = dates;
 		let stale = false;
 		failed = false;
@@ -161,6 +170,7 @@
 			{totals}
 			previous={previousTotals}
 			active={KEYS.indexOf(metric)}
+			warm={ahead}
 			pick={(i) => pick(KEYS[i])}
 		/>
 		<div class="px-4 pt-3 pb-5">

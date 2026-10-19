@@ -1,7 +1,7 @@
 <script lang="ts">
 	import bookmark from "pixelarticons/svg/bookmark.svg?raw";
 	import { page } from "$app/state";
-	import { api } from "#lib/api.ts";
+	import { api, get } from "#lib/api.ts";
 	import { ICONIC, icon } from "#lib/icons/resolve.ts";
 	import { OPS, dimLabel, display, encodeFilter, type Filter } from "#lib/stats.ts";
 	import Checks from "#lib/ui/Checks.svelte";
@@ -45,7 +45,7 @@
 
 	$effect(() => {
 		if (!segmented) return;
-		api<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`)
+		get<{ segments: Segment[] }>(`/api/app/sites/${domain}/segments`)
 			.then((result) => (segments = result.segments))
 			.catch(() => (segments = []));
 	});

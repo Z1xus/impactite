@@ -5,7 +5,7 @@
 	import alert from "pixelarticons/svg/square-alert.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
 	import users from "pixelarticons/svg/users.svg?raw";
-	import { api } from "#lib/api.ts";
+	import { get } from "#lib/api.ts";
 	import { currentTeam, session } from "#lib/session.svelte.ts";
 	import General from "#lib/team/General.svelte";
 	import Members from "#lib/team/Members.svelte";
@@ -41,7 +41,7 @@
 	async function load() {
 		failed = false;
 		try {
-			team = await api<Team>(`/api/app/teams/${id}`);
+			team = await get<Team>(`/api/app/teams/${id}`);
 		} catch (err) {
 			if (team) throw err;
 			failed = true;

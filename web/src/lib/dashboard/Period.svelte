@@ -12,8 +12,13 @@
 	import Icon from "#lib/ui/Icon.svelte";
 	import Select from "#lib/ui/Select.svelte";
 
-	let { view, go }: { view: View; go: (params: Record<string, string | null>) => void } =
-		$props();
+	type Change = Record<string, string | null>;
+
+	let {
+		view,
+		go,
+		warm
+	}: { view: View; go: (change: Change) => void; warm: (change: Change) => void } = $props();
 
 	const COMPARE = [
 		{ key: "off", label: "No comparison" },
@@ -74,9 +79,15 @@
 		}
 	}
 
+	const comparing = (key: string) => ({
+		compare: key === "off" ? null : key,
+		compare_from: null,
+		compare_to: null
+	});
+
 	function compare(key: string) {
 		if (key === "custom") picking = "compare";
-		else go({ compare: key === "off" ? null : key, compare_from: null, compare_to: null });
+		else go(comparing(key));
 	}
 
 	function keydown(event: KeyboardEvent) {
@@ -118,6 +129,7 @@
 				aria-label="earlier"
 				title="earlier"
 				disabled={!back}
+				onpointerenter={() => back && warm({ date: back })}
 				onclick={() => back && go({ date: back })}
 			>
 				<Icon svg={left} size={12} />
@@ -128,6 +140,7 @@
 				aria-label="later"
 				title="later"
 				disabled={!forward}
+				onpointerenter={() => forward && warm({ date: forward })}
 				onclick={() => forward && go({ date: forward })}
 			>
 				<Icon svg={right} size={12} />
@@ -166,6 +179,12 @@
 								item.key
 									? 'text-cyan'
 									: 'text-fg'}"
+								onpointerenter={() =>
+									item.key !== "custom" &&
+									warm({ ...CLEAR, ...preset(item.key, view) })}
+								onfocus={() =>
+									item.key !== "custom" &&
+									warm({ ...CLEAR, ...preset(item.key, view) })}
 								onclick={() => choose(item.key)}
 							>
 								{item.label.charAt(0).toUpperCase() + item.label.slice(1)}
@@ -184,6 +203,7 @@
 								value={view.compare}
 								options={COMPARE}
 								pick={compare}
+								warm={(key) => key !== "custom" && warm(comparing(key))}
 								data
 							/>
 							{#if view.compare === "previous" || view.compare === "year"}

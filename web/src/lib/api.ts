@@ -109,18 +109,29 @@ function read(path: string, method: string, body: unknown) {
 	});
 }
 
+const gets = new Map<string, { at: number; reply: Promise<unknown> }>();
+const KEEP = 10_000;
+
+// a read shared for a few seconds, so a hover or a route load feeds the page it opens
+export function get<T>(path: string, body?: unknown) {
+	const key = JSON.stringify([path, body, access.share]);
+	const hit = gets.get(key);
+	if (hit && Date.now() - hit.at < KEEP) return hit.reply as Promise<T>;
+	const reply = api<T>(path, body);
+	gets.set(key, { at: Date.now(), reply });
+	reply.catch(() => gets.delete(key));
+	return reply;
+}
+
 export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
 	const json = body !== undefined && !(body instanceof Blob);
 	const verb = method ?? (body === undefined ? "GET" : "POST");
-	const reply =
-		(verb === "GET" || READS.has(path)) && !(body instanceof Blob)
-			? await read(path, verb, body)
-			: await send(
-					path,
-					verb,
-					json ? JSON.stringify(body) : (body as Blob | undefined),
-					json
-				);
+	const reading = (verb === "GET" || READS.has(path)) && !(body instanceof Blob);
+	if (!reading) gets.clear();
+	const reply = reading
+		? await read(path, verb, body)
+		: await send(path, verb, json ? JSON.stringify(body) : (body as Blob | undefined), json);
+	if (!reading) gets.clear();
 	if (reply.status === 204) return undefined as T;
 	const data = reply.body as Record<string, unknown> | null;
 	if (reply.status < 200 || reply.status > 299) {

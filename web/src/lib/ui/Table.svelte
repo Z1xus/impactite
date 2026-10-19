@@ -66,7 +66,10 @@
 				{#each { length: 8 }, i (i)}
 					<tr
 						><td colspan={columns.length + 1} class="h-9"
-							><span class="block h-3 w-1/2 rounded-px dither opacity-60"></span></td
+							><span
+								data-skeleton
+								class="block h-3 w-1/2 rounded-px dither opacity-60"
+							></span></td
 						></tr
 					>
 				{/each}

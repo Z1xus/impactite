@@ -1,5 +1,6 @@
 import { number } from "./display.svelte.ts";
-import { api } from "./api";
+import { api, get } from "./api";
+import type { Range } from "./period.ts";
 
 export type Metric =
 	"visitors" | "visits" | "pageviews" | "bounce_rate" | "visit_duration" | "views_per_visit";
@@ -61,6 +62,12 @@ export function query(site: string, body: Record<string, unknown>, imports = tru
 	return api<Result>("/api/app/query", { site_id: site, include: { imports }, ...body });
 }
 
+export const propKeys = (site: string, range: Range) =>
+	get<string[]>("/api/app/props", {
+		site_id: site,
+		date_range: range === "30m" ? "day" : range
+	});
+
 const recent = new Map<string, { at: number; reply: Promise<Result> }>();
 const FRESH = 60_000;
 
@@ -85,8 +92,12 @@ const events = (site: string) =>
 	);
 
 export function hint(site: string) {
-	hints.set(site, { at: Date.now(), reply: events(site) });
-	hints.get(site)?.reply.catch(() => hints.delete(site));
+	const hit = hints.get(site);
+	if (hit && Date.now() - hit.at < FRESH) return hit.reply;
+	const reply = events(site);
+	hints.set(site, { at: Date.now(), reply });
+	reply.catch(() => hints.delete(site));
+	return reply;
 }
 
 // a hovered site's suggestions are used once, so goals changed in between never show stale

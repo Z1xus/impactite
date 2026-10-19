@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from "#lib/api.ts";
+	import { api, get } from "#lib/api.ts";
 	import { attempt } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Code from "#lib/ui/Code.svelte";
@@ -25,7 +25,7 @@
 	const failed = new URLSearchParams(location.search).get("google") === "failed";
 
 	$effect(() => {
-		api<Google>(path).then((result) => (google = result));
+		get<Google>(path).then((result) => (google = result));
 	});
 
 	const choose = (property: string) =>

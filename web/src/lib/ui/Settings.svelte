@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
-	import { goto } from "$app/navigation";
+	import { goto, preloadData } from "$app/navigation";
 	import { sentence } from "./text";
 	import Empty from "./Empty.svelte";
 	import Icon from "./Icon.svelte";
@@ -52,6 +52,10 @@
 					key: section.id,
 					label: sentence(section.label)
 				}))}
+				warm={(id) => {
+					const href = sections.find((section) => section.id === id)?.href;
+					if (href) void preloadData(href).catch(() => {});
+				}}
 				pick={(id) => {
 					const href = sections.find((section) => section.id === id)?.href;
 					// eslint-disable-next-line svelte/no-navigation-without-resolve -- hrefs come resolved from callers

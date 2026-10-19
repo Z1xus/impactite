@@ -1,7 +1,7 @@
 <script lang="ts">
 	import eyeOff from "pixelarticons/svg/eye-off.svg?raw";
 	import plus from "pixelarticons/svg/plus.svg?raw";
-	import { api } from "#lib/api.ts";
+	import { api, get } from "#lib/api.ts";
 	import { number } from "#lib/display.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
@@ -19,7 +19,7 @@
 	let currencies = $state<Record<string, string>>({});
 
 	export function load() {
-		api<{ events: Event[] }>(`/api/app/sites/${domain}/goals/suggestions`)
+		get<{ events: Event[] }>(`/api/app/sites/${domain}/goals/suggestions`)
 			.then((r) => (events = r.events))
 			.catch(() => (events = []));
 	}

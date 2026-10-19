@@ -1,4 +1,4 @@
-import { api } from "./api.ts";
+import { api, get } from "./api.ts";
 
 // a list the server sends back whole after every change, as `{ [key]: items }`
 export function collection<T>(url: () => string, key: string) {
@@ -18,7 +18,7 @@ export function collection<T>(url: () => string, key: string) {
 		},
 		load: () => {
 			failed = false;
-			return api<Record<string, T[]>>(url())
+			return get<Record<string, T[]>>(url())
 				.then(keep)
 				.catch(() => {
 					failed = true;
