@@ -27,7 +27,7 @@
 </script>
 
 <svelte:head>
-	<title>Demo | impactite</title>
+	<title>impactite demo</title>
 </svelte:head>
 
 <Gate>

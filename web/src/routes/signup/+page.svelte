@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign up | impactite</title>
+	<title>Create an account</title>
 </svelte:head>
 
 <Gate>

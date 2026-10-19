@@ -22,7 +22,7 @@
 </script>
 
 <svelte:head>
-	<title>{domain} | impactite</title>
+	<title>{domain}</title>
 </svelte:head>
 
 <Shell>

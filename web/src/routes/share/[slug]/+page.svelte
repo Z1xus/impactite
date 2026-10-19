@@ -62,7 +62,7 @@
 </script>
 
 <svelte:head>
-	<title>{share?.name ?? "Dashboard"} | impactite</title>
+	<title>{share?.name ?? "Shared dashboard"}</title>
 </svelte:head>
 
 {#if share}

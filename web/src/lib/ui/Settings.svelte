@@ -17,7 +17,7 @@
 		retry,
 		children
 	}: {
-		context: string;
+		context?: string;
 		sections: {
 			id: string;
 			label: string;
@@ -37,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>{sentence(label)} | {context} | impactite</title>
+	<title>{sentence(label)}{context ? ` ${context}` : ""}</title>
 </svelte:head>
 
 <div class="flex flex-col gap-8">

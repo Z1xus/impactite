@@ -68,7 +68,7 @@
 
 <Shell>
 	{#if (site || !session.me) && sections.some((item) => item.id === section)}
-		<Settings context={domain} {sections} current={section} loading={!site}>
+		<Settings context="for {domain}" {sections} current={section} loading={!site}>
 			{#snippet title()}
 				<Title>
 					<Back href={resolve("/[site]", { site: domain })} title="Back to dashboard">

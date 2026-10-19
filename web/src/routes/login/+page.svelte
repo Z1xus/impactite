@@ -81,7 +81,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign in | impactite</title>
+	<title>Sign in to impactite</title>
 </svelte:head>
 
 <Gate>

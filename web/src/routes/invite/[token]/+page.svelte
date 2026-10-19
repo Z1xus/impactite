@@ -50,7 +50,7 @@
 </script>
 
 <svelte:head>
-	<title>Join | impactite</title>
+	<title>{place ? `Join ${place}` : "Join impactite"}</title>
 </svelte:head>
 
 <Gate>

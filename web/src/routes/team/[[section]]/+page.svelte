@@ -54,7 +54,7 @@
 		<Missing text="This settings page doesn't exist." />
 	{:else}
 		<Settings
-			context={team?.name ?? current?.name ?? "Team"}
+			context="of {team?.name ?? current?.name ?? 'team'}"
 			{sections}
 			current={section}
 			loading={!team}

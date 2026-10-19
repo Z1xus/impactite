@@ -40,7 +40,7 @@
 
 <Shell>
 	{#if sections.some((item) => item.id === section)}
-		<Settings context="Account" {sections} current={section} loading={!session.me}>
+		<Settings {sections} current={section} loading={!session.me}>
 			{#snippet title()}
 				<Title>Account</Title>
 			{/snippet}

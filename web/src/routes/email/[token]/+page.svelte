@@ -26,7 +26,7 @@
 </script>
 
 <svelte:head>
-	<title>Confirm email | impactite</title>
+	<title>Confirm your email</title>
 </svelte:head>
 
 <Gate>
