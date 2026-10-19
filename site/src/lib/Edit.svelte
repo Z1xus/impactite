@@ -12,6 +12,9 @@
 	const final = $derived(
 		parts.map((part) => (typeof part === "string" ? part : part.to)).join("")
 	);
+	const initial = $derived(
+		parts.map((part) => (typeof part === "string" ? part : part.from)).join("")
+	);
 
 	// per edit: the old text is selected, then replaced, then the new text is typed in
 	let edits: Record<number, { selected: boolean; typed: number }> = $state({});
@@ -55,14 +58,19 @@
 	})}
 >
 	<code
-		class="min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-small leading-5 whitespace-pre-wrap text-cyan"
-		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if stage !== "done" && (edits[i]?.typed ?? -1) < 0}<span
-					class={edits[i]?.selected ? "bg-edge text-fg" : ""}>{part.from}</span
-				>{:else}<span class="bg-cyan-night text-fg"
-					>{part.to.slice(0, edits[i]?.typed)}</span
-				>{/if}{#if active === i}<span
-					class="inline-block h-[1.1em] w-[0.55em] translate-y-[0.2em] bg-cyan"
-				></span>{/if}{/each}</code
+		class="grid min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-small leading-5 whitespace-pre-wrap text-cyan"
+		><span class="col-start-1 row-start-1"
+			>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if stage !== "done" && (edits[i]?.typed ?? -1) < 0}<span
+						class={edits[i]?.selected ? "bg-edge text-fg" : ""}>{part.from}</span
+					>{:else}<span class="bg-cyan-night text-fg"
+						>{part.to.slice(0, edits[i]?.typed)}</span
+					>{/if}{#if active === i}<span
+						class="inline-block h-[1.1em] w-[0.55em] translate-y-[0.2em] bg-cyan"
+					></span>{/if}{/each}</span
+		><span class="invisible col-start-1 row-start-1" aria-hidden="true">{final}</span><span
+			class="invisible col-start-1 row-start-1"
+			aria-hidden="true">{initial}</span
+		></code
 	>
 	<button
 		type="button"
