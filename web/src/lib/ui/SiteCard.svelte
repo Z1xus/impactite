@@ -39,6 +39,10 @@
 			<Skeleton class="h-[22px] w-16" />
 		{/if}
 	</span>
-	<Chart values={values ?? []} axes={false} height={56} format={compact} />
+	{#if values}
+		<Chart {values} axes={false} height={56} format={compact} />
+	{:else}
+		<Skeleton class="h-14 w-full" />
+	{/if}
 </a>
 <!-- eslint-enable svelte/no-navigation-without-resolve -->
