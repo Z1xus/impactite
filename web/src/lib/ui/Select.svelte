@@ -18,7 +18,8 @@
 		label,
 		plain = false,
 		title = false,
-		footer
+		footer,
+		warm
 	}: {
 		value: T;
 		options: { key: T; label: string; glyph?: Spec | null }[];
@@ -31,6 +32,7 @@
 		plain?: boolean;
 		title?: boolean;
 		footer?: { label: string; href: string; icon: string };
+		warm?: (key: T) => void;
 	} = $props();
 
 	const text = "font-sans text-body";
@@ -163,7 +165,10 @@
 								? 'bg-line'
 								: ''} {option.key === value ? 'text-cyan' : 'text-fg'}"
 							onclick={() => choose(option.key)}
-							onpointerenter={() => (active = i)}
+							onpointerenter={() => {
+								active = i;
+								warm?.(option.key);
+							}}
 						>
 							{#if option.glyph !== undefined}
 								<Glyph

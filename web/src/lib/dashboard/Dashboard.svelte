@@ -9,12 +9,12 @@
 	import more from "pixelarticons/svg/more-vertical.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
-	import { currentTeam, findSite, session } from "#lib/session.svelte.ts";
+	import { currentTeam, findSite, session, teamTimezone } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
+		cached,
 		decodeFilter,
 		encodeFilter,
-		query,
 		toQueryFilters,
 		type Filter
 	} from "#lib/stats.ts";
@@ -30,6 +30,7 @@
 	import NewEvents from "#lib/settings/NewEvents.svelte";
 	import Period from "./Period.svelte";
 	import Waiting from "./Waiting.svelte";
+	import { warm } from "./warm.ts";
 	import Banner from "#lib/ui/Banner.svelte";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
@@ -173,7 +174,7 @@
 		let stale = false;
 		void checks;
 		failed = false;
-		query(domain, { metrics: ["events"], date_range: "all" })
+		cached(domain, { metrics: ["events"], date_range: "all" })
 			.then((result) => {
 				if (!stale) empty = !result.results[0]?.metrics[0];
 			})
@@ -311,6 +312,11 @@
 							icon: sliders
 						}
 					: undefined}
+				warm={(key) => {
+					const site = findSite(key);
+					if (team && key === "all") warm(`team:${team.id}`, teamTimezone(team));
+					else if (site) warm(key, site.timezone);
+				}}
 				pick={(key) =>
 					goto(key === "all" ? resolve("/all") : resolve("/[site]", { site: key }))}
 			/>

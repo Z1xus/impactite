@@ -61,6 +61,20 @@ export function query(site: string, body: Record<string, unknown>, imports = tru
 	return api<Result>("/api/app/query", { site_id: site, include: { imports }, ...body });
 }
 
+const recent = new Map<string, { at: number; reply: Promise<Result> }>();
+const FRESH = 60_000;
+
+// repeat queries share one request for a minute, so a hover prefetch feeds the page it opens
+export function cached(site: string, body: Record<string, unknown>, imports = true) {
+	const key = JSON.stringify([site, body, imports]);
+	const hit = recent.get(key);
+	if (hit && body.date_range !== "30m" && Date.now() - hit.at < FRESH) return hit.reply;
+	const reply = query(site, body, imports);
+	recent.set(key, { at: Date.now(), reply });
+	reply.catch(() => recent.delete(key));
+	return reply;
+}
+
 const escape = (value: string) => value.replaceAll("%", "%25").replaceAll("~", "%7E");
 const unescape = (value: string) => value.replaceAll("%7E", "~").replaceAll("%25", "%");
 

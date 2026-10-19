@@ -5,6 +5,7 @@
 	import { icon } from "#lib/icons/resolve.ts";
 	import { currentTeam, refresh, teamTimezone } from "#lib/session.svelte.ts";
 	import { shift, today } from "#lib/period.ts";
+	import { warm } from "#lib/dashboard/warm.ts";
 	import { query } from "#lib/stats.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
@@ -109,7 +110,7 @@
 			<Empty compact retry={() => tries++} />
 		{/if}
 		{#if !team || team.sites.length}
-			<ul class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-4">
+			<ul class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 				{#if !team}
 					{#each [0, 1, 2] as placeholder (placeholder)}
 						<li><SiteCard /></li>
@@ -121,6 +122,7 @@
 								href={resolve("/all")}
 								title="All sites"
 								values={series.all}
+								warm={() => warm(`team:${team.id}`, teamTimezone(team))}
 							/>
 						</li>
 					{/if}
@@ -131,6 +133,7 @@
 								title={site.domain}
 								glyph={icon("event:hostname", site.domain)}
 								values={series[site.domain]}
+								warm={() => warm(site.domain, site.timezone)}
 							/>
 						</li>
 					{/each}

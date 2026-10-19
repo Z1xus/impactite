@@ -2,7 +2,7 @@
 	import { untrack } from "svelte";
 	import Chart from "#lib/dither/Chart.svelte";
 	import { clock } from "#lib/display.svelte.ts";
-	import { METRICS, format, query, toQueryFilters, type Metric } from "#lib/stats.ts";
+	import { METRICS, cached, format, toQueryFilters, type Metric } from "#lib/stats.ts";
 	import Empty from "#lib/ui/Empty.svelte";
 	import Kpis from "#lib/ui/Kpis.svelte";
 	import Select from "#lib/ui/Select.svelte";
@@ -82,7 +82,7 @@
 	function load() {
 		const { dates, domain, imports } = ctx;
 		const where = toQueryFilters(ctx.filters);
-		const ask = (body: Record<string, unknown>) => query(domain, body, imports);
+		const ask = (body: Record<string, unknown>) => cached(domain, body, imports);
 		const { previous, grain } = dates;
 		let stale = false;
 		failed = false;

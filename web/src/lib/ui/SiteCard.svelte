@@ -10,12 +10,24 @@
 		href,
 		title,
 		glyph,
-		values
-	}: { href?: string; title?: string; glyph?: Spec | null; values?: number[] } = $props();
+		values,
+		warm
+	}: {
+		href?: string;
+		title?: string;
+		glyph?: Spec | null;
+		values?: number[];
+		warm?: () => void;
+	} = $props();
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
-<a {href} class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 hover:border-edge">
+<a
+	{href}
+	onpointerenter={warm}
+	onfocus={warm}
+	class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 hover:border-edge"
+>
 	<span class="flex h-5 min-w-0 items-center gap-2.5 text-fg">
 		{#if title === undefined}
 			<Skeleton class="h-4 w-32" />
@@ -39,10 +51,10 @@
 				<span class="label">today</span>
 			</span>
 		</span>
-		<Chart {values} axes={false} height={72} format={compact} />
+		<Chart {values} axes={false} height={96} format={compact} />
 	{:else}
 		<Skeleton class="h-[44px] w-full" />
-		<Skeleton class="h-[72px] w-full" />
+		<Skeleton class="h-[96px] w-full" />
 	{/if}
 </a>
 <!-- eslint-enable svelte/no-navigation-without-resolve -->
