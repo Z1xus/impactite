@@ -25,6 +25,7 @@
 	--color-cyan: #38e1f2;
 	--color-cyan-deep: #0e7f8d;
 	--color-cyan-night: #06343b;
+	--color-bar: var(--color-cyan-night);
 	--color-warn: #f0b64a;
 	--color-bad: #f0645a;
 
@@ -71,6 +72,7 @@
 		--color-cyan: #08707a;
 		--color-cyan-deep: #4fbcc7;
 		--color-cyan-night: #d4f0f3;
+		--color-bar: color-mix(in srgb, var(--color-cyan-deep) 55%, var(--color-cyan-night));
 		--color-warn: #965f00;
 		--color-bad: #c5372d;
 	}
@@ -180,7 +182,7 @@
 }
 
 @utility dither {
-	background-color: var(--color-cyan-night);
+	background-color: var(--dither-fill, var(--color-bar));
 	background-image:
 		linear-gradient(45deg, var(--dither-gap, var(--color-panel)) 25%, transparent 25%),
 		linear-gradient(-45deg, var(--dither-gap, var(--color-panel)) 25%, transparent 25%);
@@ -189,4 +191,17 @@
 
 @utility pixelated {
 	image-rendering: pixelated;
+}
+
+@utility rule {
+	position: absolute;
+	inset-inline: 0;
+	top: 100%;
+	height: 4px;
+	pointer-events: none;
+	background-image:
+		linear-gradient(45deg, var(--color-bar) 25%, transparent 25%),
+		linear-gradient(-45deg, var(--color-bar) 25%, transparent 25%);
+	background-size: 4px 4px;
+	mask-image: linear-gradient(90deg, #000, transparent 70%);
 }

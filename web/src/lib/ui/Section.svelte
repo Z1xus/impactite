@@ -21,12 +21,13 @@
 	class="scroll-mt-6 rounded-px border bg-panel {danger ? 'border-bad/30' : 'border-line'}"
 >
 	<header
-		class="flex min-h-13 items-center justify-between gap-4 border-b px-5 py-1.5 {danger
+		class="relative flex min-h-13 items-center justify-between gap-4 border-b px-5 py-1.5 {danger
 			? 'border-bad/30'
 			: 'border-line'}"
 	>
 		<h2 class="label {danger ? 'text-bad' : 'text-fg'}">{label}</h2>
 		{@render actions?.()}
+		<span class="rule"></span>
 	</header>
 	<div class="flex flex-col gap-4 p-5">
 		{@render children()}

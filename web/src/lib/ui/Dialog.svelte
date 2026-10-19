@@ -44,19 +44,22 @@
 	onclick={(event) => event.target === dialog && (open = false)}
 >
 	{#if mounted}
+		<header
+			class="relative flex h-13 items-center justify-between gap-4 border-b border-edge px-5"
+		>
+			<h2 id="{id}-title" class="label text-fg">{title}</h2>
+			<button
+				type="button"
+				class="-mr-2.5 grid h-control w-control place-items-center text-dim hover:text-fg"
+				aria-label="close"
+				title="close"
+				onclick={() => (open = false)}
+			>
+				<Icon svg={close} size={16} />
+			</button>
+			<span class="rule"></span>
+		</header>
 		<div class="p-5">
-			<header class="mb-5 flex items-center justify-between gap-4">
-				<h2 id="{id}-title" class="label text-fg">{title}</h2>
-				<button
-					type="button"
-					class="-mr-2.5 grid h-control w-control place-items-center text-dim hover:text-fg"
-					aria-label="close"
-					title="close"
-					onclick={() => (open = false)}
-				>
-					<Icon svg={close} size={14} />
-				</button>
-			</header>
 			{@render children()}
 		</div>
 	{/if}

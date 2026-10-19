@@ -3,6 +3,7 @@
 	import close from "pixelarticons/svg/close.svg?raw";
 	import expand from "pixelarticons/svg/scale.svg?raw";
 	import Icon from "./Icon.svelte";
+	import { sentence } from "./text";
 
 	let {
 		tabs,
@@ -31,7 +32,7 @@
 		? 'cursor-grab border-dashed border-dim active:cursor-grabbing'
 		: 'border-line'}"
 >
-	<header class="flex h-11 items-center gap-4 border-b border-line px-4">
+	<header class="relative flex h-11 items-center gap-4 border-b border-line px-4">
 		<div class="-ml-2 flex h-full min-w-0 [scrollbar-width:none] items-center overflow-x-auto">
 			{#each tabs as item (item.key)}
 				<button
@@ -42,9 +43,7 @@
 					aria-pressed={tab === item.key}
 					onclick={() => (tab = item.key)}
 				>
-					{item.key === "utm"
-						? "UTM"
-						: item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+					{sentence(item.label)}
 				</button>
 			{/each}
 		</div>
@@ -60,7 +59,7 @@
 					class="grid size-control place-items-center text-dim hover:text-fg"
 					onclick={open}
 				>
-					<Icon svg={expand} size={14} />
+					<Icon svg={expand} size={16} />
 				</button>
 			{/if}
 			{#if arranging && hide}
@@ -75,6 +74,7 @@
 				</button>
 			{/if}
 		</div>
+		<span class="rule"></span>
 	</header>
 	<div
 		class="flex-1 px-2 py-3 {fit ? '' : 'min-h-76'} {arranging
