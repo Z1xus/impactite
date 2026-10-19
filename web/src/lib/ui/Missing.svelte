@@ -7,6 +7,10 @@
 		$props();
 </script>
 
+<svelte:head>
+	<title>Not found · impactite</title>
+</svelte:head>
+
 <Empty {text}>
 	<Button variant="quiet" href={resolve("/")}>All sites</Button>
 </Empty>
