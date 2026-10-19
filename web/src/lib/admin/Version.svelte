@@ -71,7 +71,7 @@
 				<span class="text-fg">impactite {info.version}</span>
 			</li>
 			<li class="flex items-center justify-between gap-4 py-3">
-				<span class="label">updates</span>
+				<span class="label">check for updates</span>
 				{#if !info.update.enabled}
 					<span class="text-dim">Off</span>
 				{:else if info.update.failed}
