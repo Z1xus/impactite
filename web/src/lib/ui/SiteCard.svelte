@@ -24,22 +24,25 @@
 			<span class="truncate">{title}</span>
 		{/if}
 	</span>
-	<span class="flex h-[22px] items-baseline gap-2">
-		{#if values}
-			<Num
-				value={values.reduce((sum, value) => sum + value, 0)}
-				format={compact}
-				class="text-num text-fg"
-			/>
-			<span class="label">visitors in 28 days</span>
-		{:else}
-			<Skeleton class="h-[22px] w-16" />
-		{/if}
-	</span>
 	{#if values}
-		<Chart {values} axes={false} height={56} format={compact} />
+		<span class="flex items-end justify-between gap-4">
+			<span class="flex flex-col gap-1.5">
+				<Num
+					value={values.reduce((sum, value) => sum + value, 0)}
+					format={compact}
+					class="text-num text-fg"
+				/>
+				<span class="label">visitors, 28 days</span>
+			</span>
+			<span class="flex flex-col items-end gap-1.5">
+				<Num value={values.at(-1) ?? 0} format={compact} class="text-body text-fg" />
+				<span class="label">today</span>
+			</span>
+		</span>
+		<Chart {values} axes={false} height={72} format={compact} />
 	{:else}
-		<Skeleton class="h-14 w-full" />
+		<Skeleton class="h-[44px] w-full" />
+		<Skeleton class="h-[72px] w-full" />
 	{/if}
 </a>
 <!-- eslint-enable svelte/no-navigation-without-resolve -->

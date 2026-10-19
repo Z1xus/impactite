@@ -109,7 +109,7 @@
 			<Empty compact retry={() => tries++} />
 		{/if}
 		{#if !team || team.sites.length}
-			<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			<ul class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-4">
 				{#if !team}
 					{#each [0, 1, 2] as placeholder (placeholder)}
 						<li><SiteCard /></li>
