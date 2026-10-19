@@ -24,7 +24,7 @@
 	const section = $derived(page.params.section ?? (manager ? "general" : "members"));
 	const sections = $derived(
 		[
-			...(manager ? [{ id: "general", label: "general", icon: sliders }] : []),
+			...(current && manager ? [{ id: "general", label: "general", icon: sliders }] : []),
 			{ id: "members", label: "members", icon: users },
 			{ id: "danger", label: "danger", icon: alert, danger: true }
 		].map((item) => ({ ...item, href: resolve("/team/[[section]]", { section: item.id }) }))
@@ -43,7 +43,7 @@
 </script>
 
 <Shell>
-	{#if !sections.some((item) => item.id === section)}
+	{#if current && !sections.some((item) => item.id === section)}
 		<Missing text="This settings page doesn't exist." />
 	{:else}
 		<Settings {sections} current={section} loading={!team}>
