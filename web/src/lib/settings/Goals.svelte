@@ -159,5 +159,5 @@
 			{/if}
 		{/snippet}
 	</List>
-	<NewEvents bind:this={review} bind:events={suggestions} {domain} changed={goals.load} />
+	<NewEvents heading bind:this={review} bind:events={suggestions} {domain} changed={goals.load} />
 </Section>

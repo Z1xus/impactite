@@ -5,6 +5,7 @@
 	let {
 		children,
 		variant = "primary",
+		size = "md",
 		busy = false,
 		href,
 		class: className = "",
@@ -12,19 +13,21 @@
 	}: HTMLButtonAttributes & {
 		children: Snippet;
 		variant?: "primary" | "quiet" | "danger" | "icon" | "tool" | "plain";
+		size?: "md" | "sm";
 		busy?: boolean;
 		href?: string;
 	} = $props();
 
 	const variants = {
 		primary:
-			"h-control border border-cyan bg-cyan px-4 text-ink enabled:hover:border-fg enabled:hover:bg-fg disabled:border-edge disabled:bg-raised disabled:text-faint disabled:opacity-100",
-		quiet: "h-control border border-edge px-3 text-fg enabled:hover:border-dim",
-		danger: "h-control border border-bad/50 px-3 text-bad enabled:hover:border-bad enabled:hover:bg-bad/10",
+			"border border-cyan bg-cyan text-ink enabled:hover:border-fg enabled:hover:bg-fg disabled:border-edge disabled:bg-raised disabled:text-faint disabled:opacity-100",
+		quiet: "border border-edge text-fg enabled:hover:border-dim",
+		danger: "border border-bad/50 text-bad enabled:hover:border-bad enabled:hover:bg-bad/10",
 		icon: "size-control border border-edge text-dim enabled:hover:border-dim enabled:hover:text-fg",
-		tool: "size-control text-dim enabled:hover:text-fg",
-		plain: "h-control px-2 text-dim enabled:hover:text-fg"
+		tool: "size-compact text-dim enabled:hover:text-fg",
+		plain: "text-dim enabled:hover:text-fg"
 	};
+	const padding = { primary: "px-4", quiet: "px-3", danger: "px-3", plain: "px-2" };
 	let pending = $state(false);
 	const waiting = $derived(busy || pending);
 
@@ -40,8 +43,15 @@
 		}
 	}
 
+	const shape = $derived(
+		variant === "icon" || variant === "tool"
+			? "text-body"
+			: size === "sm"
+				? "h-compact px-2.5 text-small"
+				: `h-control text-body ${padding[variant]}`
+	);
 	const look = $derived(
-		`inline-flex items-center justify-center gap-2 rounded-px font-sans text-body ${variants[variant]} ${waiting ? "cursor-wait opacity-60" : ""} ${className}`
+		`inline-flex items-center justify-center gap-2 rounded-px font-sans ${variants[variant]} ${shape} ${waiting ? "cursor-wait opacity-60" : ""} ${className}`
 	);
 </script>
 

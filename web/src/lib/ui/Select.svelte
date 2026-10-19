@@ -17,6 +17,7 @@
 		align = "left",
 		label,
 		plain = false,
+		size = "md",
 		title = false,
 		footer,
 		warm
@@ -30,12 +31,14 @@
 		align?: "left" | "right";
 		label?: string;
 		plain?: boolean;
+		size?: "md" | "sm";
 		title?: boolean;
 		footer?: { label: string; href: string; icon: string };
 		warm?: (key: T) => void;
 	} = $props();
 
 	const text = "font-sans text-body";
+	const body = $derived(size === "sm" ? "text-small" : "text-body");
 
 	let open = $state(false);
 	let pending = $state(false);
@@ -119,9 +122,11 @@
 	<button
 		bind:this={trigger}
 		type="button"
-		class="flex h-control items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
-			? `font-sans hover:bg-raised hover:text-fg ${title ? 'text-title font-medium text-fg' : 'text-body text-dim'}`
-			: `border border-control ${text} text-fg hover:border-dim`}"
+		class="flex items-center gap-2 rounded-px whitespace-nowrap {size === 'sm'
+			? 'h-compact px-2.5'
+			: 'h-control px-3'} {plain
+			? `font-sans hover:bg-raised hover:text-fg ${title ? 'text-title font-medium text-fg' : `${body} text-dim`}`
+			: `border border-control font-sans ${body} text-fg hover:border-dim`}"
 		aria-haspopup="listbox"
 		aria-expanded={open}
 		disabled={pending}

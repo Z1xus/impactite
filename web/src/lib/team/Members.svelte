@@ -141,6 +141,7 @@
 			{@const member = team.members.find((member) => member.id === id)}
 			{#if member && editable(member)}
 				<Select
+					size="sm"
 					align="right"
 					value={member.role}
 					options={owner ? [...ROLES, { key: "owner", label: "make owner" }] : ROLES}

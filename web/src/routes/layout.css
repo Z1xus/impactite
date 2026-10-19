@@ -41,6 +41,7 @@
 
 	--radius-px: 2px;
 	--spacing-control: 36px;
+	--spacing-compact: 28px;
 	--container-page: 93rem;
 	--container-form: 48rem;
 }
@@ -134,6 +135,7 @@
 	@media (pointer: coarse) {
 		:root {
 			--spacing-control: 42px;
+			--spacing-compact: 40px;
 		}
 
 		html {

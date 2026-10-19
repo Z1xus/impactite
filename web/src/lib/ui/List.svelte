@@ -79,7 +79,7 @@
 						{#if remove && item.removable !== false}
 							<Button
 								variant="tool"
-								class="-mr-3 hover:text-bad"
+								class="-mr-2 hover:text-bad"
 								aria-label="{item.verb ?? verb} {item.title}"
 								title={item.verb ?? verb}
 								disabled={removing === item.key}

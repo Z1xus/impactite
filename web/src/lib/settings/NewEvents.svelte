@@ -5,6 +5,7 @@
 	import { number } from "#lib/display.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
+	import Field from "#lib/ui/Field.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import List from "#lib/ui/List.svelte";
 
@@ -13,8 +14,9 @@
 	let {
 		domain,
 		events = $bindable([]),
+		heading = false,
 		changed
-	}: { domain: string; events?: Event[]; changed?: () => void } = $props();
+	}: { domain: string; events?: Event[]; heading?: boolean; changed?: () => void } = $props();
 
 	let currencies = $state<Record<string, string>>({});
 
@@ -71,10 +73,9 @@
 	<div
 		class="-mx-5 flex flex-col gap-4 px-5 not-first:border-t not-first:border-line not-first:pt-4"
 	>
-		<div class="flex min-h-control items-center justify-between gap-4">
+		{#if heading}
 			<h3 class="label text-dim">suggested goals</h3>
-			<Button variant="quiet" onclick={addAll}>Add all</Button>
-		</div>
+		{/if}
 		<List
 			items={events.map((event) => ({
 				key: event.name,
@@ -89,13 +90,18 @@
 				{@const event = events.find((event) => event.name === key)}
 				{#if event}
 					{#if event.revenue}
-						<input
-							bind:value={currencies[event.name]}
-							placeholder="EUR"
-							maxlength={3}
-							aria-label="currency for {event.name}"
-							class="mr-1 h-control w-16 rounded-px border border-control bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
-						/>
+						<div class="mr-1 w-14">
+							<Field
+								size="sm"
+								label="currency for {event.name}"
+								placeholder="EUR"
+								maxlength={3}
+								bind:value={
+									() => currencies[event.name] ?? "",
+									(value) => (currencies[event.name] = value)
+								}
+							/>
+						</div>
 					{/if}
 					<Button
 						variant="tool"
@@ -107,7 +113,7 @@
 					</Button>
 					<Button
 						variant="tool"
-						class="-mr-3"
+						class="-mr-2"
 						aria-label="Ignore {event.name}"
 						title="Ignore"
 						onclick={() => ignore(event.name)}
@@ -117,5 +123,8 @@
 				{/if}
 			{/snippet}
 		</List>
+		{#if events.length > 1}
+			<Button variant="quiet" size="sm" class="self-end" onclick={addAll}>Add all</Button>
+		{/if}
 	</div>
 {/if}
