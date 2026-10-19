@@ -188,7 +188,7 @@
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
 					<a
 						href={footer.href}
-						class="flex h-control items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
+						class="flex h-control items-center gap-2 px-3 text-body whitespace-nowrap text-dim hover:bg-line hover:text-fg"
 						><Icon svg={footer.icon} size={12} />{footer.label}</a
 					>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
