@@ -1,6 +1,5 @@
 <script lang="ts">
 	import external from "pixelarticons/svg/external-link.svg?raw";
-	import { flip } from "svelte/animate";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
 	import Icon from "./Icon.svelte";
@@ -36,7 +35,7 @@
 	const max = $derived(Math.max(1, ...(rows ?? []).map((row) => row.value)));
 </script>
 
-<ul class="flex flex-col transition-opacity duration-150 {loading ? 'opacity-60' : ''}">
+<ul class="flex flex-col transition-opacity duration-150 {loading ? 'opacity-60 delay-300' : ''}">
 	{#if columns && rows?.length}
 		<li class="flex h-6 items-start justify-end gap-4 px-4 label text-faint">
 			{#each columns as column, i (column)}
@@ -55,11 +54,8 @@
 	{:else if rows.length === 0}
 		<li class="flex h-8 items-center px-2 label">none</li>
 	{:else}
-		{#each rows.slice(0, limit) as row (row.key)}
-			<li
-				animate:flip={{ duration: 200 }}
-				class="group relative flex h-8 items-center gap-2.5 px-2 pointer-coarse:h-control"
-			>
+		{#each rows.slice(0, limit) as row, i (i)}
+			<li class="group relative flex h-8 items-center gap-2.5 px-2 pointer-coarse:h-control">
 				<button
 					type="button"
 					class="absolute inset-0 rounded-px enabled:hover:bg-raised"

@@ -29,6 +29,7 @@
 	import FilterDialog from "./FilterDialog.svelte";
 	import NewEvents from "#lib/settings/NewEvents.svelte";
 	import Period from "./Period.svelte";
+	import Loading from "./Loading.svelte";
 	import Waiting from "./Waiting.svelte";
 	import { warm } from "./warm.ts";
 	import Banner from "#lib/ui/Banner.svelte";
@@ -101,6 +102,7 @@
 	let editing = $state<Filter | null | undefined>(undefined);
 	let details = $state<{ dim: string; title: string } | null>(null);
 	let reviewing = $state(false);
+	let suggested = $state(false);
 	let newEvents = $state.raw<{ name: string; count: number; revenue: boolean }[]>([]);
 	let goals = $state.raw<string[]>([]);
 	let revenue = $state(false);
@@ -188,7 +190,8 @@
 		if (!editable || combined) return;
 		api<{ events: typeof newEvents }>(`/api/app/sites/${domain}/goals/suggestions`)
 			.then((result) => (newEvents = result.events))
-			.catch(() => (newEvents = []));
+			.catch(() => (newEvents = []))
+			.finally(() => (suggested = true));
 	});
 
 	function loadGoals() {
@@ -394,16 +397,18 @@
 	{/if}
 
 	{#if empty && !combined}
-		<Waiting
-			{domain}
-			landed={() => {
-				empty = false;
-				version++;
-			}}
-		/>
+		{#key domain}
+			<Waiting
+				{domain}
+				landed={() => {
+					empty = false;
+					version++;
+				}}
+			/>
+		{/key}
 	{:else if failed}
 		<Empty retry={() => checks++} />
-	{:else if ctx}
+	{:else if ctx && layout.ready && (suggested || !editable || combined)}
 		<Overview
 			{ctx}
 			metric={realtime ? "pageviews" : metric}
@@ -415,5 +420,7 @@
 			setGrain={(grain) => go({ interval: grain })}
 		/>
 		<Grid {ctx} {layout} />
+	{:else}
+		<Loading bare />
 	{/if}
 </div>

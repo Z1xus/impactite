@@ -8,15 +8,20 @@ const list = (value: unknown) =>
 export function createLayout(domain: () => string, readonly: () => boolean) {
 	let saved = $state<Saved>({ order: [], hidden: [], table: false });
 	let arranging = $state(false);
+	let ready = $state(false);
 
 	$effect(() => {
-		if (readonly()) return;
+		if (readonly()) {
+			ready = true;
+			return;
+		}
 		api<Partial<Saved> | null>(`/api/app/prefs/layout:${domain()}`).then((value) => {
 			saved = {
 				order: list(value?.order),
 				hidden: list(value?.hidden),
 				table: value?.table === true
 			};
+			ready = true;
 		});
 	});
 
@@ -34,6 +39,9 @@ export function createLayout(domain: () => string, readonly: () => boolean) {
 		},
 		get table() {
 			return saved.table;
+		},
+		get ready() {
+			return ready;
 		},
 		get arranging() {
 			return arranging;

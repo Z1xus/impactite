@@ -16,9 +16,7 @@
 
 <Shell>
 	{#if site}
-		{#key domain}
-			<Dashboard {domain} timezone={site.timezone} />
-		{/key}
+		<Dashboard {domain} timezone={site.timezone} />
 	{:else if session.me}
 		<Missing />
 	{:else}

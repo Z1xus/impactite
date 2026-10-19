@@ -3,7 +3,7 @@
 	import { api } from "#lib/api.ts";
 	import WorldMap from "#lib/dither/Map.svelte";
 	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
-	import { display, format, query, toQueryFilters } from "#lib/stats.ts";
+	import { cached, display, format, toQueryFilters } from "#lib/stats.ts";
 	import Empty from "#lib/ui/Empty.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
@@ -38,8 +38,8 @@
 	let tries = $state(0);
 	// search console terms replace referrers under the google source when connected
 	let terms = $state(false);
-	// the dimension the rows on screen belong to, plain so changing it never reruns the load
-	let shown = "";
+	// the dimension the rows on screen belong to
+	let shown = $state("");
 
 	const tab = $derived(
 		panel.tabs.some((item) => item.key === chosen) ? chosen : panel.tabs[0].key
@@ -87,7 +87,7 @@
 	);
 
 	function regular(where: Where) {
-		return query(
+		return cached(
 			ctx.domain,
 			{
 				metrics: goalView ? ["visitors", "conversion_rate"] : ["visitors"],
@@ -160,7 +160,6 @@
 		let stale = false;
 		const at = dim;
 		const where = toQueryFilters(ctx.filters);
-		if (at !== shown) ranked = null;
 		loading = true;
 		failed = false;
 		const done = (rows: Ranked, searched = false) => {
@@ -212,7 +211,9 @@
 					: ["visitors"]
 	);
 	const pick = $derived(
-		tab === "funnels" || terms ? undefined : (value: string) => ctx.add(dim, value)
+		tab === "funnels" || terms
+			? undefined
+			: (value: string) => shown === dim && ctx.add(dim, value)
 	);
 </script>
 
@@ -255,7 +256,12 @@
 	{:else if tab === "map"}
 		<div class="flex h-full items-center px-2 py-1">
 			<WorldMap
-				values={Object.fromEntries((ranked ?? []).map((row) => [row.key, row.value]))}
+				values={Object.fromEntries(
+					(shown === "visit:country" ? (ranked ?? []) : []).map((row) => [
+						row.key,
+						row.value
+					])
+				)}
 				label={(code) => display("visit:country", code)}
 				format={(value) => format("visitors", value)}
 				pick={(code) => ctx.add("visit:country", code)}

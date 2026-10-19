@@ -7,6 +7,7 @@
 	let count = $state<number | null>(null);
 
 	$effect(() => {
+		count = null;
 		const share = access.share ? `?share=${encodeURIComponent(access.share)}` : "";
 		const source = new EventSource(`/api/app/live/${encodeURIComponent(site)}${share}`);
 		source.onmessage = (event) => (count = Number(event.data));

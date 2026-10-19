@@ -1,5 +1,6 @@
 import { current, interval, parse, previous } from "#lib/period.ts";
 import { METRICS, cached } from "#lib/stats.ts";
+import { PANELS } from "./panels.ts";
 
 // starts the requests the dashboard makes first, with its default view
 export function warm(domain: string, timezone: string) {
@@ -17,4 +18,15 @@ export function warm(domain: string, timezone: string) {
 		dimensions: [`time:${interval(view, range)}`],
 		filters: []
 	});
+	for (const { tabs } of PANELS) {
+		const map = tabs[0].key === "map";
+		const dim = map ? "visit:country" : tabs[0].key;
+		ask({
+			metrics: ["visitors"],
+			date_range: range,
+			dimensions: [dim],
+			filters: [],
+			pagination: { limit: map ? 300 : 9 }
+		});
+	}
 }
