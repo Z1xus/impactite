@@ -75,49 +75,47 @@
 			<h3 class="label text-dim">suggested goals</h3>
 			<Button variant="quiet" onclick={addAll}>Add all</Button>
 		</div>
-		<div class="-mr-3 max-h-[50vh] overflow-y-auto pr-3">
-			<List
-				items={events.map((event) => ({
-					key: event.name,
-					title: event.name,
-					meta: [
-						`${number(event.count)} ${event.count === 1 ? "time" : "times"}`,
-						...(event.revenue ? ["with revenue"] : [])
-					]
-				}))}
-			>
-				{#snippet control(key)}
-					{@const event = events.find((event) => event.name === key)}
-					{#if event}
-						{#if event.revenue}
-							<input
-								bind:value={currencies[event.name]}
-								placeholder="EUR"
-								maxlength={3}
-								aria-label="currency for {event.name}"
-								class="mr-1 h-control w-16 rounded-px border border-control bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
-							/>
-						{/if}
-						<Button
-							variant="tool"
-							aria-label="Add {event.name}"
-							title="Add goal"
-							onclick={() => add(event)}
-						>
-							<Icon svg={plus} size={12} />
-						</Button>
-						<Button
-							variant="tool"
-							class="-mr-3"
-							aria-label="Ignore {event.name}"
-							title="Ignore"
-							onclick={() => ignore(event.name)}
-						>
-							<Icon svg={eyeOff} size={12} />
-						</Button>
+		<List
+			items={events.map((event) => ({
+				key: event.name,
+				title: event.name,
+				meta: [
+					`${number(event.count)} ${event.count === 1 ? "time" : "times"}`,
+					...(event.revenue ? ["with revenue"] : [])
+				]
+			}))}
+		>
+			{#snippet control(key)}
+				{@const event = events.find((event) => event.name === key)}
+				{#if event}
+					{#if event.revenue}
+						<input
+							bind:value={currencies[event.name]}
+							placeholder="EUR"
+							maxlength={3}
+							aria-label="currency for {event.name}"
+							class="mr-1 h-control w-16 rounded-px border border-control bg-panel px-3 text-fg uppercase outline-none placeholder:text-faint hover:border-dim focus:border-cyan"
+						/>
 					{/if}
-				{/snippet}
-			</List>
-		</div>
+					<Button
+						variant="tool"
+						aria-label="Add {event.name}"
+						title="Add goal"
+						onclick={() => add(event)}
+					>
+						<Icon svg={plus} size={12} />
+					</Button>
+					<Button
+						variant="tool"
+						class="-mr-3"
+						aria-label="Ignore {event.name}"
+						title="Ignore"
+						onclick={() => ignore(event.name)}
+					>
+						<Icon svg={eyeOff} size={12} />
+					</Button>
+				{/if}
+			{/snippet}
+		</List>
 	</div>
 {/if}

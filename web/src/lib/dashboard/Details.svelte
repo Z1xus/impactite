@@ -160,13 +160,11 @@
 	<div class="w-full sm:w-72">
 		<Field label="search" bind:value={search} />
 	</div>
-	<div class="max-h-[60vh] [scrollbar-gutter:stable] overflow-y-auto pr-2">
-		{#if failed}
-			<Empty compact retry={() => tries++} />
-		{:else}
-			<Table {columns} {rows} bind:sort {pick} />
-		{/if}
-	</div>
+	{#if failed}
+		<Empty compact retry={() => tries++} />
+	{:else}
+		<Table {columns} {rows} bind:sort {pick} />
+	{/if}
 	{#if more}
 		<div class="flex justify-center">
 			<Button variant="quiet" onclick={() => pages++}>Load more</Button>

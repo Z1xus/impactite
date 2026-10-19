@@ -45,7 +45,7 @@
 >
 	{#if mounted}
 		<header
-			class="sticky top-0 z-10 flex h-13 items-center justify-between gap-4 border-b border-edge bg-raised px-4 sm:px-5"
+			class="sticky top-0 z-10 flex h-13 items-center justify-between gap-4 border-b border-edge bg-raised px-5"
 		>
 			<h2 id="{id}-title" class="label text-fg">{title}</h2>
 			<button
@@ -59,7 +59,7 @@
 			</button>
 			<span class="rule"></span>
 		</header>
-		<div class="p-4 sm:p-5">
+		<div class="p-5">
 			{@render children()}
 		</div>
 	{/if}
