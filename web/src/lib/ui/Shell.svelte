@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+	import { tick, type Snippet } from "svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
@@ -73,6 +73,8 @@
 		await refresh();
 		pickTeam(created.id);
 		await goto(resolve("/"));
+		await tick();
+		document.querySelector<HTMLElement>("header [aria-haspopup=menu]")?.focus();
 	}
 
 	async function signOut() {
