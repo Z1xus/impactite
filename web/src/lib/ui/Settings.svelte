@@ -37,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>{sentence(label)} · {context} · impactite</title>
+	<title>{sentence(label)} | {context} | impactite</title>
 </svelte:head>
 
 <div class="flex flex-col gap-8">

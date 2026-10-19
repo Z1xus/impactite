@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Set up · impactite</title>
+	<title>Set up | impactite</title>
 </svelte:head>
 
 <Gate>

@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Not found · impactite</title>
+	<title>Not found | impactite</title>
 </svelte:head>
 
 <Empty {text}>

@@ -32,7 +32,7 @@
 </script>
 
 <svelte:head>
-	<title>All sites · impactite</title>
+	<title>All sites | impactite</title>
 </svelte:head>
 
 <Shell>

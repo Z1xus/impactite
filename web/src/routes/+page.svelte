@@ -66,7 +66,7 @@
 </script>
 
 <svelte:head>
-	<title>Sites · impactite</title>
+	<title>Sites | impactite</title>
 </svelte:head>
 
 <Dialog title="add site" bind:open={adding}>

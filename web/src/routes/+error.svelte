@@ -7,7 +7,7 @@
 </script>
 
 <svelte:head>
-	<title>{page.status === 404 ? "Not found" : "Error"} · impactite</title>
+	<title>{page.status === 404 ? "Not found" : "Error"} | impactite</title>
 </svelte:head>
 
 {#if page.status === 404 && session.me}
