@@ -67,7 +67,7 @@
 							>
 								{#each item.meta as part, i (i)}
 									{#if i}<span class="h-2.5 w-px self-center bg-edge"></span>{/if}
-									<span class="min-w-0 [overflow-wrap:anywhere]">{part}</span>
+									<span class="max-w-full truncate" title={part}>{part}</span>
 								{/each}
 							</span>
 						{/if}
