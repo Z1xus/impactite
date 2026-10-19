@@ -55,7 +55,7 @@
 	})}
 >
 	<code
-		class="min-w-0 flex-1 py-0.5 font-mono text-small leading-5 break-all whitespace-pre-wrap text-cyan"
+		class="min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-small leading-5 whitespace-pre-wrap text-cyan"
 		>{#each parts as part, i (i)}{#if typeof part === "string"}{part}{:else if stage !== "done" && (edits[i]?.typed ?? -1) < 0}<span
 					class={edits[i]?.selected ? "bg-edge text-fg" : ""}>{part.from}</span
 				>{:else}<span class="bg-cyan-night text-fg"
