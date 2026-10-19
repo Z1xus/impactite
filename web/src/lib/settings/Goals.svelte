@@ -1,4 +1,5 @@
 <script lang="ts">
+	import edit from "pixelarticons/svg/pencil.svg?raw";
 	import { collection } from "#lib/collection.svelte.ts";
 	import NewEvents from "./NewEvents.svelte";
 	import { attempt } from "#lib/toast.svelte.ts";
@@ -6,6 +7,7 @@
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
+	import Icon from "#lib/ui/Icon.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
@@ -129,7 +131,6 @@
 	{#snippet actions()}
 		<Button variant="quiet" onclick={() => (adding = true)}>Add goal</Button>
 	{/snippet}
-	<NewEvents bind:this={review} bind:events={suggestions} {domain} changed={goals.load} />
 	<List
 		items={goals.items?.map((goal) => ({
 			key: goal.id,
@@ -147,8 +148,16 @@
 		{#snippet control(key)}
 			{@const goal = goals.items?.find((goal) => goal.id === key)}
 			{#if goal}
-				<Button variant="plain" onclick={() => rename(goal)}>Rename</Button>
+				<Button
+					variant="tool"
+					aria-label="Rename {goal.name}"
+					title="Rename"
+					onclick={() => rename(goal)}
+				>
+					<Icon svg={edit} size={12} />
+				</Button>
 			{/if}
 		{/snippet}
 	</List>
+	<NewEvents bind:this={review} bind:events={suggestions} {domain} changed={goals.load} />
 </Section>

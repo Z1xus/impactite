@@ -1,4 +1,5 @@
 <script lang="ts">
+	import resendIcon from "pixelarticons/svg/reload.svg?raw";
 	import { api } from "#lib/api.ts";
 	import { ask } from "#lib/ask.svelte.ts";
 	import { date } from "#lib/display.svelte.ts";
@@ -9,6 +10,7 @@
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
+	import Icon from "#lib/ui/Icon.svelte";
 	import List from "#lib/ui/List.svelte";
 	import Message from "#lib/ui/Message.svelte";
 	import Section from "#lib/ui/Section.svelte";
@@ -164,7 +166,14 @@
 			{#snippet control(id)}
 				{@const pending = team.invites.find((pending) => pending.id === id)}
 				{#if pending}
-					<Button variant="plain" onclick={() => resend(pending)}>Resend</Button>
+					<Button
+						variant="tool"
+						aria-label="Resend invite to {pending.email}"
+						title="Resend"
+						onclick={() => resend(pending)}
+					>
+						<Icon svg={resendIcon} size={12} />
+					</Button>
 				{/if}
 			{/snippet}
 		</List>

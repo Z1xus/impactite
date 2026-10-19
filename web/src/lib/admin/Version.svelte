@@ -34,7 +34,7 @@
 <Section id="version" label="version">
 	{#snippet actions()}
 		{#if info.update.enabled}
-			<Button variant="plain" busy={checking} onclick={check}>
+			<Button variant="quiet" busy={checking} onclick={check}>
 				{checking ? "Checking…" : "Check now"}
 			</Button>
 		{/if}
@@ -52,7 +52,7 @@
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		</div>
 		<div
-			class="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-4 gap-y-2 rounded-px border border-line bg-panel px-3 py-3 text-body text-fg"
+			class="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-4 gap-y-2 rounded-px bg-raised px-3 py-3 text-body text-fg"
 		>
 			{#each info.update.latest.changes as change (change.version)}
 				{#each change.lines as line, i (i)}
@@ -65,17 +65,25 @@
 		</div>
 		<Note>Run impactite update or pull the new image, then restart.</Note>
 	{:else}
-		<span class="text-body text-fg">impactite {info.version}</span>
-		{#if !info.update.enabled}
-			<Note>Update checks are off.</Note>
-		{:else if info.update.failed}
-			<Note tone="warn">Could not check for updates.</Note>
-		{:else if checked !== null}
-			<Note>
-				Up to date. Checked {date(checked)} at {clock(
-					new Date(checked * 1000).toTimeString().slice(0, 5)
-				)}.
-			</Note>
-		{/if}
+		<ul class="-my-3 flex flex-col divide-y divide-line text-body">
+			<li class="flex items-center justify-between gap-4 py-3">
+				<span class="label">installed</span>
+				<span class="text-fg">impactite {info.version}</span>
+			</li>
+			<li class="flex items-center justify-between gap-4 py-3">
+				<span class="label">updates</span>
+				{#if !info.update.enabled}
+					<span class="text-dim">Off</span>
+				{:else if info.update.failed}
+					<span class="text-warn">Could not check</span>
+				{:else if checked !== null}
+					<span class="text-dim">
+						Up to date, checked {date(checked)} at {clock(
+							new Date(checked * 1000).toTimeString().slice(0, 5)
+						)}
+					</span>
+				{/if}
+			</li>
+		</ul>
 	{/if}
 </Section>
