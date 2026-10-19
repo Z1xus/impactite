@@ -27,8 +27,8 @@ globalThis.matchMedia?.("(prefers-color-scheme: light)").addEventListener("chang
 	if (display.theme === "system") applyTheme("system");
 });
 
-export async function loadDisplay() {
-	const saved = await api<Partial<Display> | null>("/api/app/prefs/display").catch(() => null);
+export function loadDisplay(value: unknown) {
+	const saved = value as Partial<Display> | null | undefined;
 	// a stored value from an older version or a bad write falls back to the default
 	for (const key of Object.keys(choices) as (keyof Display)[])
 		if ((choices[key] as unknown[]).includes(saved?.[key]))

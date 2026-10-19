@@ -1,5 +1,6 @@
 import { current, interval, parse, previous } from "#lib/period.ts";
-import { METRICS, cached } from "#lib/stats.ts";
+import { findSite } from "#lib/session.svelte.ts";
+import { METRICS, cached, hint } from "#lib/stats.ts";
 import { PANELS } from "./panels.ts";
 
 // starts the requests the dashboard makes first, with its default view
@@ -9,6 +10,7 @@ export function warm(domain: string, timezone: string) {
 	const before = previous(view, range);
 	const metrics = METRICS.map((item) => item.key);
 	const ask = (body: Record<string, unknown>) => cached(domain, body).catch(() => {});
+	if (["owner", "admin", "editor"].includes(findSite(domain)?.role ?? "")) hint(domain);
 	ask({ metrics: ["events"], date_range: "all" });
 	ask({ metrics, date_range: range, filters: [] });
 	if (before) ask({ metrics, date_range: before, filters: [] });

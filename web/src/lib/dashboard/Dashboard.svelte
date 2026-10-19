@@ -13,10 +13,12 @@
 	import {
 		METRICS,
 		cached,
+		newEvents,
 		decodeFilter,
 		encodeFilter,
 		toQueryFilters,
-		type Filter
+		type Filter,
+		type NewEvent
 	} from "#lib/stats.ts";
 	import { current, interval, intervals, parse, previous } from "#lib/period.ts";
 	import { downloadCsv } from "./csv.ts";
@@ -102,8 +104,7 @@
 	let editing = $state<Filter | null | undefined>(undefined);
 	let details = $state<{ dim: string; title: string } | null>(null);
 	let reviewing = $state(false);
-	let suggested = $state(false);
-	let newEvents = $state.raw<{ name: string; count: number; revenue: boolean }[]>([]);
+	let unlisted = $state.raw<NewEvent[]>([]);
 	let goals = $state.raw<string[]>([]);
 	let revenue = $state(false);
 	let funnels = $state.raw<Funnel[]>([]);
@@ -188,10 +189,9 @@
 
 	$effect(() => {
 		if (!editable || combined) return;
-		api<{ events: typeof newEvents }>(`/api/app/sites/${domain}/goals/suggestions`)
-			.then((result) => (newEvents = result.events))
-			.catch(() => (newEvents = []))
-			.finally(() => (suggested = true));
+		newEvents(domain)
+			.then((events) => (unlisted = events))
+			.catch(() => (unlisted = []));
 	});
 
 	function loadGoals() {
@@ -216,7 +216,7 @@
 
 	$effect(() => {
 		void version;
-		if (!dates || empty !== false) return;
+		if (!dates || empty) return;
 		const range = dates.current === "30m" ? "day" : dates.current;
 		api<string[]>("/api/app/props", { site_id: domain, date_range: range }).then(
 			(keys) => (propKeys = keys)
@@ -257,10 +257,10 @@
 <Dialog title="new events" bind:open={reviewing}>
 	<NewEvents
 		{domain}
-		bind:events={newEvents}
+		bind:events={unlisted}
 		changed={() => {
 			loadGoals();
-			if (newEvents.length === 0) reviewing = false;
+			if (unlisted.length === 0) reviewing = false;
 		}}
 	/>
 </Dialog>
@@ -386,11 +386,11 @@
 		apply={applyFilters}
 	/>
 
-	{#if editable && !combined && empty === false && newEvents.length}
+	{#if editable && !combined && empty === false && unlisted.length}
 		<Banner
-			text={newEvents.length === 1
-				? `Your site sends ${newEvents[0].name} events, but there's no goal for them yet.`
-				: `Your site sends ${newEvents.length} kinds of events that have no goal yet.`}
+			text={unlisted.length === 1
+				? `Your site sends ${unlisted[0].name} events, but there's no goal for them yet.`
+				: `Your site sends ${unlisted.length} kinds of events that have no goal yet.`}
 		>
 			<Button variant="quiet" onclick={() => (reviewing = true)}>Review</Button>
 		</Banner>
@@ -408,7 +408,7 @@
 		{/key}
 	{:else if failed}
 		<Empty retry={() => checks++} />
-	{:else if ctx && layout.ready && (suggested || !editable || combined)}
+	{:else if ctx && layout.ready}
 		<Overview
 			{ctx}
 			metric={realtime ? "pageviews" : metric}

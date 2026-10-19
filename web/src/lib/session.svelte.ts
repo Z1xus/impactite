@@ -7,16 +7,20 @@ export type State = {
 	setup: boolean;
 	signup: boolean;
 	me: Me | null;
+	prefs: Prefs | null;
 	alias: string | null;
 	sso: string | null;
 	update: string | null;
 };
+
+export type Prefs = Record<string, unknown>;
 
 export const session = $state<{
 	ready: boolean;
 	setup: boolean;
 	signup: boolean;
 	me: Me | null;
+	prefs: Prefs | null;
 	team: number | null;
 	alias: string | null;
 	sso: string | null;
@@ -26,6 +30,7 @@ export const session = $state<{
 	setup: false,
 	signup: false,
 	me: null,
+	prefs: null,
 	team: null,
 	alias: null,
 	sso: null,
@@ -41,13 +46,19 @@ export async function refresh() {
 	session.alias = state.alias;
 	session.sso = state.sso;
 	session.update = state.update;
-	adopt(state.me);
+	adopt(state.me, state.prefs);
 	session.ready = true;
 }
 
-export function adopt(me: Me | null) {
+export function adopt(me: Me | null, prefs: Prefs | null = null) {
 	session.me = me;
-	if (me) loadDisplay();
+	session.prefs = prefs;
+	if (prefs) loadDisplay(prefs.display);
+	else if (me)
+		api<Prefs>("/api/app/prefs").then((all) => {
+			session.prefs = all;
+			loadDisplay(all.display);
+		});
 	const saved = Number(localStorage.getItem("team"));
 	const teams = me?.teams ?? [];
 	session.team = teams.find((team) => team.id === saved)?.id ?? teams[0]?.id ?? null;

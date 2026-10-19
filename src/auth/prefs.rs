@@ -12,7 +12,13 @@ use crate::auth::accounts::Viewer;
 use crate::web::{Error, Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
-	Router::new().route("/api/app/prefs/{key}", get(read).put(write))
+	Router::new()
+		.route("/api/app/prefs", get(all))
+		.route("/api/app/prefs/{key}", get(read).put(write))
+}
+
+async fn all(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
+	Ok(Json(web.app.prefs(viewer.user)?))
 }
 
 async fn read(State(web): State<Arc<Web>>, viewer: Viewer, Path(key): Path<String>) -> Reply {
@@ -39,6 +45,22 @@ async fn write(
 }
 
 impl App {
+	pub fn prefs(&self, user: i64) -> rusqlite::Result<Value> {
+		let conn = self.conn();
+		let mut statement = conn.prepare("select key, value from prefs where user = ?1")?;
+		let rows = statement.query_map(params![user], |row| {
+			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+		})?;
+		let mut all = serde_json::Map::new();
+		for row in rows {
+			let (key, text) = row?;
+			if let Ok(value) = serde_json::from_str(&text) {
+				all.insert(key, value);
+			}
+		}
+		Ok(Value::Object(all))
+	}
+
 	fn pref(&self, user: i64, key: &str) -> rusqlite::Result<Option<Value>> {
 		let text: Option<String> = self
 			.conn()

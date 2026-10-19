@@ -75,6 +75,27 @@ export function cached(site: string, body: Record<string, unknown>, imports = tr
 	return reply;
 }
 
+export type NewEvent = { name: string; count: number; revenue: boolean };
+
+const hints = new Map<string, { at: number; reply: Promise<NewEvent[]> }>();
+
+const events = (site: string) =>
+	api<{ events: NewEvent[] }>(`/api/app/sites/${site}/goals/suggestions`).then(
+		(result) => result.events
+	);
+
+export function hint(site: string) {
+	hints.set(site, { at: Date.now(), reply: events(site) });
+	hints.get(site)?.reply.catch(() => hints.delete(site));
+}
+
+// a hovered site's suggestions are used once, so goals changed in between never show stale
+export function newEvents(site: string) {
+	const hit = hints.get(site);
+	hints.delete(site);
+	return hit && Date.now() - hit.at < FRESH ? hit.reply : events(site);
+}
+
 const escape = (value: string) => value.replaceAll("%", "%25").replaceAll("~", "%7E");
 const unescape = (value: string) => value.replaceAll("%7E", "~").replaceAll("%25", "%");
 

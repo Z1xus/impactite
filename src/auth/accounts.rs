@@ -72,13 +72,14 @@ pub fn app_state(web: &Web, headers: &HeaderMap) -> Value {
 	let user = cookie(headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let setup = web.app.users_exist().is_ok_and(|exists| !exists);
 	let me = user.and_then(|user| web.app.me(user).ok());
+	let prefs = user.and_then(|user| web.app.prefs(user).ok());
 	let update = me.as_ref().filter(|me| me["admin"] == true).and_then(|_| {
 		lock(&web.updates)
 			.latest
 			.as_ref()
 			.map(|latest| latest["version"].clone())
 	});
-	json!({ "setup": setup, "signup": web.app.signup_open(), "me": me, "alias": web.alias,
+	json!({ "setup": setup, "signup": web.app.signup_open(), "me": me, "prefs": prefs, "alias": web.alias,
 	"sso": web.sso.as_ref().map(|provider| &provider.name), "update": update })
 }
 

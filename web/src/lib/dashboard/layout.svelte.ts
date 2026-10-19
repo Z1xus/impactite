@@ -1,4 +1,5 @@
 import { api } from "#lib/api.ts";
+import { session } from "#lib/session.svelte.ts";
 
 type Saved = { order: string[]; hidden: string[]; table: boolean };
 
@@ -6,28 +7,21 @@ const list = (value: unknown) =>
 	Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 
 export function createLayout(domain: () => string, readonly: () => boolean) {
-	let saved = $state<Saved>({ order: [], hidden: [], table: false });
-	let arranging = $state(false);
-	let ready = $state(false);
-
-	$effect(() => {
-		if (readonly()) {
-			ready = true;
-			return;
-		}
-		api<Partial<Saved> | null>(`/api/app/prefs/layout:${domain()}`).then((value) => {
-			saved = {
-				order: list(value?.order),
-				hidden: list(value?.hidden),
-				table: value?.table === true
-			};
-			ready = true;
-		});
+	const key = () => `layout:${domain()}`;
+	const saved = $derived.by<Saved>(() => {
+		const value = session.prefs?.[key()] as Partial<Saved> | null | undefined;
+		return {
+			order: list(value?.order),
+			hidden: list(value?.hidden),
+			table: value?.table === true
+		};
 	});
+	let arranging = $state(false);
 
 	function save(next: Saved) {
-		saved = next;
-		if (!readonly()) api(`/api/app/prefs/layout:${domain()}`, next, "PUT");
+		if (readonly() || !session.prefs) return;
+		session.prefs[key()] = next;
+		api(`/api/app/prefs/${key()}`, next, "PUT");
 	}
 
 	return {
@@ -41,7 +35,7 @@ export function createLayout(domain: () => string, readonly: () => boolean) {
 			return saved.table;
 		},
 		get ready() {
-			return ready;
+			return readonly() || session.prefs !== null;
 		},
 		get arranging() {
 			return arranging;
