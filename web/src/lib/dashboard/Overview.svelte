@@ -136,14 +136,12 @@
 	{#if ctx.dates.choices.length > 1}
 		<Select
 			align="left"
-			plain
 			value={ctx.dates.interval}
 			options={ctx.dates.choices.map((key) => ({ key, label: key }))}
 			pick={setGrain}
 		/>
 	{/if}
 	<Toggle
-		plain
 		bind:value={
 			() => (table ? "table" : "chart"),
 			(view: "chart" | "table") => setTable(view === "table")

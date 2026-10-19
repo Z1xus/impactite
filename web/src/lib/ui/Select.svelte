@@ -17,6 +17,7 @@
 		align = "left",
 		label,
 		plain = false,
+		title = false,
 		footer
 	}: {
 		value: T;
@@ -28,6 +29,7 @@
 		align?: "left" | "right";
 		label?: string;
 		plain?: boolean;
+		title?: boolean;
 		footer?: { label: string; href: string; icon: string };
 	} = $props();
 
@@ -116,7 +118,7 @@
 		bind:this={trigger}
 		type="button"
 		class="flex h-control items-center gap-2 rounded-px px-3 whitespace-nowrap {plain
-			? 'font-sans text-body text-dim hover:bg-raised hover:text-fg'
+			? `font-sans hover:bg-raised hover:text-fg ${title ? 'text-title font-medium text-fg' : 'text-body text-dim'}`
 			: `border border-control ${text} text-fg hover:border-dim`}"
 		aria-haspopup="listbox"
 		aria-expanded={open}
@@ -182,7 +184,7 @@
 					<a
 						href={footer.href}
 						class="flex h-control items-center gap-2 px-3 text-body text-dim hover:bg-line hover:text-fg"
-						><Icon svg={footer.icon} size={14} />{footer.label}</a
+						><Icon svg={footer.icon} size={12} />{footer.label}</a
 					>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				</div>

@@ -3,13 +3,11 @@
 	let {
 		value = $bindable(),
 		options,
-		label,
-		plain = false
+		label
 	}: {
 		value: T;
 		options: { key: T; label: string }[];
 		label?: string;
-		plain?: boolean;
 	} = $props();
 
 	function move(event: KeyboardEvent, at: number) {
@@ -29,9 +27,7 @@
 		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<div
-		class="flex h-control w-fit max-w-full shrink-0 [scrollbar-width:none] overflow-x-auto rounded-px {plain
-			? ''
-			: 'ring-1 ring-control ring-inset'}"
+		class="flex h-control w-fit max-w-full shrink-0 [scrollbar-width:none] overflow-x-auto rounded-px ring-1 ring-control ring-inset"
 		role="radiogroup"
 		aria-label={label}
 	>

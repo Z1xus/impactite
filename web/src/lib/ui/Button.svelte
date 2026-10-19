@@ -18,7 +18,7 @@
 
 	const variants = {
 		primary:
-			"h-control border border-cyan bg-cyan px-4 text-ink enabled:hover:border-fg enabled:hover:bg-fg",
+			"h-control border border-cyan bg-cyan px-4 text-ink enabled:hover:border-fg enabled:hover:bg-fg disabled:border-edge disabled:bg-raised disabled:text-faint disabled:opacity-100",
 		quiet: "h-control border border-edge px-3 text-fg enabled:hover:border-dim",
 		danger: "h-control border border-bad/50 px-3 text-bad enabled:hover:border-bad enabled:hover:bg-bad/10",
 		icon: "size-control border border-edge text-dim enabled:hover:border-dim enabled:hover:text-fg",

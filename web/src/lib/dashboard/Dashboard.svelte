@@ -303,6 +303,7 @@
 				options={sites}
 				data
 				plain
+				title
 				footer={editable
 					? {
 							label: "Site settings",
@@ -325,7 +326,7 @@
 				>
 			{:else if empty === false}
 				<Button variant="plain" onclick={() => (editing = null)}
-					><Icon svg={funnel} size={14} />Filter</Button
+					><Icon svg={funnel} size={12} />Filter</Button
 				>
 				{#if view}
 					<Period {view} {go} />
