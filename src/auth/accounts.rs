@@ -68,8 +68,8 @@ struct Setup {
 	passkey: Option<Proof>,
 }
 
-async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
-	let user = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
+pub fn app_state(web: &Web, headers: &HeaderMap) -> Value {
+	let user = cookie(headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let setup = web.app.users_exist().is_ok_and(|exists| !exists);
 	let me = user.and_then(|user| web.app.me(user).ok());
 	let update = me.as_ref().filter(|me| me["admin"] == true).and_then(|_| {
@@ -78,11 +78,12 @@ async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 			.as_ref()
 			.map(|latest| latest["version"].clone())
 	});
-	Json(
-		json!({ "setup": setup, "signup": web.app.signup_open(), "me": me, "alias": web.alias,
-		"sso": web.sso.as_ref().map(|provider| &provider.name), "update": update }),
-	)
-	.into_response()
+	json!({ "setup": setup, "signup": web.app.signup_open(), "me": me, "alias": web.alias,
+	"sso": web.sso.as_ref().map(|provider| &provider.name), "update": update })
+}
+
+async fn state(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
+	Json(app_state(&web, &headers)).into_response()
 }
 
 async fn setup(

@@ -1,6 +1,12 @@
+use std::sync::Arc;
+
+use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
+
+use crate::auth::accounts::app_state;
+use crate::web::Web;
 
 #[derive(RustEmbed)]
 #[folder = "web/build"]
@@ -8,7 +14,7 @@ use rust_embed::RustEmbed;
 #[allow_missing = true]
 struct Assets;
 
-pub async fn serve(uri: Uri, headers: HeaderMap) -> Response {
+pub async fn serve(State(web): State<Arc<Web>>, uri: Uri, headers: HeaderMap) -> Response {
 	let requested = uri.path().trim_start_matches('/');
 	if requested.starts_with("api/") {
 		return StatusCode::NOT_FOUND.into_response();
@@ -21,6 +27,10 @@ pub async fn serve(uri: Uri, headers: HeaderMap) -> Response {
 	let Some(file) = Assets::get(path) else {
 		return (StatusCode::NOT_FOUND, "dashboard not built").into_response();
 	};
+
+	if path == "index.html" {
+		return page(&file.data, &web, &headers);
+	}
 
 	let brotli = headers
 		.get(header::ACCEPT_ENCODING)
@@ -88,6 +98,24 @@ pub fn share_page(head: &str) -> Response {
 			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
 			(header::CACHE_CONTROL, "no-cache"),
 			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+			(header::REFERRER_POLICY, "same-origin"),
+		],
+		html,
+	)
+		.into_response()
+}
+
+// the session rides along with the page, so the app needs no request to start
+fn page(html: &[u8], web: &Web, headers: &HeaderMap) -> Response {
+	let state = app_state(web, headers).to_string().replace('<', "\\u003c");
+	let script = format!("<script>window.early=Promise.resolve({state})</script>");
+	let html = String::from_utf8_lossy(html).replacen("<head>", &format!("<head>{script}"), 1);
+	(
+		[
+			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
+			(header::CACHE_CONTROL, "private, no-cache"),
+			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+			(header::X_FRAME_OPTIONS, "DENY"),
 			(header::REFERRER_POLICY, "same-origin"),
 		],
 		html,

@@ -67,14 +67,14 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/api/app/export", post(export::export))
 				.route("/api/app/icon/{host}", get(icons::icon))
 				.route("/counter/{*file}", get(counter::counter))
-				.with_state(web),
+				.with_state(web.clone()),
 		)
-		.merge(scripts)
-		.fallback(assets::serve);
+		.merge(scripts);
 	let batch = Router::new()
 		.route("/api/app/batch", post(batch::batch))
 		.with_state(app.clone());
 	app.merge(batch)
+		.merge(Router::new().fallback(assets::serve).with_state(web))
 }
 
 async fn preflight() -> Response {

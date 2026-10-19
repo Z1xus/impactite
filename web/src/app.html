@@ -31,8 +31,8 @@
 			} catch {}
 		</script>
 		<script>
-			// the session starts loading with the page, not after the scripts
-			window.early = fetch("/api/app/state").then((res) => res.json());
+			// the server inlines the session, the dev server does not
+			window.early ??= fetch("/api/app/state").then((res) => res.json());
 		</script>
 		%sveltekit.head%
 	</head>
