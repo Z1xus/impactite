@@ -74,10 +74,12 @@
 					class="pointer-events-none relative flex h-full min-w-0 flex-1 items-center justify-between gap-4"
 				>
 					<span
-						class="absolute inset-y-1 left-0 rounded-px dither opacity-85 transition-[width] duration-300 ease-out motion-reduce:transition-none"
-						style:width="{(row.value / max) * 100}%"
-					></span>
-					<span class="relative flex min-w-0 items-center gap-1.5 pl-2">
+						class="relative isolate flex h-full min-w-0 flex-1 items-center gap-1.5 pl-2"
+					>
+						<span
+							class="bar absolute inset-y-1 left-0 -z-10 rounded-px transition-[width] duration-300 ease-out motion-reduce:transition-none"
+							style:width="{(row.value / max) * 100}%"
+						></span>
 						<span class="truncate text-body text-fg">{row.label}</span>
 						{#if row.note}
 							<span class="min-w-0 shrink-[2] truncate text-small text-dim"

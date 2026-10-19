@@ -189,6 +189,23 @@
 	background-size: 4px 4px;
 }
 
+@utility bar {
+	overflow: hidden;
+	background-color: color-mix(in srgb, var(--color-bar) 50%, var(--color-panel));
+	&::after {
+		content: "";
+		position: absolute;
+		inset-block: 0;
+		right: 0;
+		width: 4px;
+		background-color: var(--color-bar);
+		background-image:
+			linear-gradient(45deg, var(--color-panel) 25%, transparent 25%),
+			linear-gradient(-45deg, var(--color-panel) 25%, transparent 25%);
+		background-size: 4px 4px;
+	}
+}
+
 @utility pixelated {
 	image-rendering: pixelated;
 }
