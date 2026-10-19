@@ -93,7 +93,7 @@
 
 <div class="min-h-dvh">
 	<header class="relative z-40 border-b border-line [view-transition-name:shell]">
-		<div class="mx-auto flex h-14 max-w-6xl items-center gap-2 gutter sm:gap-3">
+		<div class="mx-auto flex h-14 max-w-page items-center gap-2 gutter sm:gap-3">
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
 				href={session.me ? resolve("/") : page.url.pathname}
@@ -125,7 +125,7 @@
 		</div>
 	</header>
 	<main
-		class="mx-auto max-w-6xl gutter py-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-8 sm:pb-[max(2rem,env(safe-area-inset-bottom))]"
+		class="mx-auto max-w-page gutter py-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-8 sm:pb-[max(2rem,env(safe-area-inset-bottom))]"
 	>
 		{@render children()}
 	</main>

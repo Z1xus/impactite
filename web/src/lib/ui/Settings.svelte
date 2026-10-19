@@ -85,7 +85,7 @@
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{/each}
 		</nav>
-		<div class="flex flex-col gap-6">
+		<div class="flex max-w-form flex-col gap-6">
 			{#if retry}
 				<Section {label}>
 					<Empty compact {retry} />

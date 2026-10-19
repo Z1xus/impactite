@@ -41,6 +41,8 @@
 
 	--radius-px: 2px;
 	--spacing-control: 36px;
+	--container-page: 93rem;
+	--container-form: 48rem;
 }
 
 @layer base {
