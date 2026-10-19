@@ -33,9 +33,9 @@
 
 <dialog
 	bind:this={dialog}
-	class="mx-auto mt-[15dvh] mb-auto {wide
-		? 'w-[min(60rem,calc(100vw-2rem))]'
-		: 'w-[min(32rem,calc(100vw-2rem))]'} overflow-visible rounded-px border border-edge bg-raised p-0 text-fg backdrop:bg-ink/70"
+	class="mx-auto mt-4 mb-auto max-h-[calc(100dvh-2rem)] [@media(min-height:700px)]:mt-[15dvh] [@media(min-height:700px)]:max-h-[calc(85dvh-1rem)] {wide
+		? 'w-[min(60rem,calc(100vw-1.5rem))]'
+		: 'w-[min(32rem,calc(100vw-1.5rem))]'} overflow-y-auto overscroll-contain rounded-px border border-edge bg-raised p-0 text-fg backdrop:bg-ink/70"
 	aria-labelledby="{id}-title"
 	onclose={() => {
 		open = false;
@@ -45,7 +45,7 @@
 >
 	{#if mounted}
 		<header
-			class="relative flex h-13 items-center justify-between gap-4 border-b border-edge px-5"
+			class="sticky top-0 z-10 flex h-13 items-center justify-between gap-4 border-b border-edge bg-raised px-4 sm:px-5"
 		>
 			<h2 id="{id}-title" class="label text-fg">{title}</h2>
 			<button
@@ -59,7 +59,7 @@
 			</button>
 			<span class="rule"></span>
 		</header>
-		<div class="p-5">
+		<div class="p-4 sm:p-5">
 			{@render children()}
 		</div>
 	{/if}

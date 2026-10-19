@@ -37,7 +37,8 @@
 				role="radio"
 				aria-checked={value === option.key}
 				tabindex={value === option.key ? 0 : -1}
-				class="shrink-0 rounded-px px-3 font-sans text-body text-dim {value === option.key
+				class="shrink-0 rounded-px px-2.5 font-sans text-body text-dim sm:px-3 {value ===
+				option.key
 					? 'bg-edge text-fg'
 					: 'hover:text-fg'}"
 				onclick={() => (value = option.key)}

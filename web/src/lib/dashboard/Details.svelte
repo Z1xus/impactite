@@ -157,7 +157,7 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<div class="w-72">
+	<div class="w-full sm:w-72">
 		<Field label="search" bind:value={search} />
 	</div>
 	<div class="max-h-[60vh] [scrollbar-gutter:stable] overflow-y-auto pr-2">

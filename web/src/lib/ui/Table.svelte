@@ -29,7 +29,7 @@
 	<table class="w-full border-collapse text-left">
 		<thead>
 			<tr class="border-b border-line">
-				<th class="w-full min-w-24 py-2 pr-4 font-normal"></th>
+				<th class="w-full min-w-36 py-2 pr-4 font-normal"></th>
 				{#each columns as column (column.key)}
 					<th class="py-2 pl-4 text-right font-normal whitespace-nowrap">
 						<button
@@ -61,7 +61,7 @@
 			{:else}
 				{#each rows as row (row.key)}
 					<tr class="group border-b border-line/60 last:border-0">
-						<td class="w-full max-w-0 min-w-24 py-2 pr-4">
+						<td class="w-full max-w-0 min-w-36 py-2 pr-4 pointer-coarse:py-3">
 							<button
 								type="button"
 								class="flex w-full min-w-0 items-center gap-2.5 text-left"
