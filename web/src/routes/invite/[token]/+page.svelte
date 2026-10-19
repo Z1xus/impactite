@@ -49,6 +49,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Join · impactite</title>
+</svelte:head>
+
 <Gate>
 	{#if failed}
 		<Message tone="bad">{failed}</Message>

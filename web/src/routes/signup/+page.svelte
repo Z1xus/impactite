@@ -7,6 +7,10 @@
 	import Message from "#lib/ui/Message.svelte";
 </script>
 
+<svelte:head>
+	<title>Sign up · impactite</title>
+</svelte:head>
+
 <Gate>
 	{#if session.signup}
 		<NewAccount />

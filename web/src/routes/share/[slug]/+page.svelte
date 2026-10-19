@@ -55,6 +55,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{share?.name ?? "Dashboard"} · impactite</title>
+</svelte:head>
+
 {#if share}
 	{#if embed}
 		<div class="p-4">

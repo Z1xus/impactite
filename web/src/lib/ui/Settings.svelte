@@ -9,6 +9,7 @@
 	import Skeleton from "./Skeleton.svelte";
 
 	let {
+		context,
 		sections,
 		current,
 		title,
@@ -16,6 +17,7 @@
 		retry,
 		children
 	}: {
+		context: string;
 		sections: {
 			id: string;
 			label: string;
@@ -30,7 +32,13 @@
 		retry?: () => unknown;
 		children: Snippet;
 	} = $props();
+
+	const label = $derived(sections.find((section) => section.id === current)?.label ?? "");
 </script>
+
+<svelte:head>
+	<title>{sentence(label)} · {context} · impactite</title>
+</svelte:head>
 
 <div class="flex flex-col gap-8">
 	<div class="flex min-h-control items-center gap-3">
@@ -63,16 +71,14 @@
 				<a
 					href={section.href}
 					aria-current={active ? "page" : undefined}
-					class="flex h-control shrink-0 items-center gap-2.5 rounded-px px-3 font-sans text-body hover:bg-raised {active
-						? 'bg-raised'
-						: ''} {section.danger ? 'text-bad' : active ? 'text-fg' : 'hover:text-fg'}"
+					class="flex h-control shrink-0 items-center gap-2.5 rounded-px px-3 font-sans text-body hover:bg-raised {section.danger
+						? 'text-bad'
+						: active
+							? 'text-cyan'
+							: 'hover:text-fg'}"
 				>
 					{#if section.icon}
-						<Icon
-							svg={section.icon}
-							size={12}
-							class={active && !section.danger ? "text-cyan" : ""}
-						/>
+						<Icon svg={section.icon} size={12} />
 					{/if}
 					{sentence(section.label)}
 				</a>
@@ -81,11 +87,11 @@
 		</nav>
 		<div class="flex max-w-3xl flex-col gap-6">
 			{#if retry}
-				<Section label={sections.find((section) => section.id === current)?.label ?? ""}>
+				<Section {label}>
 					<Empty compact {retry} />
 				</Section>
 			{:else if loading}
-				<Section label={sections.find((section) => section.id === current)?.label ?? ""}>
+				<Section {label}>
 					<Skeleton class="h-control w-full" />
 				</Section>
 			{:else}

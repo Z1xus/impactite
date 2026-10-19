@@ -10,6 +10,10 @@
 	const site = $derived(findSite(domain));
 </script>
 
+<svelte:head>
+	<title>{domain} · impactite</title>
+</svelte:head>
+
 <Shell>
 	{#if site}
 		{#key domain}

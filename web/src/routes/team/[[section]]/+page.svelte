@@ -53,7 +53,13 @@
 	{#if current && !sections.some((item) => item.id === section)}
 		<Missing text="This settings page doesn't exist." />
 	{:else}
-		<Settings {sections} current={section} loading={!team} retry={failed ? load : undefined}>
+		<Settings
+			context={team?.name ?? current?.name ?? "Team"}
+			{sections}
+			current={section}
+			loading={!team}
+			retry={failed ? load : undefined}
+		>
 			{#snippet title()}
 				<Title>
 					{#if current}

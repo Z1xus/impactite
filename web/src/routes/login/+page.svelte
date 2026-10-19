@@ -80,6 +80,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Sign in · impactite</title>
+</svelte:head>
+
 <Gate>
 	<div class="flex flex-col gap-3" bind:this={panel}>
 		{#if ssoError}

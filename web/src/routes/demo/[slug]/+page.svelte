@@ -26,6 +26,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Demo · impactite</title>
+</svelte:head>
+
 <Gate>
 	<div bind:this={panel}>
 		<Form block action="Open demo" submit={enter} />

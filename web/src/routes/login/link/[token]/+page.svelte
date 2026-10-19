@@ -24,6 +24,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Sign in · impactite</title>
+</svelte:head>
+
 <Gate>
 	<div class="flex flex-col items-center gap-4">
 		<Message tone={error ? "bad" : "dim"}>{error || "Signing you in."}</Message>

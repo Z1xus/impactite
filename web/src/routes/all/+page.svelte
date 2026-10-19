@@ -8,6 +8,10 @@
 	const team = $derived(currentTeam());
 </script>
 
+<svelte:head>
+	<title>All sites · impactite</title>
+</svelte:head>
+
 <Shell>
 	{#if team?.sites.length}
 		{#key team.id}

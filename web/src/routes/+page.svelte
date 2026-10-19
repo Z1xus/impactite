@@ -74,6 +74,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Sites · impactite</title>
+</svelte:head>
+
 <Dialog title="add site" bind:open={adding}>
 	<Form action="Add site" submit={add}>
 		<Field label="domain" placeholder="example.com" bind:value={domain} required />

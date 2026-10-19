@@ -7,6 +7,10 @@
 	const token = page.url.searchParams.get("token") ?? "";
 </script>
 
+<svelte:head>
+	<title>Set up · impactite</title>
+</svelte:head>
+
 <Gate>
 	{#if token}
 		<NewAccount {token} />

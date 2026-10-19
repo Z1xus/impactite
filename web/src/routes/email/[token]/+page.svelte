@@ -25,6 +25,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Confirm email · impactite</title>
+</svelte:head>
+
 <Gate>
 	<div class="flex flex-col items-center gap-4">
 		<Message tone={failed ? "bad" : result ? "cyan" : "dim"}

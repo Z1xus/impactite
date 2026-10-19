@@ -36,6 +36,7 @@
 		<Missing text="This settings page doesn't exist." />
 	{:else}
 		<Settings
+			context="Instance"
 			{sections}
 			current={section}
 			loading={!admin.info}
