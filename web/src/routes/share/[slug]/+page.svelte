@@ -8,8 +8,7 @@
 	import Gate from "#lib/ui/Gate.svelte";
 	import Shell from "#lib/ui/Shell.svelte";
 	import { query } from "#lib/stats.ts";
-
-	type Share = { domain: string; timezone: string; name: string; token: string };
+	import type { Share } from "#lib/session.svelte.ts";
 
 	const slug = $derived(page.params.slug ?? "");
 	const embed = $derived(page.url.searchParams.get("embed") === "true");
@@ -34,6 +33,13 @@
 	}
 
 	$effect(() => {
+		const early = window.opened;
+		window.opened = undefined;
+		if (early) {
+			access.share = early.token;
+			share = early;
+			return;
+		}
 		const key = `share:${slug}`;
 		const saved: Share | null = JSON.parse(sessionStorage.getItem(key) ?? "null");
 		if (!saved) return open();

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use argon2::{Argon2, PasswordVerifier};
 use axum::extract::{FromRequestParts, Path, State};
-use axum::http::StatusCode;
 use axum::http::request::Parts;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
@@ -92,6 +92,15 @@ pub struct Share {
 }
 
 impl Share {
+	fn opened(&self) -> Value {
+		json!({
+			"domain": self.domain,
+			"timezone": self.timezone,
+			"name": self.name,
+			"token": format!("{}.{}", self.slug, self.grant()),
+		})
+	}
+
 	// changes with the password, so a new password locks out old links
 	fn grant(&self) -> String {
 		if self.password.is_empty() {
@@ -157,7 +166,15 @@ fn change(now: u64, then: u64) -> Option<i64> {
 	(then > 0).then(|| ((now as f64 - then as f64) / then as f64 * 100.0).round() as i64)
 }
 
-async fn page(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response {
+async fn page(
+	State(web): State<Arc<Web>>,
+	Path(slug): Path<String>,
+	headers: HeaderMap,
+) -> Response {
+	let opened = match web.app.share(&slug) {
+		Ok(Some(share)) if share.password.is_empty() => Some(share.opened()),
+		_ => None,
+	};
 	let head = match web.app.share(&slug) {
 		Ok(Some(share)) if share.password.is_empty() => month(&web, &share)
 			.map(|(now, then, _)| {
@@ -188,7 +205,7 @@ async fn page(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response
 			.unwrap_or_default(),
 		_ => String::new(),
 	};
-	crate::assets::share_page(&head)
+	crate::assets::page(&web, &headers, Some((&head, opened)))
 }
 
 async fn card(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response {
@@ -305,13 +322,7 @@ async fn open(
 				.into_response());
 		}
 	}
-	Ok(Json(json!({
-		"domain": share.domain,
-		"timezone": share.timezone,
-		"name": share.name,
-		"token": format!("{}.{}", share.slug, share.grant()),
-	}))
-	.into_response())
+	Ok(Json(share.opened()).into_response())
 }
 
 fn respond(web: &Web, site: u64) -> Reply {

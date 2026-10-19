@@ -4,6 +4,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
+use serde_json::Value;
 
 use crate::auth::accounts::app_state;
 use crate::web::Web;
@@ -29,7 +30,7 @@ pub async fn serve(State(web): State<Arc<Web>>, uri: Uri, headers: HeaderMap) ->
 	};
 
 	if path == "index.html" {
-		return page(&file.data, &web, &headers);
+		return page(&web, &headers, None);
 	}
 
 	let brotli = headers
@@ -38,10 +39,10 @@ pub async fn serve(State(web): State<Arc<Web>>, uri: Uri, headers: HeaderMap) ->
 		.is_some_and(|value| value.contains("br"))
 		.then(|| Assets::get(&format!("{path}.br")))
 		.flatten();
-	let cache = if path.starts_with("_app/immutable/") {
-		"public, max-age=31536000, immutable"
-	} else {
-		"no-cache"
+	let cache = match path {
+		_ if path.starts_with("_app/immutable/") => "public, max-age=31536000, immutable",
+		"_app/version.json" => "no-cache",
+		_ => "public, max-age=86400",
 	};
 
 	let mut response = match brotli {
@@ -86,39 +87,39 @@ fn kind(path: &str) -> &'static str {
 	}
 }
 
-// a share link's page: other sites may frame it for embeds, and a public one carries preview tags
-pub fn share_page(head: &str) -> Response {
+// the session rides along with the page, so the app needs no request to start
+pub fn page(web: &Web, headers: &HeaderMap, share: Option<(&str, Option<Value>)>) -> Response {
 	let Some(file) = Assets::get("index.html") else {
 		return (StatusCode::NOT_FOUND, "dashboard not built").into_response();
 	};
-	let html =
-		String::from_utf8_lossy(&file.data).replacen("</head>", &format!("{head}</head>"), 1);
-	(
-		[
-			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
-			(header::CACHE_CONTROL, "no-cache"),
-			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
-			(header::REFERRER_POLICY, "same-origin"),
-		],
-		html,
-	)
-		.into_response()
-}
-
-// the session rides along with the page, so the app needs no request to start
-fn page(html: &[u8], web: &Web, headers: &HeaderMap) -> Response {
-	let state = app_state(web, headers).to_string().replace('<', "\\u003c");
-	let script = format!("<script>window.early=Promise.resolve({state})</script>");
-	let html = String::from_utf8_lossy(html).replacen("<head>", &format!("<head>{script}"), 1);
-	(
+	let inline = |value: Value| value.to_string().replace('<', "\\u003c");
+	let mut start = format!(
+		"<script>window.early=Promise.resolve({})</script>",
+		inline(app_state(web, headers))
+	);
+	let mut html = String::from_utf8_lossy(&file.data).into_owned();
+	let framed = share.is_some();
+	// other sites may frame a share link for embeds, and a public one carries preview tags
+	if let Some((head, opened)) = share {
+		if let Some(opened) = opened {
+			start += &format!("<script>window.opened={}</script>", inline(opened));
+		}
+		html = html.replacen("</head>", &format!("{head}</head>"), 1);
+	}
+	let mut response = (
 		[
 			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
 			(header::CACHE_CONTROL, "private, no-cache"),
 			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
-			(header::X_FRAME_OPTIONS, "DENY"),
 			(header::REFERRER_POLICY, "same-origin"),
 		],
-		html,
+		html.replacen("<head>", &format!("<head>{start}"), 1),
 	)
-		.into_response()
+		.into_response();
+	if !framed {
+		response
+			.headers_mut()
+			.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+	}
+	response
 }

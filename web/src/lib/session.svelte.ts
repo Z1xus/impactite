@@ -1,6 +1,8 @@
 import { api, type Me, type Team } from "./api";
 import { loadDisplay } from "./display.svelte.ts";
 
+export type Share = { domain: string; timezone: string; name: string; token: string };
+
 export type State = {
 	setup: boolean;
 	signup: boolean;
