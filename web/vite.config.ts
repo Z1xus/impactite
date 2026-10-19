@@ -14,7 +14,9 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes("node_modules") ? undefined : true
 			},
-			adapter: adapter({ fallback: "index.html", precompress: true })
+			adapter: adapter({ fallback: "index.html", precompress: true }),
+			output: { bundleStrategy: "single" },
+			inlineStyleThreshold: 30_000
 		})
 	]
 });

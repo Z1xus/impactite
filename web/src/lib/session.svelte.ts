@@ -1,6 +1,15 @@
 import { api, type Me, type Team } from "./api";
 import { loadDisplay } from "./display.svelte.ts";
 
+export type State = {
+	setup: boolean;
+	signup: boolean;
+	me: Me | null;
+	alias: string | null;
+	sso: string | null;
+	update: string | null;
+};
+
 export const session = $state<{
 	ready: boolean;
 	setup: boolean;
@@ -22,14 +31,9 @@ export const session = $state<{
 });
 
 export async function refresh() {
-	const state = await api<{
-		setup: boolean;
-		signup: boolean;
-		me: Me | null;
-		alias: string | null;
-		sso: string | null;
-		update: string | null;
-	}>("/api/app/state");
+	const early = window.early;
+	window.early = undefined;
+	const state = (await early?.catch(() => null)) ?? (await api<State>("/api/app/state"));
 	session.setup = state.setup;
 	session.signup = state.signup;
 	session.alias = state.alias;
