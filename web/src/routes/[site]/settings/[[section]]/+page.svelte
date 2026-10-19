@@ -49,7 +49,7 @@
 			{ id: "goals", label: "goals", icon: target, group: "measure" },
 			{ id: "funnels", label: "funnels", icon: filter, group: "measure" },
 			{ id: "segments", label: "segments", icon: bookmark, group: "measure" },
-			{ id: "imports", label: "data", icon: download, group: "measure" },
+			{ id: "data", label: "data", icon: download, group: "measure" },
 			{ id: "search-console", label: "search console", icon: search, group: "measure" },
 			{ id: "sharing", label: "sharing", icon: share, group: "share" },
 			{ id: "reports", label: "reports", icon: mail, group: "share" },
@@ -94,7 +94,7 @@
 						<Funnels {domain} />
 					{:else if section === "segments"}
 						<Segments {domain} {owner} />
-					{:else if section === "imports"}
+					{:else if section === "data"}
 						<Data {domain} />
 					{:else if section === "search-console"}
 						<SearchConsole {domain} />

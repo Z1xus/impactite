@@ -398,7 +398,7 @@ async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Reply<Resp
 		.app
 		.site_domain(site)?
 		.ok_or_else(|| Error::not_found("Site not found."))?;
-	let back = format!("/{domain}/settings/imports");
+	let back = format!("/{domain}/settings/data");
 	if let (Some(code), None, Some(client)) = (query.code, query.error, &web.google)
 		&& let Some(body) = exchange(web, client, &code).await
 	{

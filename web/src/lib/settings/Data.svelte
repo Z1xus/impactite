@@ -86,7 +86,7 @@
 		});
 </script>
 
-<Section id="imports" label="data">
+<Section id="data" label="data">
 	<div class="flex flex-col gap-3">
 		<span class="text-body text-fg">Export data</span>
 		<Note>Export collected events from all dates. Imported summaries are not included.</Note>
