@@ -44,4 +44,7 @@
 			<dd class="font-mono text-num">{count(room)}x</dd>
 		</div>
 	</dl>
+	<p class="border-t border-line pt-5 text-body">
+		{core < 5 ? "No. One small server is enough." : "Still one server. Give it more cores."}
+	</p>
 </div>

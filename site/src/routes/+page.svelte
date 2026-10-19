@@ -177,14 +177,18 @@
 			</p>
 		</section>
 
-		<Section id="scale" title="One server is enough.">
+		<Section
+			id="scale"
+			title="Do you really need Kubernetes?"
+			note="Set your monthly pageviews to see the load on one server."
+		>
 			<Scale cpu={stat("cpu for 1M pageviews")} rate={stat("pageviews per second")} />
 		</Section>
 
 		<Section
 			id="compatible"
-			title="Keep your snippets."
-			note="Change the host. Old snippets, custom events and API calls keep working."
+			title="Migrating from Plausible or GoatCounter?"
+			note="Just change the host in your script. Your old snippets, custom events and API calls keep working."
 		>
 			<div class="flex flex-col gap-4">
 				<span class="label">plausible</span>
