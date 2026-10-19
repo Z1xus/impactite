@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { crater, random } from "#lib/dither/crater.ts";
-	import { css, threshold } from "#lib/dither/bayer.ts";
+	import { css } from "#lib/dither/bayer.ts";
+	import { rock } from "#lib/dither/avatar.ts";
 	import { theme } from "#lib/theme.svelte.ts";
 
 	let {
@@ -16,31 +16,21 @@
 		void theme.shown;
 		const g = canvas?.getContext("2d");
 		if (!g) return;
-		const [night, deep, cyan] = ["--color-cyan-night", "--color-cyan-deep", "--color-cyan"].map(
-			css
-		);
-		const next = random([...name].reduce((hash, char) => hash * 31 + char.charCodeAt(0), 7));
-		const light = next() * Math.PI * 2;
-		const spot: [number, number, number] = [
-			9 + Math.floor(next() * 6),
-			9 + Math.floor(next() * 6),
-			6.5 + next() * 2
-		];
-		const rays = Array.from({ length: 7 }, () => next() * Math.PI * 2);
+		const [raised, night, deep, cyan] = [
+			"--color-raised",
+			"--color-cyan-night",
+			"--color-cyan-deep",
+			"--color-cyan"
+		].map(css);
 		g.clearRect(0, 0, CELLS, CELLS);
-		g.save();
-		g.beginPath();
-		g.arc(CELLS / 2, CELLS / 2, CELLS / 2, 0, Math.PI * 2);
-		g.clip();
-		g.fillStyle = night;
-		g.fillRect(0, 0, CELLS, CELLS);
-		g.fillStyle = deep;
-		for (let y = 0; y < CELLS; y++)
-			for (let x = 0; x < CELLS; x++)
-				if (0.55 + 0.3 * Math.cos(Math.atan2(y - 12, x - 12) - light) > threshold(x, y))
-					g.fillRect(x, y, 1, 1);
-		crater(g, [CELLS, CELLS], spot, 1, rays, { night, deep, cyan });
-		g.restore();
+		rock(
+			g,
+			CELLS,
+			name,
+			theme.shown === "light"
+				? { floor: night, low: deep, high: cyan, rim: cyan }
+				: { floor: raised, low: night, high: deep, rim: cyan }
+		);
 	});
 </script>
 
