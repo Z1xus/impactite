@@ -59,18 +59,24 @@
 
 <div id="top" class="mx-auto flex max-w-6xl flex-col px-6" {@attach appear}>
 	<header class="flex h-16 items-center justify-between">
-		<a href="#top" class="flex items-center gap-2 font-mono text-body">
+		<a href="#top" class="flex h-control items-center gap-2 font-mono text-body">
 			<img src="/favicon.svg" alt="" width="22" height="22" />
 			impactite
 		</a>
 		<nav class="flex items-center gap-6">
-			<a href="#speed" class="hidden label hover:text-fg sm:block">speed</a>
-			<a href="#compatible" class="hidden label hover:text-fg sm:block">compatible</a>
-			<a href={DEMO} class="label hover:text-fg">demo</a>
-			<a href="#install" class="hidden label hover:text-fg sm:block">install</a>
+			<a href="#speed" class="hidden h-control items-center label hover:text-fg sm:flex"
+				>speed</a
+			>
+			<a href="#compatible" class="hidden h-control items-center label hover:text-fg sm:flex"
+				>compatible</a
+			>
+			<a href={DEMO} class="flex h-control items-center label hover:text-fg">demo</a>
+			<a href="#install" class="hidden h-control items-center label hover:text-fg sm:flex"
+				>install</a
+			>
 			<a
 				href={REPO}
-				class="flex items-center gap-1.5 label hover:text-fg"
+				class="flex h-control items-center gap-1.5 label hover:text-fg"
 				aria-label="source on github{data.stars === null ? '' : `, ${data.stars} stars`}"
 			>
 				<Icon svg={github} size={14} />

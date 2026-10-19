@@ -89,12 +89,12 @@
 </Dialog>
 
 <div class="min-h-dvh">
-	<header class="relative z-40 border-b border-line">
+	<header class="relative z-40 border-b border-line [view-transition-name:shell]">
 		<div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-6">
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
 				href={session.me ? resolve("/") : page.url.pathname}
-				class="mr-1 flex items-center gap-2 font-mono text-[15px] text-fg"
+				class="-mr-1 -ml-2 flex h-control items-center gap-2 px-2 font-mono text-body text-fg"
 			>
 				<img src="/favicon.svg" alt="impactite" width="22" height="22" class="pixelated" />
 				<span class="hidden sm:inline">impactite</span>

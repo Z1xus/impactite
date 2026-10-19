@@ -114,7 +114,7 @@
 				{@const inside = day > bounds[0] && day < bounds[1]}
 				<button
 					type="button"
-					class="grid h-control place-items-center font-mono text-[12px] disabled:text-faint {edge
+					class="grid h-control place-items-center font-mono text-small disabled:text-faint {edge
 						? 'bg-cyan text-ink'
 						: inside
 							? 'dither text-fg'

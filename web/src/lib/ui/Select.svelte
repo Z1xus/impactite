@@ -110,7 +110,7 @@
 	role="presentation"
 >
 	{#if label}
-		<span class="label">{label}</span>
+		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<button
 		bind:this={trigger}

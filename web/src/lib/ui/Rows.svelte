@@ -58,7 +58,7 @@
 		{#each rows.slice(0, limit) as row (row.key)}
 			<li
 				animate:flip={{ duration: 200 }}
-				class="group relative flex h-8 items-center gap-2.5 px-2"
+				class="group relative flex h-8 items-center gap-2.5 px-2 pointer-coarse:h-control"
 			>
 				<button
 					type="button"
@@ -100,7 +100,9 @@
 					</span>
 					<span class="relative flex items-center gap-4 pr-2">
 						{#if row.extra}
-							<span class="w-14 text-right text-label text-dim">{row.extra}</span>
+							<span class="w-14 text-right font-mono text-label text-dim"
+								>{row.extra}</span
+							>
 						{/if}
 						<Num
 							value={row.value}

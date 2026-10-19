@@ -92,7 +92,9 @@
 	<button
 		bind:this={trigger}
 		type="button"
-		class="flex h-control items-center gap-2 rounded-px px-3 whitespace-nowrap text-fg {plain
+		class="flex h-control items-center gap-2 rounded-px whitespace-nowrap text-fg {iconOnly
+			? 'w-control justify-center'
+			: 'px-3'} {plain
 			? 'font-sans text-body hover:bg-raised'
 			: 'border border-edge font-sans text-body hover:border-dim'} {data
 			? 'tracking-normal normal-case'
