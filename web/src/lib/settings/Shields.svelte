@@ -25,7 +25,7 @@
 		{ key: "hostname", label: "hostname", meta: "allowed hostname", example: "*.example.com" },
 		{ key: "prop", label: "prop", meta: "allowed prop", example: "plan" }
 	];
-	const IGNORE = 'localStorage.plausible_ignore = "true"';
+	const IGNORE = 'localStorage.impactite_ignore = "true"';
 
 	const shields = collection<Shield>(() => `${sitePath(domain)}/shields`, "shields");
 	let adding = $state(false);
