@@ -27,7 +27,10 @@
 		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<div
-		class="flex min-h-control w-fit max-w-full shrink-0 flex-wrap rounded-px ring-1 ring-control ring-inset"
+		class="flex min-h-control w-fit max-w-full shrink-0 flex-wrap rounded-px ring-1 ring-control ring-inset {options.length >
+		3
+			? 'max-sm:grid max-sm:w-full max-sm:grid-cols-2'
+			: ''}"
 		role="radiogroup"
 		aria-label={label}
 	>
