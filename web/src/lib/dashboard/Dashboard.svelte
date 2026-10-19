@@ -9,6 +9,7 @@
 	import more from "pixelarticons/svg/more-vertical.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import sliders from "pixelarticons/svg/sliders.svg?raw";
+	import { display } from "#lib/display.svelte.ts";
 	import { currentTeam, findSite, session, teamTimezone } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
@@ -59,7 +60,9 @@
 	);
 	const team = $derived(currentTeam());
 	const sites = $derived([
-		...((team?.sites.length ?? 0) > 1 ? [{ key: "all", label: "All sites" }] : []),
+		...((team?.sites.length ?? 0) > 1 && display.all === "show"
+			? [{ key: "all", label: "All sites" }]
+			: []),
 		...(session.me?.teams.flatMap((item) => item.sites) ?? []).map((site) => ({
 			key: site.domain,
 			label: site.domain,

@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { untrack } from "svelte";
+	import { display } from "#lib/display.svelte.ts";
 	import Dashboard from "#lib/dashboard/Dashboard.svelte";
 	import { warm } from "#lib/dashboard/warm.ts";
 	import { session, teamTimezone } from "#lib/session.svelte.ts";
@@ -17,6 +20,10 @@
 	});
 	const team = $derived(session.me?.teams.find((item) => item.id === id));
 	let loaded = $state(untrack(() => data.warmed));
+
+	$effect(() => {
+		if (display.all === "hide") void goto(resolve("/"), { replaceState: true });
+	});
 
 	$effect(() => {
 		if (team?.sites.length && !loaded)

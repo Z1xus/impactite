@@ -6,20 +6,23 @@ export type Display = {
 	clock: "24" | "12";
 	numbers: "en-US" | "de-DE" | "fr-FR";
 	theme: Theme;
+	all: "show" | "hide";
 };
 
 export const display = $state<Display>({
 	week: "monday",
 	clock: "24",
 	numbers: "en-US",
-	theme: "dark"
+	theme: "dark",
+	all: "show"
 });
 
 const choices: { [key in keyof Display]: Display[key][] } = {
 	week: ["monday", "sunday"],
 	clock: ["24", "12"],
 	numbers: ["en-US", "de-DE", "fr-FR"],
-	theme: ["dark", "light", "system"]
+	theme: ["dark", "light", "system"],
+	all: ["show", "hide"]
 };
 
 // follow the system while it's the choice

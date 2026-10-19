@@ -40,5 +40,13 @@
 				{ key: "fr-FR", label: "1 234,5" }
 			]}
 		/>
+		<Toggle
+			label="all sites"
+			bind:value={() => display.all, (all) => saveDisplay({ all })}
+			options={[
+				{ key: "show", label: "show" },
+				{ key: "hide", label: "hide" }
+			]}
+		/>
 	</div>
 </Section>

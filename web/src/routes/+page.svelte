@@ -4,6 +4,7 @@
 	import { resolve } from "$app/paths";
 	import { api } from "#lib/api.ts";
 	import { icon } from "#lib/icons/resolve.ts";
+	import { display } from "#lib/display.svelte.ts";
 	import { currentTeam, refresh, teamTimezone } from "#lib/session.svelte.ts";
 	import { sparks } from "#lib/sparks.ts";
 	import { swap } from "#lib/swap.ts";
@@ -105,7 +106,7 @@
 						<li><SiteCard /></li>
 					{/each}
 				{:else}
-					{#if team.sites.length > 1}
+					{#if team.sites.length > 1 && display.all === "show"}
 						<li>
 							<SiteCard
 								href={resolve("/all")}
