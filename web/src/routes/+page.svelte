@@ -22,6 +22,8 @@
 	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
 	let series = $state<Record<string, number[]>>({});
 	let domain = $state("");
+	let failed = $state(false);
+	let tries = $state(0);
 
 	const targets = $derived(
 		JSON.stringify([
@@ -34,6 +36,8 @@
 
 	$effect(() => {
 		let stale = false;
+		void tries;
+		failed = false;
 		series = {};
 		for (const target of JSON.parse(targets) as {
 			key: string;
@@ -44,9 +48,13 @@
 				metrics: ["visitors"],
 				date_range: [shift(today(target.timezone), -27), today(target.timezone)],
 				dimensions: ["time:day"]
-			}).then((result) => {
-				if (!stale) series[target.key] = result.results.map((row) => row.metrics[0]);
-			});
+			})
+				.then((result) => {
+					if (!stale) series[target.key] = result.results.map((row) => row.metrics[0]);
+				})
+				.catch(() => {
+					if (!stale) failed = true;
+				});
 		return () => (stale = true);
 	});
 
@@ -93,6 +101,9 @@
 				<Button onclick={() => (adding = true)}>Add site</Button>
 			{/if}
 		</div>
+		{#if failed}
+			<Empty compact retry={() => tries++} />
+		{/if}
 		{#if !team || team.sites.length}
 			<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				{#if !team}

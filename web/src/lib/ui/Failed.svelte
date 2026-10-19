@@ -11,7 +11,7 @@
 	<div class="flex flex-col items-center gap-4">
 		<Message>{text}</Message>
 		{#if retry}
-			<Button variant="quiet" onclick={retry}>Try again</Button>
+			<Button variant="quiet" onclick={retry}>Retry</Button>
 		{:else}
 			<Button variant="quiet" href={resolve("/")}>Home</Button>
 		{/if}

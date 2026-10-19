@@ -4,6 +4,7 @@
 	import type { Range } from "#lib/period.ts";
 	import { display, format, query } from "#lib/stats.ts";
 	import Button from "#lib/ui/Button.svelte";
+	import Empty from "#lib/ui/Empty.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Table from "#lib/ui/Table.svelte";
 
@@ -99,12 +100,15 @@
 		| null
 	>(null);
 	let pages = $state(1);
+	let failed = $state(false);
+	let tries = $state(0);
 	let more = $state(false);
 
 	$effect(() => {
 		const typed = search.trim();
 		const keys = columns.map((column) => column.key);
 		const limit = pages * PAGE;
+		void tries;
 		// goals have no text filter, and country and language names only exist here
 		const local = ["event:goal", "visit:country", "visit:language"].includes(dim);
 		const body = {
@@ -116,26 +120,32 @@
 			pagination: { limit: local ? 1000 : limit + 1 }
 		};
 		let stale = false;
+		failed = false;
 		const timer = setTimeout(
 			() => {
-				query(domain, body, imports).then((result) => {
-					if (stale) return;
-					const all = result.results
-						.map((row) => {
-							const value = row.dimensions[0];
-							return {
-								key: value,
-								label: display(dim, value),
-								...(iconic && { icon: icon(dim, value) }),
-								values: row.metrics as (number | null)[]
-							};
-						})
-						.filter(
-							(row) => !local || row.label.toLowerCase().includes(typed.toLowerCase())
-						);
-					more = all.length > limit;
-					rows = all.slice(0, limit);
-				});
+				query(domain, body, imports)
+					.then((result) => {
+						if (stale) return;
+						const all = result.results
+							.map((row) => {
+								const value = row.dimensions[0];
+								return {
+									key: value,
+									label: display(dim, value),
+									...(iconic && { icon: icon(dim, value) }),
+									values: row.metrics as (number | null)[]
+								};
+							})
+							.filter(
+								(row) =>
+									!local || row.label.toLowerCase().includes(typed.toLowerCase())
+							);
+						more = all.length > limit;
+						rows = all.slice(0, limit);
+					})
+					.catch(() => {
+						if (!stale) failed = true;
+					});
 			},
 			typed ? 150 : 0
 		);
@@ -151,7 +161,11 @@
 		<Field label="search" bind:value={search} />
 	</div>
 	<div class="max-h-[60vh] [scrollbar-gutter:stable] overflow-y-auto pr-2">
-		<Table {columns} {rows} bind:sort {pick} />
+		{#if failed}
+			<Empty compact retry={() => tries++} />
+		{:else}
+			<Table {columns} {rows} bind:sort {pick} />
+		{/if}
 	</div>
 	{#if more}
 		<div class="flex justify-center">

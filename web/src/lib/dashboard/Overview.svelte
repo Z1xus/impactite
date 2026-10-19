@@ -3,6 +3,7 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import { clock } from "#lib/display.svelte.ts";
 	import { METRICS, format, query, toQueryFilters, type Metric } from "#lib/stats.ts";
+	import Empty from "#lib/ui/Empty.svelte";
 	import Kpis from "#lib/ui/Kpis.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Table from "#lib/ui/Table.svelte";
@@ -38,6 +39,8 @@
 	let series = $state.raw<number[]>([]);
 	let previousSeries = $state.raw<number[]>([]);
 	let lines = $state.raw<Line[]>([]);
+	let failed = $state(false);
+	let tries = $state(0);
 	let sort = $state<[string, "asc" | "desc"]>(["", "asc"]);
 
 	const labels = $derived(lines.map((line) => line.label));
@@ -71,7 +74,8 @@
 			ctx.filters,
 			ctx.imports,
 			table,
-			metric
+			metric,
+			tries
 		])
 	);
 
@@ -81,6 +85,7 @@
 		const ask = (body: Record<string, unknown>) => query(domain, body, imports);
 		const { previous, grain } = dates;
 		let stale = false;
+		failed = false;
 		Promise.all([
 			ask({ metrics: KEYS, date_range: dates.current, filters: where }),
 			previous && ask({ metrics: KEYS, date_range: previous, filters: where }),
@@ -98,20 +103,26 @@
 					dimensions: [grain],
 					filters: where
 				})
-		]).then(([now, before, line, previousLine]) => {
-			if (stale) return;
-			found(!imports || (now.meta?.imports_skip_reason ?? "") !== "no_imported_data");
-			totals = now.results[0]?.metrics ?? null;
-			previousTotals = before ? (before.results[0]?.metrics ?? null) : null;
-			const at = table ? KEYS.indexOf(metric) : 0;
-			series = line.results.map((row) => row.metrics[Math.max(at, 0)]);
-			lines = line.results.map((row) => ({
-				key: row.dimensions[0],
-				label: label(row.dimensions[0], grain),
-				values: row.metrics
-			}));
-			previousSeries = previousLine ? previousLine.results.map((row) => row.metrics[0]) : [];
-		});
+		])
+			.then(([now, before, line, previousLine]) => {
+				if (stale) return;
+				found(!imports || (now.meta?.imports_skip_reason ?? "") !== "no_imported_data");
+				totals = now.results[0]?.metrics ?? null;
+				previousTotals = before ? (before.results[0]?.metrics ?? null) : null;
+				const at = table ? KEYS.indexOf(metric) : 0;
+				series = line.results.map((row) => row.metrics[Math.max(at, 0)]);
+				lines = line.results.map((row) => ({
+					key: row.dimensions[0],
+					label: label(row.dimensions[0], grain),
+					values: row.metrics
+				}));
+				previousSeries = previousLine
+					? previousLine.results.map((row) => row.metrics[0])
+					: [];
+			})
+			.catch(() => {
+				if (!stale) failed = true;
+			});
 		return () => (stale = true);
 	}
 
@@ -145,46 +156,50 @@
 {/snippet}
 
 <section class="rounded-px border border-line bg-panel">
-	<Kpis
-		{totals}
-		previous={previousTotals}
-		active={KEYS.indexOf(metric)}
-		pick={(i) => pick(KEYS[i])}
-	/>
-	<div class="px-4 pt-3 pb-5">
-		{#if table}
-			<div class="relative">
-				<div class="absolute top-0 left-0 z-20 flex h-control items-center gap-2">
+	{#if failed}
+		<Empty retry={() => tries++} />
+	{:else}
+		<Kpis
+			{totals}
+			previous={previousTotals}
+			active={KEYS.indexOf(metric)}
+			pick={(i) => pick(KEYS[i])}
+		/>
+		<div class="px-4 pt-3 pb-5">
+			{#if table}
+				<div class="relative">
+					<div class="absolute top-0 left-0 z-20 flex h-control items-center gap-2">
+						{@render controls()}
+					</div>
+					<div
+						class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto pr-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:h-9 [&_thead_th]:bg-panel [&_thead_th]:shadow-[inset_0_-1px_0_var(--color-line)] [&_thead_th:first-child]:min-w-56 [&>div]:overflow-visible"
+					>
+						<Table
+							columns={columns.map((item) => ({
+								key: item.key,
+								label: item.label,
+								format: (value: number | null) => format(item.key, value ?? 0)
+							}))}
+							rows={sorted.map((line) => ({
+								...line,
+								values: columns.map((item) => line.values[KEYS.indexOf(item.key)])
+							}))}
+							bind:sort
+						/>
+					</div>
+				</div>
+			{:else}
+				<div class="mb-2 flex items-center gap-2">
 					{@render controls()}
 				</div>
-				<div
-					class="max-h-96 [scrollbar-gutter:stable] overflow-y-auto pr-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:h-9 [&_thead_th]:bg-panel [&_thead_th]:shadow-[inset_0_-1px_0_var(--color-line)] [&_thead_th:first-child]:min-w-56 [&>div]:overflow-visible"
-				>
-					<Table
-						columns={columns.map((item) => ({
-							key: item.key,
-							label: item.label,
-							format: (value: number | null) => format(item.key, value ?? 0)
-						}))}
-						rows={sorted.map((line) => ({
-							...line,
-							values: columns.map((item) => line.values[KEYS.indexOf(item.key)])
-						}))}
-						bind:sort
-					/>
-				</div>
-			</div>
-		{:else}
-			<div class="mb-2 flex items-center gap-2">
-				{@render controls()}
-			</div>
-			<Chart
-				values={series}
-				previous={previousSeries}
-				{labels}
-				keys={lines.map((line) => line.key)}
-				format={(value) => format(metric, value)}
-			/>
-		{/if}
-	</div>
+				<Chart
+					values={series}
+					previous={previousSeries}
+					{labels}
+					keys={lines.map((line) => line.key)}
+					format={(value) => format(metric, value)}
+				/>
+			{/if}
+		</div>
+	{/if}
 </section>

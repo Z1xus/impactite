@@ -4,6 +4,7 @@
 	import WorldMap from "#lib/dither/Map.svelte";
 	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
 	import { display, format, query, toQueryFilters } from "#lib/stats.ts";
+	import Empty from "#lib/ui/Empty.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
 	import Select from "#lib/ui/Select.svelte";
@@ -26,6 +27,8 @@
 	let chosenFunnel = $state(0);
 	let ranked = $state.raw<Ranked>(null);
 	let loading = $state(false);
+	let failed = $state(false);
+	let tries = $state(0);
 	// search console terms replace referrers under the google source when connected
 	let terms = $state(false);
 	// the dimension the rows on screen belong to, plain so changing it never reruns the load
@@ -71,7 +74,8 @@
 			ctx.converting,
 			tab,
 			dim,
-			funnel
+			funnel,
+			tries
 		])
 	);
 
@@ -151,6 +155,7 @@
 		const where = toQueryFilters(ctx.filters);
 		if (at !== shown) ranked = null;
 		loading = true;
+		failed = false;
 		const done = (rows: Ranked, searched = false) => {
 			if (stale) return;
 			ranked = rows;
@@ -158,12 +163,19 @@
 			shown = at;
 			loading = false;
 		};
-		if (tab === "funnels") steps(where).then((rows) => done(rows));
-		else if (searching)
-			keywords()
-				.then((rows) => done(rows, true))
-				.catch(() => regular(where).then((rows) => done(rows)));
-		else regular(where).then((rows) => done(rows));
+		const request =
+			tab === "funnels"
+				? steps(where).then((rows) => done(rows))
+				: searching
+					? keywords()
+							.then((rows) => done(rows, true))
+							.catch(() => regular(where).then((rows) => done(rows)))
+					: regular(where).then((rows) => done(rows));
+		request.catch(() => {
+			if (stale) return;
+			failed = true;
+			loading = false;
+		});
 		return () => (stale = true);
 	}
 
@@ -230,7 +242,9 @@
 		: () => ctx.expand(dim, panel.tabs.find((item) => item.key === tab)?.label ?? "")}
 	actions={["props", "utm", "funnels"].includes(tab) ? picker : undefined}
 >
-	{#if tab === "map"}
+	{#if failed}
+		<Empty retry={() => tries++} />
+	{:else if tab === "map"}
 		<div class="flex h-full items-center px-2 py-1">
 			<WorldMap
 				values={Object.fromEntries((ranked ?? []).map((row) => [row.key, row.value]))}

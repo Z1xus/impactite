@@ -35,7 +35,12 @@
 	{#if !sections.some((item) => item.id === section)}
 		<Missing text="This settings page doesn't exist." />
 	{:else}
-		<Settings {sections} current={section} loading={!admin.info}>
+		<Settings
+			{sections}
+			current={section}
+			loading={!admin.info}
+			retry={admin.failed ? load : undefined}
+		>
 			{#snippet title()}
 				<Title>Instance</Title>
 			{/snippet}

@@ -3,6 +3,7 @@ import { api } from "./api.ts";
 // a list the server sends back whole after every change, as `{ [key]: items }`
 export function collection<T>(url: () => string, key: string) {
 	let items = $state.raw<T[] | null>(null);
+	let failed = $state(false);
 	const keep = <R>(reply: Record<string, T[]> & R) => {
 		items = reply[key];
 		return reply;
@@ -12,7 +13,17 @@ export function collection<T>(url: () => string, key: string) {
 		get items() {
 			return items;
 		},
-		load: () => api<Record<string, T[]>>(url()).then(keep),
+		get failed() {
+			return failed;
+		},
+		load: () => {
+			failed = false;
+			return api<Record<string, T[]>>(url())
+				.then(keep)
+				.catch(() => {
+					failed = true;
+				});
+		},
 		add: <R = unknown>(body: unknown) => api<Record<string, T[]> & R>(url(), body).then(keep),
 		change: (id: string | number, body: unknown) =>
 			api<Record<string, T[]>>(`${url()}/${encodeURIComponent(id)}`, body, "PATCH").then(

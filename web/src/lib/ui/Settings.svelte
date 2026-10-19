@@ -2,6 +2,7 @@
 	import type { Snippet } from "svelte";
 	import { goto } from "$app/navigation";
 	import { sentence } from "./text";
+	import Empty from "./Empty.svelte";
 	import Icon from "./Icon.svelte";
 	import Section from "./Section.svelte";
 	import Select from "./Select.svelte";
@@ -12,6 +13,7 @@
 		current,
 		title,
 		loading = false,
+		retry,
 		children
 	}: {
 		sections: {
@@ -25,6 +27,7 @@
 		current: string;
 		title: Snippet;
 		loading?: boolean;
+		retry?: () => unknown;
 		children: Snippet;
 	} = $props();
 </script>
@@ -77,7 +80,11 @@
 			{/each}
 		</nav>
 		<div class="flex max-w-3xl flex-col gap-6">
-			{#if loading}
+			{#if retry}
+				<Section label={sections.find((section) => section.id === current)?.label ?? ""}>
+					<Empty compact {retry} />
+				</Section>
+			{:else if loading}
 				<Section label={sections.find((section) => section.id === current)?.label ?? ""}>
 					<Skeleton class="h-control w-full" />
 				</Section>

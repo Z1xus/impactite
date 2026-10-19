@@ -34,6 +34,7 @@
 	import Button from "#lib/ui/Button.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";
+	import Empty from "#lib/ui/Empty.svelte";
 	import Icon from "#lib/ui/Icon.svelte";
 	import Glyph from "#lib/ui/Glyph.svelte";
 	import Title from "#lib/ui/Title.svelte";
@@ -92,6 +93,8 @@
 		() => readonly
 	);
 	let empty = $state<boolean | null>(null);
+	let failed = $state(false);
+	let checks = $state(0);
 	let version = $state(0);
 	let hasImports = $state(false);
 	let editing = $state<Filter | null | undefined>(undefined);
@@ -168,9 +171,15 @@
 			return;
 		}
 		let stale = false;
-		query(domain, { metrics: ["events"], date_range: "all" }).then((result) => {
-			if (!stale) empty = !result.results[0]?.metrics[0];
-		});
+		void checks;
+		failed = false;
+		query(domain, { metrics: ["events"], date_range: "all" })
+			.then((result) => {
+				if (!stale) empty = !result.results[0]?.metrics[0];
+			})
+			.catch(() => {
+				if (!stale) failed = true;
+			});
 		return () => (stale = true);
 	});
 
@@ -376,6 +385,8 @@
 				version++;
 			}}
 		/>
+	{:else if failed}
+		<Empty retry={() => checks++} />
 	{:else if ctx}
 		<Overview
 			{ctx}

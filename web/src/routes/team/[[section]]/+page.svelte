@@ -31,6 +31,7 @@
 	);
 
 	let team = $state.raw<Team | null>(null);
+	let failed = $state(false);
 
 	$effect(() => {
 		if (current && (current.personal || current.id === 0)) goto(resolve("/"));
@@ -38,7 +39,13 @@
 	});
 
 	async function load() {
-		team = await api<Team>(`/api/app/teams/${id}`);
+		failed = false;
+		try {
+			team = await api<Team>(`/api/app/teams/${id}`);
+		} catch (err) {
+			if (team) throw err;
+			failed = true;
+		}
 	}
 </script>
 
@@ -46,7 +53,7 @@
 	{#if current && !sections.some((item) => item.id === section)}
 		<Missing text="This settings page doesn't exist." />
 	{:else}
-		<Settings {sections} current={section} loading={!team}>
+		<Settings {sections} current={section} loading={!team} retry={failed ? load : undefined}>
 			{#snippet title()}
 				<Title>
 					{#if current}

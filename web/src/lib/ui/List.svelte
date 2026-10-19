@@ -2,11 +2,14 @@
 	import type { Snippet } from "svelte";
 	import close from "pixelarticons/svg/close.svg?raw";
 	import Avatar from "./Avatar.svelte";
+	import Empty from "./Empty.svelte";
 	import Icon from "./Icon.svelte";
 	import Skeleton from "./Skeleton.svelte";
 
 	let {
 		items,
+		source,
+		empty,
 		remove,
 		control
 	}: {
@@ -20,12 +23,29 @@
 					avatar?: number | null;
 			  }[]
 			| null;
-		remove?: (key: K) => void;
+		source?: { failed: boolean; load: () => unknown };
+		empty?: string;
+		remove?: (key: K) => unknown;
 		control?: Snippet<[K]>;
 	} = $props();
+
+	let removing = $state<K | null>(null);
+
+	async function drop(key: K) {
+		removing = key;
+		try {
+			await remove?.(key);
+		} finally {
+			removing = null;
+		}
+	}
 </script>
 
-{#if items === null || items.length}
+{#if items === null && source?.failed}
+	<Empty compact retry={source.load} />
+{:else if items?.length === 0 && empty}
+	<Empty compact text={empty} />
+{:else if items === null || items.length}
 	<ul class="flex flex-col rounded-px border border-line bg-panel">
 		{#if items === null}
 			<li class="flex h-14 items-center px-4"><Skeleton class="h-3 w-40" /></li>
@@ -62,7 +82,8 @@
 							type="button"
 							class="-mr-2.5 grid h-control w-control shrink-0 place-items-center text-dim hover:text-bad"
 							aria-label="remove {item.title}"
-							onclick={() => remove(item.key)}
+							disabled={removing === item.key}
+							onclick={() => drop(item.key)}
 						>
 							<Icon svg={close} size={14} />
 						</button>
