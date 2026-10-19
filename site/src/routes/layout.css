@@ -90,4 +90,7 @@
 	[data-landed="false"] [data-chart] {
 		clip-path: inset(0 100% 0 0);
 	}
+	[data-landed="false"] :is(.num, .num + .label, .bar) {
+		visibility: hidden;
+	}
 }
