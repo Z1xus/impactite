@@ -1,7 +1,7 @@
 <script lang="ts">
 	import "./layout.css";
 	import font from "#lib/fonts/DepartureMono-Regular.woff2?url";
-	import { goto } from "$app/navigation";
+	import { goto, onNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { ApiError } from "#lib/api.ts";
@@ -18,6 +18,21 @@
 
 	$effect(() => {
 		refresh();
+	});
+
+	onNavigate((navigation) => {
+		if (
+			!document.startViewTransition ||
+			matchMedia("(prefers-reduced-motion: reduce)").matches ||
+			navigation.from?.url.pathname === navigation.to?.url.pathname
+		)
+			return;
+		return new Promise((done) => {
+			document.startViewTransition(async () => {
+				done();
+				await navigation.complete;
+			});
+		});
 	});
 
 	// where this visitor has to go instead, so a page never loads for someone it isn't for

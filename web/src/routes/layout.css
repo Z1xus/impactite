@@ -132,6 +132,13 @@
 	}
 }
 
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+	animation-duration: 120ms;
+	animation-timing-function: ease-out;
+}
+
 @keyframes pop {
 	from {
 		opacity: 0;
