@@ -27,6 +27,7 @@
 
 	async function onsubmit(event: SubmitEvent) {
 		event.preventDefault();
+		if (busy) return;
 		busy = true;
 		error = "";
 		try {

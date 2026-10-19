@@ -25,8 +25,10 @@
 		plain: "h-control px-2 text-dim enabled:hover:text-fg"
 	};
 	let pending = $state(false);
+	const waiting = $derived(busy || pending);
 
 	async function click(event: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }) {
+		if (waiting) return event.preventDefault();
 		const result: unknown = rest.onclick?.(event);
 		if (!(result instanceof Promise)) return;
 		pending = true;
@@ -38,7 +40,7 @@
 	}
 
 	const look = $derived(
-		`inline-flex items-center justify-center gap-2 rounded-px font-sans text-body ${variants[variant]} ${busy || pending ? "disabled:cursor-wait disabled:opacity-60" : ""} ${className}`
+		`inline-flex items-center justify-center gap-2 rounded-px font-sans text-body ${variants[variant]} ${waiting ? "cursor-wait opacity-60" : ""} ${className}`
 	);
 </script>
 
@@ -46,7 +48,7 @@
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- callers pass resolved paths -->
 	<a {href} class={look}>{@render children()}</a>
 {:else}
-	<button {...rest} onclick={click} disabled={busy || pending || rest.disabled} class={look}>
+	<button {...rest} onclick={click} disabled={rest.disabled} aria-busy={waiting} class={look}>
 		{@render children()}
 	</button>
 {/if}
