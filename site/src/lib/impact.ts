@@ -31,14 +31,13 @@ export function impact(stage: HTMLElement, landed: (value: boolean) => void) {
 	const [fg, cyan, deep] = ["--color-fg", "--color-cyan", "--color-cyan-deep"].map(css);
 	const end = [(target.left + target.width / 2) / CELL, (target.top + target.height / 2) / CELL];
 	const radius = target.width / CELL / 2;
-	// down a slanted line from the top edge of the screen, the same on every width
-	const start = [end[0] - Math.max(end[1] + radius, 40) * 0.4, -radius];
+	const start = [end[0] - 150, -radius];
 	const along = (t: number) => [
 		start[0] + (end[0] - start[0]) * t,
 		start[1] + (end[1] - start[1]) * t
 	];
 
-	const [DELAY, FALL, RING] = [250, 900, 900];
+	const [DELAY, FALL, RING] = [250, 650, 900];
 	const debris = Array.from({ length: 48 }, () => {
 		const angle = Math.random() * Math.PI * 2;
 		const speed = radius * (1.2 + Math.random() * 2.4);
