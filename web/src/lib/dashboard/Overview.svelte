@@ -154,7 +154,7 @@
 	<div class="px-4 pt-3 pb-5">
 		{#if table}
 			<div class="relative">
-				<div class="absolute top-0 left-0 z-20 flex h-9 items-center gap-2">
+				<div class="absolute top-0 left-0 z-20 flex h-control items-center gap-2">
 					{@render controls()}
 				</div>
 				<div

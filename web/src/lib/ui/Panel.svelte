@@ -32,12 +32,11 @@
 		: 'border-line'}"
 >
 	<header class="flex h-11 items-center gap-4 border-b border-line px-4">
-		<div class="flex h-full min-w-0 [scrollbar-width:none] items-center gap-4 overflow-x-auto">
+		<div class="-ml-2 flex h-full min-w-0 [scrollbar-width:none] items-center overflow-x-auto">
 			{#each tabs as item (item.key)}
 				<button
 					type="button"
-					class="h-full shrink-0 cursor-pointer border-b font-sans text-small transition-colors duration-100 {tab ===
-					item.key
+					class="h-full shrink-0 border-b px-2 font-sans text-small {tab === item.key
 						? 'border-cyan text-fg'
 						: 'border-transparent hover:text-fg'}"
 					onclick={() => (tab = item.key)}
@@ -57,7 +56,7 @@
 					type="button"
 					aria-label="expand report"
 					title="expand report"
-					class="grid h-7 w-7 cursor-pointer place-items-center text-dim hover:text-fg"
+					class="grid size-control place-items-center text-dim hover:text-fg"
 					onclick={open}
 				>
 					<Icon svg={expand} size={14} />
@@ -68,7 +67,7 @@
 					type="button"
 					aria-label="hide panel"
 					title="hide panel"
-					class="-mr-2 grid h-7 w-7 cursor-pointer place-items-center text-dim hover:text-fg"
+					class="-mr-2 grid size-control place-items-center text-dim hover:text-fg"
 					onclick={hide}
 				>
 					<Icon svg={close} size={12} />

@@ -6,7 +6,7 @@
 </script>
 
 <label
-	class="flex h-9 min-w-0 cursor-pointer items-center gap-2.5 rounded-px border border-edge bg-panel px-3 transition-colors duration-100 focus-within:border-cyan hover:border-dim"
+	class="flex h-control min-w-0 cursor-pointer items-center gap-2.5 rounded-px border border-edge bg-panel px-3 transition-colors duration-100 focus-within:border-cyan hover:border-dim"
 >
 	<Icon svg={icon} size={12} class="shrink-0 text-dim" />
 	{#if file}

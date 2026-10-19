@@ -62,10 +62,10 @@
 			>
 				<button
 					type="button"
-					class="absolute inset-0 rounded-px transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-raised"
+					class="absolute inset-0 rounded-px enabled:hover:bg-raised"
 					aria-label={row.label}
 					onclick={() => pick?.(row.key)}
-					disabled={!pick}
+					inert={!pick}
 				></button>
 				{#if row.icon || row.fallback}
 					<Glyph spec={row.icon ?? null} fallback={row.fallback} />
@@ -91,7 +91,7 @@
 								target="_blank"
 								rel="noopener noreferrer"
 								aria-label="open {row.label}"
-								class="pointer-events-auto grid h-5 w-5 shrink-0 cursor-pointer place-items-center text-dim opacity-0 transition-opacity duration-100 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100"
+								class="pointer-events-auto -mx-1.5 -my-1.5 grid size-control shrink-0 place-items-center text-dim opacity-0 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100 pointer-coarse:hidden"
 							>
 								<Icon svg={external} size={12} />
 							</a>

@@ -5,7 +5,7 @@
 
 <div class="flex flex-col gap-6">
 	<div class="flex flex-wrap items-center gap-3">
-		<Skeleton class="h-9 w-44" />
+		<Skeleton class="h-control w-44" />
 	</div>
 	<section class="rounded-px border border-line bg-panel">
 		<Kpis totals={null} previous={null} active={0} pick={() => {}} />

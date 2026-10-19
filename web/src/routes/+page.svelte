@@ -81,7 +81,7 @@
 
 <Shell>
 	<div class="flex flex-col gap-6">
-		<div class="flex min-h-9 items-center justify-between gap-4">
+		<div class="flex min-h-control items-center justify-between gap-4">
 			<Title>
 				{#if team}
 					{team.personal ? "Personal" : team.name}

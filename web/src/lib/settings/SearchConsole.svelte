@@ -83,6 +83,6 @@
 			<Note>No properties on this Google account.</Note>
 		{/if}
 	{:else}
-		<Skeleton class="h-9 w-full" />
+		<Skeleton class="h-control w-full" />
 	{/if}
 </Section>

@@ -66,7 +66,7 @@
 	>
 	<button
 		type="button"
-		class="grid h-6 w-6 shrink-0 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
+		class="-my-1.5 grid size-control shrink-0 place-items-center text-dim hover:text-fg"
 		aria-label="copy"
 		title="copy"
 		onclick={write}

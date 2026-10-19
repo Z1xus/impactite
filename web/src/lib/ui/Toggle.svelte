@@ -29,9 +29,9 @@
 		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<div
-		class="flex h-9 w-fit max-w-full shrink-0 [scrollbar-width:none] gap-0.5 overflow-x-auto rounded-px p-0.5 {plain
+		class="flex h-control w-fit max-w-full shrink-0 [scrollbar-width:none] overflow-x-auto rounded-px {plain
 			? ''
-			: 'border border-edge'}"
+			: 'ring-1 ring-edge ring-inset'}"
 		role="radiogroup"
 		aria-label={label}
 	>
@@ -41,10 +41,7 @@
 				role="radio"
 				aria-checked={value === option.key}
 				tabindex={value === option.key ? 0 : -1}
-				class="shrink-0 cursor-pointer rounded-px px-3 {plain
-					? 'font-sans text-small text-dim'
-					: 'font-sans text-body text-dim'} transition-colors duration-100 {value ===
-				option.key
+				class="shrink-0 rounded-px px-3 font-sans text-body text-dim {value === option.key
 					? 'bg-edge text-fg'
 					: 'hover:text-fg'}"
 				onclick={() => (value = option.key)}

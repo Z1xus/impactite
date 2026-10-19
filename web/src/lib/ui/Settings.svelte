@@ -30,7 +30,7 @@
 </script>
 
 <div class="flex flex-col gap-8">
-	<div class="flex min-h-9 items-center gap-3">
+	<div class="flex min-h-control items-center gap-3">
 		{@render title()}
 	</div>
 	<div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-[11rem_minmax(0,1fr)]">
@@ -60,7 +60,7 @@
 				<a
 					href={section.href}
 					aria-current={active ? "page" : undefined}
-					class="flex h-9 shrink-0 items-center gap-2.5 rounded-px px-3 font-sans text-body transition-colors duration-100 hover:bg-raised {active
+					class="flex h-control shrink-0 items-center gap-2.5 rounded-px px-3 font-sans text-body hover:bg-raised {active
 						? 'bg-raised'
 						: ''} {section.danger ? 'text-bad' : active ? 'text-fg' : 'hover:text-fg'}"
 				>
@@ -79,7 +79,7 @@
 		<div class="flex max-w-3xl flex-col gap-6">
 			{#if loading}
 				<Section label={sections.find((section) => section.id === current)?.label ?? ""}>
-					<Skeleton class="h-9 w-full" />
+					<Skeleton class="h-control w-full" />
 				</Section>
 			{:else}
 				{@render children()}

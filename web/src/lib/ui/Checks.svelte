@@ -21,7 +21,7 @@
 			type="button"
 			role="checkbox"
 			aria-checked={on}
-			class="flex h-9 cursor-pointer items-center gap-2.5 rounded-px border px-3 font-sans text-body transition-colors duration-100 {data
+			class="flex h-control items-center gap-2.5 rounded-px border px-3 font-sans text-body {data
 				? 'tracking-normal normal-case'
 				: ''} {on
 				? 'border-cyan/70 bg-cyan/10 text-fg'
@@ -29,7 +29,7 @@
 			onclick={() => flip(option.key)}
 		>
 			<span
-				class="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[2px] border transition-colors duration-100 {on
+				class="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[2px] border {on
 					? 'border-cyan bg-cyan text-ink'
 					: 'border-dim'}"
 			>

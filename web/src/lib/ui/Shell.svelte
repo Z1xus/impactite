@@ -108,7 +108,7 @@
 					items={workspace}
 				/>
 			{:else if !session.ready}
-				<Skeleton class="h-9 w-32" />
+				<Skeleton class="h-control w-32" />
 			{/if}
 			<div class="ml-auto flex items-center gap-3">
 				{@render actions?.()}
@@ -121,7 +121,7 @@
 						items={account}
 					/>
 				{:else if !session.ready}
-					<Skeleton class="h-9 w-28" />
+					<Skeleton class="h-control w-28" />
 				{/if}
 			</div>
 		</div>

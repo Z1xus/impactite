@@ -8,7 +8,7 @@
 <button
 	type="button"
 	aria-label={`Add ${label.toLowerCase()} panel`}
-	class="flex h-full min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-px border border-dashed border-line text-dim transition-colors duration-100 hover:border-dim hover:bg-panel hover:text-fg"
+	class="flex h-full min-h-40 w-full flex-col items-center justify-center gap-3 rounded-px border border-dashed border-line text-dim hover:border-dim hover:bg-panel hover:text-fg"
 	{onclick}
 >
 	<Icon svg={plus} size={24} />

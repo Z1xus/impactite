@@ -19,13 +19,8 @@
 	} = $props();
 </script>
 
-<span class="inline-flex h-9 items-center gap-1 rounded-px border border-edge pr-1 pl-2.5">
-	<button
-		type="button"
-		class="flex min-w-0 items-center gap-2 enabled:cursor-pointer"
-		disabled={!edit}
-		onclick={edit}
-	>
+<span class="inline-flex h-control items-center gap-1 rounded-px border border-edge pl-2.5">
+	<button type="button" class="flex min-w-0 items-center gap-2" inert={!edit} onclick={edit}>
 		<span class="label">{label}</span>
 		{#if icon}
 			<Glyph spec={icon} />
@@ -34,7 +29,7 @@
 	</button>
 	<button
 		type="button"
-		class="grid h-5 w-5 cursor-pointer place-items-center text-dim transition-colors duration-100 hover:text-fg"
+		class="grid h-full w-8 place-items-center text-dim hover:text-fg"
 		aria-label="remove filter"
 		title="remove filter"
 		onclick={remove}

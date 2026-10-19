@@ -34,7 +34,7 @@
 					<th class="py-2 pl-4 text-right font-normal whitespace-nowrap">
 						<button
 							type="button"
-							class="inline-flex cursor-pointer items-center gap-1 label transition-colors duration-100 hover:text-fg {sort[0] ===
+							class="inline-flex items-center gap-1 label hover:text-fg {sort[0] ===
 							column.key
 								? 'text-fg'
 								: ''}"
@@ -64,8 +64,8 @@
 						<td class="w-full max-w-0 min-w-24 py-2 pr-4">
 							<button
 								type="button"
-								class="flex w-full min-w-0 items-center gap-2.5 text-left enabled:cursor-pointer"
-								disabled={!pick}
+								class="flex w-full min-w-0 items-center gap-2.5 text-left"
+								inert={!pick}
 								onclick={() => pick?.(row.key)}
 							>
 								{#if row.icon !== undefined}

@@ -17,14 +17,28 @@
 	} = $props();
 
 	const variants = {
-		primary: "h-9 border border-cyan bg-cyan px-4 text-ink hover:border-fg hover:bg-fg",
-		quiet: "h-9 border border-edge px-3 text-fg hover:border-dim",
-		danger: "h-9 border border-bad/50 px-3 text-bad hover:border-bad hover:bg-bad/10",
-		icon: "h-9 w-9 border border-edge text-dim hover:border-dim hover:text-fg",
-		plain: "h-9 px-2 text-dim hover:text-fg"
+		primary:
+			"h-control border border-cyan bg-cyan px-4 text-ink enabled:hover:border-fg enabled:hover:bg-fg",
+		quiet: "h-control border border-edge px-3 text-fg enabled:hover:border-dim",
+		danger: "h-control border border-bad/50 px-3 text-bad enabled:hover:border-bad enabled:hover:bg-bad/10",
+		icon: "size-control border border-edge text-dim enabled:hover:border-dim enabled:hover:text-fg",
+		plain: "h-control px-2 text-dim enabled:hover:text-fg"
 	};
+	let pending = $state(false);
+
+	async function click(event: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }) {
+		const result: unknown = rest.onclick?.(event);
+		if (!(result instanceof Promise)) return;
+		pending = true;
+		try {
+			await result;
+		} finally {
+			pending = false;
+		}
+	}
+
 	const look = $derived(
-		`inline-flex items-center justify-center gap-2 rounded-px font-sans text-body transition-colors duration-100 enabled:cursor-pointer disabled:cursor-default ${variants[variant]} ${busy ? "cursor-wait opacity-60" : ""} ${className}`
+		`inline-flex items-center justify-center gap-2 rounded-px font-sans text-body ${variants[variant]} ${busy || pending ? "disabled:cursor-wait disabled:opacity-60" : ""} ${className}`
 	);
 </script>
 
@@ -32,7 +46,7 @@
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- callers pass resolved paths -->
 	<a {href} class={look}>{@render children()}</a>
 {:else}
-	<button {...rest} disabled={busy || rest.disabled} class={look}>
+	<button {...rest} onclick={click} disabled={busy || pending || rest.disabled} class={look}>
 		{@render children()}
 	</button>
 {/if}

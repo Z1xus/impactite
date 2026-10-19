@@ -15,10 +15,7 @@
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
-<a
-	{href}
-	class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 transition-colors duration-100 hover:border-edge"
->
+<a {href} class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 hover:border-edge">
 	<span class="flex h-5 min-w-0 items-center gap-2.5 text-fg">
 		{#if title === undefined}
 			<Skeleton class="h-4 w-32" />
