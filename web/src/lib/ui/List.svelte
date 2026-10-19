@@ -23,7 +23,7 @@
 					removable?: boolean;
 					verb?: string;
 					// a person, null while their invite is open
-					avatar?: number | null;
+					avatar?: "joined" | "invited";
 			  }[]
 			| null;
 		source?: { failed: boolean; load: () => unknown };
@@ -56,14 +56,8 @@
 		{:else}
 			{#each items as item (item.key)}
 				<li class="flex items-center gap-3 py-3">
-					{#if item.avatar !== undefined}
-						{#if item.avatar === null}
-							<span
-								class="size-[32px] shrink-0 rounded-full border border-dashed border-edge"
-							></span>
-						{:else}
-							<Avatar seed={item.avatar} size={32} />
-						{/if}
+					{#if item.avatar}
+						<Avatar name={item.title} invited={item.avatar === "invited"} size={32} />
 					{/if}
 					<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 						<span class="truncate text-body text-fg">{item.title}</span>

@@ -31,7 +31,7 @@
 	}: {
 		label: string;
 		icon?: string;
-		avatar?: number;
+		avatar?: boolean;
 		items: Item[];
 		align?: "left" | "right";
 		data?: boolean;
@@ -104,8 +104,8 @@
 		aria-label={iconOnly ? label : undefined}
 		onclick={() => (open = !open)}
 	>
-		{#if avatar !== undefined}
-			<Avatar seed={avatar} size={18} />
+		{#if avatar}
+			<Avatar name={label} size={18} />
 		{:else if icon}
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}

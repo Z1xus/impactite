@@ -34,7 +34,7 @@
 		items={info.users.map((user) => ({
 			key: user.id,
 			title: user.name,
-			avatar: user.id,
+			avatar: "joined",
 			meta: [
 				user.email,
 				`${user.sites} ${user.sites === 1 ? "site" : "sites"}`,

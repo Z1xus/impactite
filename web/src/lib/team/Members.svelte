@@ -130,7 +130,7 @@
 		items={team.members.map((member) => ({
 			key: member.id,
 			title: member.name,
-			avatar: member.id,
+			avatar: "joined",
 			meta: editable(member) ? [member.email] : [member.email, member.role],
 			removable: editable(member)
 		}))}
@@ -157,7 +157,7 @@
 			items={team.invites.map((pending) => ({
 				key: pending.id,
 				title: pending.email,
-				avatar: null,
+				avatar: "invited",
 				meta: [pending.role, `expires ${date(pending.expires)}`]
 			}))}
 			remove={revoke}

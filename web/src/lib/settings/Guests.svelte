@@ -76,14 +76,14 @@
 			...people.guests.map((guest) => ({
 				key: `g${guest.id}`,
 				title: guest.name,
-				avatar: guest.id,
+				avatar: "joined" as const,
 				verb: "Remove",
 				meta: [guest.email, guest.role]
 			})),
 			...people.invites.map((item) => ({
 				key: `i${item.id}`,
 				title: item.email,
-				avatar: null,
+				avatar: "invited" as const,
 				verb: "Revoke",
 				meta: ["invited", item.role]
 			}))

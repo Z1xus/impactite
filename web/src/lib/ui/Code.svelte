@@ -11,7 +11,7 @@
 
 <div class="flex items-start gap-2 rounded-px bg-raised py-2.5 pr-2 pl-3">
 	<code
-		class="min-w-0 flex-1 py-0.5 font-mono text-small leading-5 break-all whitespace-pre-wrap text-cyan"
+		class="min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-small leading-5 whitespace-pre text-cyan"
 		>{code}</code
 	>
 	<button
