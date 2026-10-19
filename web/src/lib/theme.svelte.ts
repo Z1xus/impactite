@@ -9,7 +9,10 @@ export function applyTheme(choice: Theme) {
 		choice === "light" ||
 		(choice === "system" && matchMedia("(prefers-color-scheme: light)").matches);
 	theme.shown = light ? "light" : "dark";
-	document.documentElement.dataset.theme = theme.shown;
+	const root = document.documentElement;
+	root.dataset.switching = "";
+	root.dataset.theme = theme.shown;
+	requestAnimationFrame(() => requestAnimationFrame(() => delete root.dataset.switching));
 	document
 		.querySelector('meta[name="theme-color"]')
 		?.setAttribute("content", light ? "#f3f6f7" : "#06090b");

@@ -114,6 +114,10 @@
 		transition-timing-function: ease-out;
 	}
 
+	html[data-switching] * {
+		transition: none !important;
+	}
+
 	button:not([inert]) {
 		cursor: pointer;
 	}
