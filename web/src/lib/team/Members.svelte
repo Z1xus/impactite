@@ -133,6 +133,7 @@
 			removable: editable(member)
 		}))}
 		remove={removeMember}
+		verb="Remove"
 	>
 		{#snippet control(id)}
 			{@const member = team.members.find((member) => member.id === id)}
@@ -158,6 +159,7 @@
 				meta: [pending.role, `expires ${date(pending.expires)}`]
 			}))}
 			remove={revoke}
+			verb="Revoke"
 		>
 			{#snippet control(id)}
 				{@const pending = team.invites.find((pending) => pending.id === id)}

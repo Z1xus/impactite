@@ -77,12 +77,14 @@
 				key: `g${guest.id}`,
 				title: guest.name,
 				avatar: guest.id,
+				verb: "Remove",
 				meta: [guest.email, guest.role]
 			})),
 			...people.invites.map((item) => ({
 				key: `i${item.id}`,
 				title: item.email,
 				avatar: null,
+				verb: "Revoke",
 				meta: ["invited", item.role]
 			}))
 		]}

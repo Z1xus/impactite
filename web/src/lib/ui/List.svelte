@@ -11,6 +11,7 @@
 		source,
 		empty,
 		remove,
+		verb = "Delete",
 		control
 	}: {
 		items:
@@ -19,6 +20,7 @@
 					title: string;
 					meta?: string[];
 					removable?: boolean;
+					verb?: string;
 					// a person, null while their invite is open
 					avatar?: number | null;
 			  }[]
@@ -26,6 +28,7 @@
 		source?: { failed: boolean; load: () => unknown };
 		empty?: string;
 		remove?: (key: K) => unknown;
+		verb?: string;
 		control?: Snippet<[K]>;
 	} = $props();
 
@@ -81,7 +84,8 @@
 						<button
 							type="button"
 							class="-mr-2.5 grid h-control w-control shrink-0 place-items-center text-dim hover:text-bad"
-							aria-label="remove {item.title}"
+							aria-label="{item.verb ?? verb} {item.title}"
+							title={item.verb ?? verb}
 							disabled={removing === item.key}
 							onclick={() => drop(item.key)}
 						>

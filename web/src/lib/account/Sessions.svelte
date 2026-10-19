@@ -57,5 +57,6 @@
 		})) ?? null}
 		source={sessions}
 		{remove}
+		verb="End"
 	/>
 </Section>
