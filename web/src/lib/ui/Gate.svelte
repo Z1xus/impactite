@@ -6,7 +6,7 @@
 </script>
 
 <main
-	class="grid min-h-dvh place-content-center justify-items-center gutter py-8 [@media(min-height:700px)]:py-16"
+	class="flex min-h-dvh flex-col items-center justify-center gutter py-8 [@media(min-height:700px)]:py-16"
 >
 	<div class="flex w-full max-w-sm flex-col items-center gap-10">
 		<div class="flex flex-col items-center gap-6">
