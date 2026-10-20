@@ -98,7 +98,18 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 				crate::export::day_archive(web, &report.site, yesterday)
 			})?;
 			let name = format!("{}/{yesterday}.impactite.zip", report.site.domain);
-			bucket.put(&web.http, &name, archive).await?;
+			anyhow::ensure!(
+				bucket.local()
+					|| url::Url::parse(&report.email.replacen("s3://", "https://", 1))
+						.is_ok_and(|url| crate::outbound::allowed(&url)),
+				"the bucket address is not public"
+			);
+			let http = if bucket.local() {
+				&web.http
+			} else {
+				&web.hooks
+			};
+			bucket.put(http, &name, archive).await?;
 			web.app
 				.mark_report(report.id, day_number(yesterday).into())?;
 		}
@@ -326,13 +337,17 @@ async fn deliver(web: &Web, report: &Report, note: &Note) -> anyhow::Result<()> 
 			.send(to, &note.subject, &letter.text(), &letter.html())
 			.await;
 	}
+	anyhow::ensure!(
+		url::Url::parse(to).is_ok_and(|url| crate::outbound::allowed(&url)),
+		"the webhook address is not public"
+	);
 	let request = if to.starts_with("https://hooks.slack.com/") {
-		web.http.post(to).json(&slack(note))
+		web.hooks.post(to).json(&slack(note))
 	} else if to.contains("discord.com/api/webhooks/") {
 		discord(web, note, to)?
 	} else {
 		let text = [note.line.as_str(), &table, &note.link].join("\n\n");
-		web.http.post(to).json(&json!({
+		web.hooks.post(to).json(&json!({
 			"subject": note.subject,
 			"text": text,
 			"site": report.site.domain,
@@ -373,7 +388,7 @@ fn discord(web: &Web, note: &Note, to: &str) -> anyhow::Result<reqwest::RequestB
 		"footer": { "text": "impactite" },
 	});
 	if note.series.is_empty() {
-		return Ok(web.http.post(to).json(&json!({ "embeds": [embed] })));
+		return Ok(web.hooks.post(to).json(&json!({ "embeds": [embed] })));
 	}
 	embed["image"] = json!({ "url": "attachment://chart.png" });
 	let mut chart = card::Canvas::new(800, 200, card::INK);
@@ -386,7 +401,7 @@ fn discord(web: &Web, note: &Note, to: &str) -> anyhow::Result<reqwest::RequestB
 				.file_name("chart.png")
 				.mime_str("image/png")?,
 		);
-	Ok(web.http.post(to).multipart(form))
+	Ok(web.hooks.post(to).multipart(form))
 }
 
 fn slack(note: &Note) -> Value {
@@ -454,10 +469,22 @@ async fn add(
 	let threshold = if alert { body.threshold } else { 0 };
 	let to = body.email.trim();
 	if body.kind == "export" {
-		crate::s3::Bucket::parse(to)
+		let bucket = crate::s3::Bucket::parse(to)
 			.map_err(|err| Error::bad(format!("Check the bucket: {err}.")))?;
+		let reachable = if bucket.local() {
+			web.app.is_admin(viewer.user)
+		} else {
+			url::Url::parse(&to.replacen("s3://", "https://", 1))
+				.is_ok_and(|url| crate::outbound::allowed(&url))
+		};
+		if !reachable {
+			return Err(Error::forbidden(
+				"This bucket is not reachable. A bucket on the local network needs an instance admin.",
+			));
+		}
 	} else {
-		let webhook = to.starts_with("https://") && url::Url::parse(to).is_ok();
+		let webhook = to.starts_with("https://")
+			&& url::Url::parse(to).is_ok_and(|url| crate::outbound::allowed(&url));
 		if !KINDS.contains(&body.kind.as_str())
 			|| !(webhook || to.contains('@'))
 			|| (alert && !(1..=MAX_THRESHOLD).contains(&body.threshold))

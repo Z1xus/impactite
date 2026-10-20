@@ -52,6 +52,11 @@ impl Bucket {
 		})
 	}
 
+	// a bucket on the local network, set up by an instance admin
+	pub fn local(&self) -> bool {
+		self.scheme == "http"
+	}
+
 	pub fn shown(&self) -> String {
 		format!("bucket {}{}", self.host, self.path)
 	}
