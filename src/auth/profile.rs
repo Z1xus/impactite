@@ -67,6 +67,12 @@ struct Token {
 	token: String,
 }
 
+#[derive(Deserialize)]
+struct Link {
+	token: String,
+	code: Option<String>,
+}
+
 async fn update(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
@@ -298,16 +304,25 @@ async fn send_link(
 	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Reply<Response> {
-	let user = web
-		.app
-		.take_login(&body.token)?
-		.ok_or_else(|| Error::not_found("This link expired or was already used."))?;
+async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Link>) -> Reply<Response> {
+	let expired = || Error::not_found("This link expired or was already used.");
+	let user = web.app.login_user(&body.token)?.ok_or_else(expired)?;
+	let totp_needed = |message: &str| {
+		(
+			StatusCode::UNAUTHORIZED,
+			Json(json!({ "error": message, "totp": true })),
+		)
+			.into_response()
+	};
 	if web.app.totp(user)?.is_some() {
-		return Err(Error::forbidden(
-			"Two-factor is on. Sign in with your password and code.",
-		));
+		let Some(code) = &body.code else {
+			return Ok(totp_needed("Enter the code from your authenticator app."));
+		};
+		if let Err(message) = crate::auth::totp::verify(&web.app, user, code) {
+			return Ok(totp_needed(message));
+		}
 	}
+	web.app.take_login(&body.token)?.ok_or_else(expired)?;
 	signed_in(&web, user, None)
 }
 
@@ -432,6 +447,16 @@ impl App {
 				"delete from email_changes where hash = ?1 and expires_at > ?2 returning user, email",
 				params![key_hash(token), now()],
 				|row| Ok((row.get(0)?, row.get(1)?)),
+			)
+			.optional()
+	}
+
+	fn login_user(&self, token: &str) -> rusqlite::Result<Option<i64>> {
+		self.conn()
+			.query_row(
+				"select user from logins where hash = ?1 and expires_at > ?2",
+				params![key_hash(token), now()],
+				|row| row.get(0),
 			)
 			.optional()
 	}
