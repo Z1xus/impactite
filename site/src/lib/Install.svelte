@@ -7,7 +7,7 @@
 
 	// everything stays in the browser, secrets are placeholders to fill in later
 	let host = $state("");
-	let run = $state<"binary" | "docker" | "compose">("docker");
+	let run = $state<"binary" | "docker" | "podman" | "compose">("docker");
 	let https = $state<"built-in" | "proxy" | "tunnel">("built-in");
 	let mail = $state<"none" | "smtp" | "resend" | "cloudflare">("none");
 
@@ -64,6 +64,58 @@
 					: [])
 			].join("\n");
 		}
+		if (run === "podman") {
+			const unit = (name: string, lines: string[]) => [
+				`cat > ~/.config/containers/systemd/${name}.container <<'EOF'`,
+				"[Container]",
+				...lines,
+				"ReadOnly=true",
+				"DropCapability=ALL",
+				"NoNewPrivileges=true",
+				"",
+				"[Service]",
+				"Restart=always",
+				"",
+				"[Install]",
+				"WantedBy=default.target",
+				"EOF"
+			];
+			const ports = {
+				"built-in": ["PublishPort=443:8000", "PublishPort=80:80"],
+				proxy: ["PublishPort=127.0.0.1:8000:8000"],
+				tunnel: []
+			}[https];
+			return [
+				...(https === "built-in"
+					? [
+							"echo net.ipv4.ip_unprivileged_port_start=80 | sudo tee /etc/sysctl.d/impactite.conf",
+							"sudo sysctl --system"
+						]
+					: []),
+				"sudo loginctl enable-linger $USER",
+				"mkdir -p ~/.config/containers/systemd",
+				...unit("impactite", [
+					`Image=${image}`,
+					`Exec=serve --url ${url}${acme}`,
+					"Volume=impactite:/data:U",
+					...ports,
+					...(mailUrl ? [`Environment=IMPACTITE_MAIL=${mailUrl}`] : []),
+					"User=1000:1000",
+					"Sysctl=net.ipv4.ip_unprivileged_port_start=0"
+				]),
+				...(https === "tunnel"
+					? [
+							"# route the tunnel to http://localhost:8000 in cloudflare",
+							...unit("impactite-tunnel", [
+								"Image=docker.io/cloudflare/cloudflared",
+								"Exec=tunnel --no-autoupdate run --token TUNNEL_TOKEN",
+								"Network=impactite.container"
+							])
+						]
+					: []),
+				`systemctl --user daemon-reload && systemctl --user start impactite${https === "tunnel" ? " impactite-tunnel" : ""}`
+			].join("\n");
+		}
 		const ports = {
 			"built-in": ['      - "443:8000"', '      - "80:80"'],
 			proxy: ['      - "127.0.0.1:8000:8000"'],
@@ -107,6 +159,7 @@
 			bind:value={run}
 			options={[
 				{ key: "docker", label: "docker" },
+				{ key: "podman", label: "podman" },
 				{ key: "compose", label: "compose" },
 				{ key: "binary", label: "binary" }
 			]}

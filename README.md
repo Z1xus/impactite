@@ -24,6 +24,8 @@ Or use Docker:
 docker run -d -p 443:8000 -p 80:80 -v impactite:/data ghcr.io/z1xus/impactite serve --url https://stats.example.com --acme
 ```
 
+For rootless Podman, the [install builder](https://impactite.dev/#install) writes a hardened Quadlet unit.
+
 On first start it prints a setup link where you make your account. `--acme` gets the certificate for you. If you already have a reverse proxy, drop that flag and point the proxy at `127.0.0.1:8000`.
 
 Updating is `impactite update` and a restart (or pulling the new image).
