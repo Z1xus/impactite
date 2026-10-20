@@ -465,7 +465,11 @@ async fn start_import(
 	let site = web.editable(viewer.user, &domain)?;
 	let token =
 		token(site.id).ok_or_else(|| Error::bad("The Google sign-in expired. Connect again."))?;
-	if !body.property.starts_with("properties/") {
+	if !body
+		.property
+		.strip_prefix("properties/")
+		.is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
+	{
 		return Err(Error::bad("Pick a property."));
 	}
 	{

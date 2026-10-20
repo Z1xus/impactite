@@ -193,7 +193,7 @@ fn row_values(
 		(
 			"date",
 			match date.len() {
-				8 => format!("{}-{}-{}", &date[..4], &date[4..6], &date[6..]),
+				8 if date.is_ascii() => format!("{}-{}-{}", &date[..4], &date[4..6], &date[6..]),
 				_ => String::new(),
 			},
 		),

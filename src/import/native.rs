@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 
 use anyhow::{Context, bail};
@@ -14,7 +14,7 @@ use crate::app::{App, Site};
 
 pub fn import(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<(u64, Option<i64>)> {
 	let mut archive = ZipArchive::new(File::open(path).context("open export")?)?;
-	let meta: Value = serde_json::from_reader(archive.by_name("site.json")?)?;
+	let meta: Value = serde_json::from_reader(archive.by_name("site.json")?.take(1 << 24))?;
 	if meta["format"] != "impactite" {
 		bail!("This is not an impactite export.");
 	}
@@ -41,8 +41,14 @@ pub fn import(db: &Db, app: &App, site: &Site, path: &Path) -> anyhow::Result<(u
 		.unwrap_or(TimeZone::UTC);
 	let target = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let (mut count, mut first) = (0, None);
-	for line in BufReader::new(archive.by_name("events.ndjson")?).lines() {
-		let line: Map<String, Value> = serde_json::from_str(&line?)?;
+	let mut lines = BufReader::new(archive.by_name("events.ndjson")?.take(super::LIMIT));
+	let mut text = String::new();
+	loop {
+		text.clear();
+		if lines.by_ref().take(1 << 20).read_line(&mut text)? == 0 {
+			break;
+		}
+		let line: Map<String, Value> = serde_json::from_str(&text)?;
 		let text = |key: &str| line.get(key).and_then(Value::as_str).unwrap_or_default();
 		let id = |key: &str| u64::from_str_radix(text(key), 16).context("bad id");
 		let local: DateTime = text("t").parse().context("bad time")?;

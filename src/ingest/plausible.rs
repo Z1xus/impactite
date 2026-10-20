@@ -128,7 +128,12 @@ pub async fn event(
 		});
 	let domains = payload.d.unwrap_or_else(|| hostname.clone());
 	let mut dropped = 0;
-	for domain in domains.split(',').map(str::trim).filter(|d| !d.is_empty()) {
+	for domain in domains
+		.split(',')
+		.map(str::trim)
+		.filter(|d| !d.is_empty())
+		.take(10)
+	{
 		let tracked = if let Some(site) = ingest.site(domain) {
 			let keyed = reported
 				.as_ref()

@@ -91,7 +91,9 @@ pub async fn counter(
 		};
 		let mut counts = lock(&COUNTS);
 		counts.retain(|_, (at, _)| at.elapsed() < FRESH);
-		counts.insert(key, (Instant::now(), count));
+		if counts.len() < 10_000 {
+			counts.insert(key, (Instant::now(), count));
+		}
 		count
 	};
 

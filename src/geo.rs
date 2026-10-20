@@ -103,7 +103,9 @@ async fn download(path: &Path) -> anyhow::Result<()> {
 		now.date(),
 		now.date().saturating_sub(jiff::Span::new().months(1)),
 	];
-	let client = reqwest::Client::new();
+	let client = reqwest::Client::builder()
+		.timeout(Duration::from_secs(300))
+		.build()?;
 	for month in months {
 		let url = format!(
 			"https://download.db-ip.com/free/dbip-country-lite-{}.mmdb.gz",
@@ -115,7 +117,9 @@ async fn download(path: &Path) -> anyhow::Result<()> {
 		}
 		let packed = response.bytes().await?;
 		let mut mmdb = Vec::new();
-		GzDecoder::new(packed.as_ref()).read_to_end(&mut mmdb)?;
+		GzDecoder::new(packed.as_ref())
+			.take(1 << 29)
+			.read_to_end(&mut mmdb)?;
 		Reader::from_source(mmdb.as_slice()).context("downloaded geo database is invalid")?;
 		if let Some(dir) = path.parent() {
 			fs::create_dir_all(dir)?;

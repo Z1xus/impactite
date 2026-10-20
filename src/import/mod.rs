@@ -8,6 +8,9 @@ use jiff::tz::TimeZone;
 
 use crate::app::{App, Site};
 
+// uncompressed bytes read from one file, so a zip bomb runs out before memory does
+pub const LIMIT: u64 = 2 << 30;
+
 pub mod clickhouse;
 pub mod ga4;
 pub mod goatcounter;

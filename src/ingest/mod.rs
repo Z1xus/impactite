@@ -409,6 +409,9 @@ pub fn language(headers: &HeaderMap) -> String {
 }
 
 fn referrer_parts(raw: &str, page_host: &str) -> (String, String) {
+	if raw.len() > 2000 {
+		return Default::default();
+	}
 	let Ok(url) = url::Url::parse(raw) else {
 		return Default::default();
 	};

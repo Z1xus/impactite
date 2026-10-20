@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 use anyhow::Context;
@@ -39,7 +40,7 @@ pub fn import(
 		let Some(table) = table(&file.name()?).map(str::to_owned) else {
 			continue;
 		};
-		let mut csv = csv::Reader::from_reader(file);
+		let mut csv = csv::Reader::from_reader(file.take(super::LIMIT));
 		let headers = csv.headers()?.clone();
 		for record in csv.records() {
 			let record = record?;

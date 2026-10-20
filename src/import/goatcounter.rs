@@ -22,9 +22,9 @@ pub fn import(
 ) -> anyhow::Result<(u64, Option<i64>)> {
 	let file = BufReader::new(File::open(path).context("open export")?);
 	let reader: Box<dyn Read> = if path.extension().is_some_and(|ext| ext == "gz") {
-		Box::new(MultiGzDecoder::new(file))
+		Box::new(MultiGzDecoder::new(file).take(super::LIMIT))
 	} else {
-		Box::new(file)
+		Box::new(file.take(super::LIMIT))
 	};
 	let mut csv = csv::Reader::from_reader(reader);
 	if !csv

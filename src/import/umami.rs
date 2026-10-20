@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::path::Path;
 
 use anyhow::{Context, bail};
@@ -20,8 +20,9 @@ pub fn import(
 	path: &Path,
 	titles: &mut HashMap<String, String>,
 ) -> anyhow::Result<(u64, Option<i64>)> {
-	let mut csv =
-		csv::Reader::from_reader(BufReader::new(File::open(path).context("open export")?));
+	let mut csv = csv::Reader::from_reader(BufReader::new(
+		File::open(path).context("open export")?.take(super::LIMIT),
+	));
 	let headers = csv.headers()?.clone();
 	let column = |name: &str| headers.iter().position(|header| header == name);
 	let (Some(created), Some(session)) = (column("created_at"), column("session_id")) else {
