@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderValue, StatusCode, header};
-use axum::middleware::map_response;
+use axum::middleware::{from_fn_with_state, map_response};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
@@ -11,6 +12,7 @@ use crate::assets;
 use crate::auth::{accounts, admin, keys, passkeys, prefs, profile, sso, teams, totp};
 use crate::batch;
 use crate::export;
+use crate::guard::guard;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::site;
@@ -21,7 +23,12 @@ use crate::web::Web;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 	let mut events = Router::new()
-		.route("/api/event", post(plausible::event).options(preflight))
+		.route(
+			"/api/event",
+			post(plausible::event)
+				.options(preflight)
+				.layer(DefaultBodyLimit::max(1 << 17)),
+		)
 		.route("/count", get(goatcounter::count).post(goatcounter::count));
 	let mut scripts = Router::new()
 		.route("/js/{file}", get(tracker::script))
@@ -74,7 +81,12 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 		.route("/api/app/batch", post(batch::batch))
 		.with_state(app.clone());
 	app.merge(batch)
-		.merge(Router::new().fallback(assets::serve).with_state(web))
+		.merge(
+			Router::new()
+				.fallback(assets::serve)
+				.with_state(web.clone()),
+		)
+		.layer(from_fn_with_state(web, guard))
 }
 
 async fn preflight() -> Response {

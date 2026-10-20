@@ -106,6 +106,16 @@ pub fn page(web: &Web, headers: &HeaderMap, share: Option<(&str, Option<Value>)>
 		}
 		html = html.replacen("</head>", &format!("{head}</head>"), 1);
 	}
+	let Some(nonce) = crate::auth::webauthn::challenge() else {
+		return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+	};
+	let html = html
+		.replacen("<head>", &format!("<head>{start}"), 1)
+		.replace("<script", &format!("<script nonce=\"{nonce}\""));
+	let ancestors = if framed { "*" } else { "'none'" };
+	let policy = format!(
+		"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors {ancestors}"
+	);
 	let mut response = (
 		[
 			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
@@ -113,9 +123,14 @@ pub fn page(web: &Web, headers: &HeaderMap, share: Option<(&str, Option<Value>)>
 			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
 			(header::REFERRER_POLICY, "same-origin"),
 		],
-		html.replacen("<head>", &format!("<head>{start}"), 1),
+		html,
 	)
 		.into_response();
+	if let Ok(policy) = HeaderValue::from_str(&policy) {
+		response
+			.headers_mut()
+			.insert(header::CONTENT_SECURITY_POLICY, policy);
+	}
 	if !framed {
 		response
 			.headers_mut()
