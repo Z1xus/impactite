@@ -2,12 +2,13 @@ use axum::Json;
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, HeaderValue, Method, header};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tower::ServiceExt;
 
 const LIMIT: usize = 1 << 22;
+const CALLS: usize = 32;
 
 #[derive(Deserialize)]
 pub struct Call {
@@ -22,12 +23,15 @@ pub struct Answer {
 	body: Value,
 }
 
-// runs several app calls from one request, each as if it came in alone
+// runs several app reads from one request, each as if it came in alone
 pub async fn batch(
 	State(app): State<Router>,
 	headers: HeaderMap,
 	Json(calls): Json<Vec<Call>>,
-) -> Json<Vec<Answer>> {
+) -> Result<Json<Vec<Answer>>, StatusCode> {
+	if calls.len() > CALLS {
+		return Err(StatusCode::PAYLOAD_TOO_LARGE);
+	}
 	let tasks: Vec<_> = calls
 		.into_iter()
 		.map(|call| tokio::spawn(run(app.clone(), headers.clone(), call)))
@@ -39,7 +43,29 @@ pub async fn batch(
 			body: Value::Null,
 		}));
 	}
-	Json(answers)
+	Ok(Json(answers))
+}
+
+// reads only, and never an oauth step or a stream that does not end
+fn readable(method: &Method, path: &str) -> bool {
+	match *method {
+		Method::GET => {
+			path.starts_with("/api/app/")
+				&& ![
+					"/api/app/live/",
+					"/api/app/sso",
+					"/api/app/google/",
+					"/api/app/icon/",
+				]
+				.iter()
+				.any(|prefix| path.starts_with(prefix))
+				&& !["/connect", "/card.png"]
+					.iter()
+					.any(|suffix| path.ends_with(suffix))
+		}
+		Method::POST => matches!(path, "/api/app/query" | "/api/app/props"),
+		_ => false,
+	}
 }
 
 async fn run(app: Router, headers: HeaderMap, call: Call) -> Answer {
@@ -50,7 +76,7 @@ async fn run(app: Router, headers: HeaderMap, call: Call) -> Answer {
 	let Ok(method) = call.method.parse::<Method>() else {
 		return refused(400);
 	};
-	if !call.path.starts_with("/api/app/") {
+	if !readable(&method, call.path.split('?').next().unwrap_or_default()) {
 		return refused(404);
 	}
 	let body = call.body.map(|body| body.to_string()).unwrap_or_default();
