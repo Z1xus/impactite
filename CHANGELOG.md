@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1
+- Fix: The dashboard no longer loads blank behind Cloudflare Rocket Loader
+
 ## 0.2.0
 - New: Delete and manage segments from the dashboard filter menu
 - New: Hide All sites in Account, Display
