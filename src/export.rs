@@ -125,7 +125,7 @@ fn build(
 		let mut csv = csv::Writer::from_writer(Vec::new());
 		csv.write_record(header)?;
 		for row in rows {
-			csv.write_record(row)?;
+			csv.write_record(row.into_iter().map(cell))?;
 		}
 		zip.write_all(&csv.into_inner()?)?;
 		Ok(())
@@ -366,6 +366,15 @@ fn build(
 	Ok(zip.finish()?.into_inner())
 }
 
+// a spreadsheet runs a cell that starts like a formula
+fn cell(value: String) -> String {
+	if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+		format!("'{value}")
+	} else {
+		value
+	}
+}
+
 fn utc(local: i64, tz: &TimeZone) -> anyhow::Result<Timestamp> {
 	let civil = Timestamp::from_second(local)?
 		.to_zoned(TimeZone::UTC)
@@ -531,7 +540,7 @@ pub(crate) fn goatcounter(
 			seen.insert(event.visitor).to_string(),
 			date,
 		];
-		if let Err(err) = csv.write_record(row) {
+		if let Err(err) = csv.write_record(row.map(cell)) {
 			failed.get_or_insert(err);
 		}
 	})?;
