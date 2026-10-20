@@ -98,8 +98,9 @@ fn next(reader: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
 	if len > MAX_FRAME {
 		return Ok(None);
 	}
-	let mut payload = vec![0; len];
-	if !read_full(reader, &mut payload)? || crc32fast::hash(&payload) != crc {
+	let mut payload = Vec::new();
+	reader.take(len as u64).read_to_end(&mut payload)?;
+	if payload.len() != len || crc32fast::hash(&payload) != crc {
 		return Ok(None);
 	}
 	Ok(Some(payload))

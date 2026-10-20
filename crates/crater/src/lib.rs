@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod cache;
 mod codec;
 mod db;

@@ -1,3 +1,5 @@
+const MAX_VALUES: usize = 1 << 27;
+
 pub(crate) fn put_uvar(buf: &mut Vec<u8>, mut v: u64) {
 	while v >= 0x80 {
 		buf.push(v as u8 | 0x80);
@@ -94,7 +96,9 @@ impl<'a> Reader<'a> {
 		let width = u32::try_from(self.uvar()?)
 			.ok()
 			.filter(|&width| width <= 32)?;
-		let len = usize::try_from(self.uvar()?).ok()?;
+		let len = usize::try_from(self.uvar()?)
+			.ok()
+			.filter(|&len| len <= MAX_VALUES)?;
 		if width == 0 {
 			return Some(vec![0; len]);
 		}
