@@ -36,10 +36,11 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use axum::extract::connect_info::IntoMakeServiceWithConnectInfo;
-use axum_server::tls_rustls::RustlsConfig;
+use axum_server::tls_rustls::{RustlsAcceptor, RustlsConfig};
 use clap::{Args, Parser, Subcommand};
 use crater::Db;
 use futures_util::StreamExt;
+use hyper_util::rt::TokioTimer;
 use mimalloc::MiMalloc;
 use rustls_acme::AcmeConfig;
 use rustls_acme::caches::DirCache;
@@ -477,6 +478,12 @@ async fn bind(
 	handle: axum_server::Handle<SocketAddr>,
 	service: IntoMakeServiceWithConnectInfo<axum::Router, SocketAddr>,
 ) -> anyhow::Result<()> {
+	let mut server = axum_server::bind(listen).handle(handle);
+	server
+		.http_builder()
+		.http1()
+		.timer(TokioTimer::new())
+		.header_read_timeout(Duration::from_secs(10));
 	if let (Some(cert), Some(key)) = (&args.cert, &args.key) {
 		let config = RustlsConfig::from_pem_file(cert, key)
 			.await
@@ -492,8 +499,8 @@ async fn bind(
 				}
 			}
 		});
-		axum_server::bind_rustls(listen, config)
-			.handle(handle)
+		server
+			.acceptor(RustlsAcceptor::new(config))
 			.serve(service)
 			.await?;
 	} else if args.acme {
@@ -520,16 +527,9 @@ async fn bind(
 			}
 		});
 		tokio::spawn(redirect(url.to_owned()));
-		axum_server::bind(listen)
-			.acceptor(acceptor)
-			.handle(handle)
-			.serve(service)
-			.await?;
+		server.acceptor(acceptor).serve(service).await?;
 	} else {
-		axum_server::bind(listen)
-			.handle(handle)
-			.serve(service)
-			.await?;
+		server.serve(service).await?;
 	}
 	Ok(())
 }
