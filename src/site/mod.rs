@@ -109,6 +109,11 @@ async fn update(
 		}
 		None => None,
 	};
+	if body.retention.is_some() && !manages(&web, viewer.user, &site) {
+		return Err(Error::forbidden(
+			"Only owners and admins can change how long data is kept.",
+		));
+	}
 	if let Some(team) = body.team
 		&& (!manages(&web, viewer.user, &site) || !manager(&web, viewer.user, team))
 	{

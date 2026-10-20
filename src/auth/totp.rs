@@ -145,6 +145,11 @@ async fn begin(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 }
 
 async fn enable(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<Enable>) -> Reply {
+	if web.app.totp(viewer.user)?.is_some() {
+		return Err(Error::conflict(
+			"Turn two-factor off before setting it up again.",
+		));
+	}
 	let step = matching(&body.secret, &body.code)
 		.ok_or_else(|| Error::bad("Wrong code. Check the time on your phone."))?;
 	let mut codes = Vec::new();
