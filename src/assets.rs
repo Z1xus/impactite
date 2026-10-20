@@ -119,7 +119,8 @@ pub fn page(web: &Web, headers: &HeaderMap, share: Option<(&str, Option<Value>)>
 	let mut response = (
 		[
 			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
-			(header::CACHE_CONTROL, "private, no-cache"),
+			// no-transform keeps cloudflare rocket loader from rewriting nonced scripts
+			(header::CACHE_CONTROL, "private, no-cache, no-transform"),
 			(header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
 			(header::REFERRER_POLICY, "same-origin"),
 		],
