@@ -1,7 +1,9 @@
-use std::sync::Arc;
+use std::net::SocketAddr;
+use std::sync::{Arc, LazyLock};
 
 use argon2::{Argon2, PasswordVerifier};
-use axum::extract::{Path, State};
+use axum::extract::{ConnectInfo, Path, State};
+use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post, put};
@@ -13,11 +15,15 @@ use serde_json::{Value, json};
 use crate::app::now;
 use crate::app::{App, key_hash, token};
 use crate::auth::accounts::{Viewer, hash, signed_in};
+use crate::limit::Limit;
 use crate::mail::Letter;
 use crate::site;
 use crate::web::{Error, Reply, Web};
 
 const LINK_SECS: i64 = 15 * 60;
+
+static LINKS: LazyLock<Limit> = LazyLock::new(|| Limit::new(5, 10));
+static CLIENTS: LazyLock<Limit> = LazyLock::new(|| Limit::new(20, 10));
 
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
@@ -245,10 +251,22 @@ pub async fn remove_account(web: &Web, user: i64) -> Reply<()> {
 	Ok(())
 }
 
-async fn send_link(State(web): State<Arc<Web>>, Json(body): Json<Confirm>) -> Reply<StatusCode> {
+async fn send_link(
+	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
+	Json(body): Json<Confirm>,
+) -> Reply<StatusCode> {
 	if !web.mail.ready() {
 		return Err(Error::bad("Mail is not set up on this server."));
 	}
+	let client = web.client(peer, &headers);
+	let account = body.email.trim().to_lowercase();
+	if !LINKS.open(&account) || !CLIENTS.open(&client) {
+		return Err(Error::too_many());
+	}
+	LINKS.strike(&account);
+	CLIENTS.strike(&client);
 	// answer the same way for unknown emails so accounts stay private
 	let Some(user) = web.app.user_by_email(&body.email)? else {
 		return Ok(StatusCode::NO_CONTENT);
@@ -285,6 +303,11 @@ async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> Re
 		.app
 		.take_login(&body.token)?
 		.ok_or_else(|| Error::not_found("This link expired or was already used."))?;
+	if web.app.totp(user)?.is_some() {
+		return Err(Error::forbidden(
+			"Two-factor is on. Sign in with your password and code.",
+		));
+	}
 	signed_in(&web, user, None)
 }
 

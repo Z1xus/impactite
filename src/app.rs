@@ -478,6 +478,11 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
 	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+// compared as digests, so timing says nothing about where two secrets differ
+pub(crate) fn same(a: &str, b: &str) -> bool {
+	blake3::hash(a.as_bytes()) == blake3::hash(b.as_bytes())
+}
+
 pub(crate) fn key_hash(key: &str) -> String {
 	blake3::hash(key.as_bytes()).to_hex().to_string()
 }

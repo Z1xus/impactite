@@ -1,8 +1,9 @@
 use std::convert::Infallible;
-use std::sync::Arc;
+use std::net::SocketAddr;
+use std::sync::{Arc, LazyLock};
 
 use argon2::{Argon2, PasswordVerifier};
-use axum::extract::{FromRequestParts, Path, State};
+use axum::extract::{ConnectInfo, FromRequestParts, Path, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -12,9 +13,13 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::app::{App, Site, token};
+use crate::app::{App, Site, same, token};
 use crate::auth::accounts::{Viewer, hash};
+use crate::limit::Limit;
 use crate::web::{Error, Reply, Web};
+
+static LINKS: LazyLock<Limit> = LazyLock::new(|| Limit::new(10, 10));
+static CLIENTS: LazyLock<Limit> = LazyLock::new(|| Limit::new(30, 10));
 
 // a signed in member or a share link token, for read only access
 pub struct Reader {
@@ -55,7 +60,7 @@ impl Reader {
 				.as_deref()
 				.map(|share| share.rsplit_once('.').unwrap_or((share, "")))
 				.is_some_and(
-					|(slug, grant)| matches!(web.app.share(slug), Ok(Some(share)) if share.grant() == grant),
+					|(slug, grant)| matches!(web.app.share(slug), Ok(Some(share)) if same(&share.grant(), grant)),
 				)
 	}
 
@@ -79,7 +84,7 @@ impl Reader {
 		else {
 			return false;
 		};
-		matches!(web.app.share(slug), Ok(Some(share)) if share.domain == domain && share.grant() == grant)
+		matches!(web.app.share(slug), Ok(Some(share)) if share.domain == domain && same(&share.grant(), grant))
 	}
 }
 
@@ -300,6 +305,8 @@ async fn remove(
 
 async fn open(
 	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
 	Path(slug): Path<String>,
 	Json(body): Json<Unlock>,
 ) -> Reply<Response> {
@@ -308,13 +315,23 @@ async fn open(
 		.share(&slug)?
 		.ok_or_else(|| Error::not_found("This link does not exist."))?;
 	if !share.password.is_empty() {
-		let valid = !body.password.is_empty()
-			&& argon2::PasswordHash::new(&share.password).is_ok_and(|parsed| {
-				Argon2::default()
-					.verify_password(body.password.as_bytes(), &parsed)
-					.is_ok()
-			});
+		let client = web.client(peer, &headers);
+		if !LINKS.open(&slug) || !CLIENTS.open(&client) {
+			return Err(Error::too_many());
+		}
+		let (stored, given) = (share.password.clone(), body.password.clone());
+		let valid = tokio::task::spawn_blocking(move || {
+			!given.is_empty()
+				&& argon2::PasswordHash::new(&stored).is_ok_and(|parsed| {
+					Argon2::default()
+						.verify_password(given.as_bytes(), &parsed)
+						.is_ok()
+				})
+		})
+		.await?;
 		if !valid {
+			LINKS.strike(&slug);
+			CLIENTS.strike(&client);
 			return Ok((
 				StatusCode::UNAUTHORIZED,
 				Json(json!({ "error": "Wrong password.", "locked": true })),

@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use aws_lc_rs::digest::{SHA256, digest};
@@ -6,7 +7,8 @@ use aws_lc_rs::signature::{
 	VerificationAlgorithm,
 };
 use axum::Router;
-use axum::extract::{Query, State};
+use axum::extract::{ConnectInfo, Query, State};
+use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use base64::Engine;
@@ -16,7 +18,7 @@ use serde_json::Value;
 
 use crate::app::now;
 use crate::auth::accounts::signed_in;
-use crate::auth::passkeys::Purpose;
+use crate::auth::passkeys::{Purpose, crowded};
 use crate::auth::webauthn;
 use crate::web::Web;
 
@@ -79,10 +81,17 @@ fn failed(reason: &str) -> Response {
 	Redirect::to(&format!("/login?sso={reason}")).into_response()
 }
 
-async fn start(State(web): State<Arc<Web>>) -> Response {
+async fn start(
+	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
+) -> Response {
 	let Some(provider) = &web.sso else {
 		return failed("off");
 	};
+	if crowded(&web, peer, &headers).is_err() {
+		return failed("provider");
+	}
 	let discovery = match discover(&web, provider).await {
 		Ok(discovery) => discovery,
 		Err(err) => {

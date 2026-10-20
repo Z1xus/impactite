@@ -1,6 +1,7 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
@@ -13,7 +14,7 @@ use serde_json::{Value, json};
 
 use crate::app::now;
 use crate::app::{App, lock};
-use crate::auth::accounts::{Viewer, signed_in};
+use crate::auth::accounts::{ANONYMOUS, Viewer, signed_in};
 use crate::auth::webauthn::{self, Assertion, Key, Registration};
 use crate::ingest::ua;
 use crate::web::{Error, Reply, Web};
@@ -116,7 +117,13 @@ struct Signup {
 	open: bool,
 }
 
-async fn signup(State(web): State<Arc<Web>>, Json(body): Json<Signup>) -> Reply {
+async fn signup(
+	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
+	Json(body): Json<Signup>,
+) -> Reply {
+	crowded(&web, peer, &headers)?;
 	let (purpose, email) = if body.open {
 		if !web.app.signup_open() {
 			return Err(Error::forbidden("Sign-up is closed on this server."));
@@ -188,7 +195,12 @@ async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<Stri
 	list(State(web), viewer).await
 }
 
-async fn login_begin(State(web): State<Arc<Web>>) -> Reply {
+async fn login_begin(
+	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
+) -> Reply {
+	crowded(&web, peer, &headers)?;
 	ceremony(&web, Purpose::Login, |challenge| {
 		webauthn::request_options(&web.rp, challenge)
 	})
@@ -222,6 +234,16 @@ async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Reply<Re
 		})?;
 	let _ = web.app.touch_passkey(&id, counter);
 	signed_in(&web, user, None)
+}
+
+// anyone can open a ceremony, so one address gets only so many
+pub(crate) fn crowded(web: &Web, peer: SocketAddr, headers: &HeaderMap) -> Reply<()> {
+	let client = web.client(peer, headers);
+	if !ANONYMOUS.open(&client) {
+		return Err(Error::too_many());
+	}
+	ANONYMOUS.strike(&client);
+	Ok(())
 }
 
 fn ceremony(web: &Web, purpose: Purpose, options: impl FnOnce(&str) -> Value) -> Reply {

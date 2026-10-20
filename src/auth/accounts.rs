@@ -1,7 +1,8 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
 
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use axum::extract::{FromRequestParts, State};
+use axum::extract::{ConnectInfo, FromRequestParts, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -11,12 +12,17 @@ use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::app::{App, key_hash, lock, now, token};
-use crate::auth::passkeys::{Proof, Purpose, device, registered};
+use crate::app::{App, key_hash, lock, now, same, token};
+use crate::auth::passkeys::{Proof, Purpose, crowded, device, registered};
+use crate::limit::Limit;
 use crate::web::{Error, Reply, Web, fail};
 
 const COOKIE: &str = "impactite_session";
 const SESSION_SECS: i64 = 30 * 86_400;
+static ACCOUNTS: LazyLock<Limit> = LazyLock::new(|| Limit::new(10, 10));
+static CLIENTS: LazyLock<Limit> = LazyLock::new(|| Limit::new(30, 10));
+// sign-ups and sign-in ceremonies cost the server a hash or an open slot each
+pub static ANONYMOUS: LazyLock<Limit> = LazyLock::new(|| Limit::new(60, 10));
 static DECOY: LazyLock<String> = LazyLock::new(|| hash("decoy password").unwrap_or_default());
 
 pub struct Viewer {
@@ -93,7 +99,9 @@ async fn setup(
 	Json(body): Json<Setup>,
 ) -> Reply<Response> {
 	let expected = lock(&web.setup).clone();
-	if expected.as_deref() != Some(body.token.as_str()) || web.app.users_exist().unwrap_or(true) {
+	if !expected.is_some_and(|expected| same(&expected, &body.token))
+		|| web.app.users_exist().unwrap_or(true)
+	{
 		return Err(Error::forbidden("This setup link is no longer valid."));
 	}
 	let user = new_account(
@@ -145,11 +153,29 @@ pub(crate) fn new_account(
 	}
 }
 
-async fn login(State(web): State<Arc<Web>>, Json(body): Json<Credentials>) -> Reply<Response> {
-	let user = web
-		.app
-		.verify(&body.email, &body.password)?
-		.ok_or_else(|| Error::new(StatusCode::UNAUTHORIZED, "Wrong email or password."))?;
+async fn login(
+	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
+	Json(body): Json<Credentials>,
+) -> Reply<Response> {
+	let client = web.client(peer, &headers);
+	let account = body.email.trim().to_lowercase();
+	if !CLIENTS.open(&client) || !ACCOUNTS.open(&account) {
+		return Err(Error::too_many());
+	}
+	let checked = web.clone();
+	let (email, password) = (body.email.clone(), body.password.clone());
+	let user = tokio::task::spawn_blocking(move || checked.app.verify(&email, &password)).await??;
+	let Some(user) = user else {
+		CLIENTS.strike(&client);
+		ACCOUNTS.strike(&account);
+		return Err(Error::new(
+			StatusCode::UNAUTHORIZED,
+			"Wrong email or password.",
+		));
+	};
+	ACCOUNTS.clear(&account);
 	let totp_needed = |message: &str| {
 		(
 			StatusCode::UNAUTHORIZED,
@@ -227,12 +253,14 @@ pub struct Signup {
 
 pub async fn signup(
 	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
 	headers: HeaderMap,
 	Json(body): Json<Signup>,
 ) -> Reply<Response> {
 	if !web.app.signup_open() {
 		return Err(Error::forbidden("Sign-up is closed on this server."));
 	}
+	crowded(&web, peer, &headers)?;
 	let user = new_account(
 		&web,
 		&headers,

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 
@@ -21,6 +22,7 @@ pub struct Web {
 	pub ingest: Arc<Ingest>,
 	pub mail: Arc<Mail>,
 	pub http: reqwest::Client,
+	pub hooks: reqwest::Client,
 	pub data: PathBuf,
 	pub url: String,
 	pub rp: Relying,
@@ -57,6 +59,13 @@ impl Error {
 
 	pub fn conflict(message: impl Into<String>) -> Self {
 		Self::new(StatusCode::CONFLICT, message)
+	}
+
+	pub fn too_many() -> Self {
+		Self::new(
+			StatusCode::TOO_MANY_REQUESTS,
+			"Too many attempts. Wait a few minutes.",
+		)
 	}
 }
 
@@ -106,6 +115,14 @@ impl IntoResponse for Error {
 }
 
 impl Web {
+	// the address a rate limit counts, a whole ipv6 network is one visitor
+	pub fn client(&self, peer: SocketAddr, headers: &HeaderMap) -> String {
+		match self.ingest.proxies.visitor(peer, headers).ip {
+			IpAddr::V6(ip) => format!("{:x}", u128::from(ip) >> 64),
+			ip => ip.to_string(),
+		}
+	}
+
 	pub fn editable(&self, user: i64, domain: &str) -> Reply<Site> {
 		self.app
 			.editable(user, domain)

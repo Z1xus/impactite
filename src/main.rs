@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod api;
 mod app;
 mod assets;
@@ -8,12 +10,15 @@ mod cli;
 mod demo;
 mod export;
 mod geo;
+mod guard;
 mod icons;
 mod import;
 mod ingest;
+mod limit;
 mod mail;
 mod names;
 mod net;
+mod outbound;
 mod s3;
 mod server;
 mod site;
@@ -24,6 +29,7 @@ mod web;
 
 use std::fs;
 use std::net::SocketAddr;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -217,6 +223,8 @@ async fn main() -> anyhow::Result<()> {
 
 	let cli = Cli::parse();
 	fs::create_dir_all(&cli.data).context("create data dir")?;
+	// the database holds password hashes and sessions, and acme keeps its keys here
+	let _ = fs::set_permissions(&cli.data, fs::Permissions::from_mode(0o700));
 	let app = Arc::new(App::open(&cli.data.join("impactite.db")).context("open app db")?);
 	let mail = Arc::new(Mail::new(cli.mail.as_deref(), &cli.mail_from)?);
 
@@ -321,7 +329,10 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		stats: stats.clone(),
 		ingest: ingest.clone(),
 		mail,
-		http: reqwest::Client::new(),
+		http: reqwest::Client::builder()
+			.timeout(Duration::from_secs(30))
+			.build()?,
+		hooks: outbound::client()?,
 		data: data.to_path_buf(),
 		rp: auth::webauthn::Relying::from_url(&url).context("invalid --url")?,
 		url: url.clone(),
