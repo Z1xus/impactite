@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+- New: Plain style in Account, Display: smooth charts, line icons and no dithering, in dark and light
+- New: Demo visitors can open Account, Display to change the theme and formats
+
 ## 0.2.1
 - Fix: The dashboard no longer loads blank behind Cloudflare Rocket Loader
 
