@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { COLS, CODES, GRID, ROWS } from "#lib/art/world.ts";
 	import { theme } from "#lib/theme.svelte.ts";
-	import { css, threshold } from "./bayer";
+	import { css } from "./bayer";
 
 	let {
 		values,
@@ -25,10 +25,17 @@
 		return char === 32 || Number.isNaN(char) ? "" : CODES[char - 48];
 	};
 
-	const max = $derived(Math.max(1, ...Object.values(values)));
-	const level = (country: string) => {
+	const range = $derived.by(() => {
+		const counts = Object.values(values).filter((value) => value > 0);
+		return [Math.log(Math.min(...counts)), Math.log(Math.max(...counts))];
+	});
+	// four clear steps on a log scale between the least and most visited country
+	const share = (country: string) => {
 		const visits = values[country] ?? 0;
-		return visits ? 0.2 + (0.8 * Math.log1p(visits)) / Math.log1p(max) : 0;
+		if (!visits) return 0;
+		const [low, high] = range;
+		const at = high > low ? (Math.log(visits) - low) / (high - low) : 1;
+		return (1 + Math.min(3, Math.floor(at * 4))) / 4;
 	};
 
 	$effect(() => {
@@ -40,26 +47,24 @@
 		if (!ctx) return;
 		void theme.shown;
 		const [land, cyan, active] = [css("--color-edge"), css("--color-cyan"), css("--color-fg")];
+		const rgb = (hex: string) => [16, 8, 0].map((k) => (parseInt(hex.slice(1), 16) >> k) & 255);
+		const [from, to] = [rgb(land), rgb(cyan)];
 		const image = ctx.createImageData(COLS * CELL, ROWS * CELL);
-		const paint = (x: number, y: number, color: string) => {
-			const n = parseInt(color.slice(1), 16);
-			const i = (y * COLS * CELL + x) * 4;
-			image.data.set([n >> 16, (n >> 8) & 255, n & 255, 255], i);
-		};
 		for (let row = 0; row < ROWS; row++) {
 			for (let col = 0; col < COLS; col++) {
 				const country = code(col, row);
 				if (!country) continue;
-				const lit = level(country);
-				for (let dy = 0; dy < CELL - 1; dy++) {
-					for (let dx = 0; dx < CELL - 1; dx++) {
-						const x = col * CELL + dx;
-						const y = row * CELL + dy;
-						const color =
-							hover?.code === country ? active : threshold(x, y) < lit ? cyan : land;
-						paint(x, y, color);
-					}
-				}
+				const lit = share(country);
+				const color =
+					hover?.code === country
+						? rgb(active)
+						: from.map((v, k) => v + (to[k] - v) * lit);
+				for (let dy = 0; dy < CELL - 1; dy++)
+					for (let dx = 0; dx < CELL - 1; dx++)
+						image.data.set(
+							[...color, 255],
+							((row * CELL + dy) * COLS * CELL + col * CELL + dx) * 4
+						);
 			}
 		}
 		ctx.putImageData(image, 0, 0);
@@ -113,7 +118,7 @@
 						vector-effect="non-scaling-stroke"
 						style:fill={hover?.code === country
 							? "var(--color-fg)"
-							: `color-mix(in srgb, var(--color-cyan) ${Math.round(level(country) * 100)}%, var(--color-edge))`}
+							: `color-mix(in srgb, var(--color-cyan) ${share(country) * 100}%, var(--color-edge))`}
 					/>
 				{/each}
 			</svg>
