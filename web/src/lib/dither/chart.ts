@@ -1,4 +1,4 @@
-import { threshold } from "./bayer";
+import { css, threshold } from "./bayer";
 
 export const COLORS = [
 	"--color-cyan",
@@ -67,4 +67,81 @@ export function chart(
 	}
 
 	return data;
+}
+
+export function smooth(
+	ctx: CanvasRenderingContext2D,
+	width: number,
+	height: number,
+	peak: number,
+	axes: boolean,
+	values: number[],
+	previous: number[],
+	hover: number | null,
+	at: (x: number, width: number) => number
+) {
+	const [cyan, grid, faint, fg, panel] = [
+		"--color-cyan",
+		"--color-line",
+		"--color-faint",
+		"--color-fg",
+		"--color-panel"
+	].map(css);
+	const top = (value: number) => 1 + (1 - value / peak) * (height - 2);
+	const trace = (series: (x: number) => number) => {
+		ctx.beginPath();
+		for (let x = 0; x < width; x++) ctx.lineTo(x, top(series(x)));
+	};
+	ctx.lineWidth = 1;
+	ctx.lineJoin = "round";
+
+	if (axes) {
+		ctx.strokeStyle = grid;
+		ctx.setLineDash([2, 3]);
+		ctx.beginPath();
+		for (const tick of [peak, peak / 2, 0]) {
+			const y = Math.round(top(tick)) + 0.5;
+			ctx.moveTo(0, y);
+			ctx.lineTo(width, y);
+		}
+		ctx.stroke();
+	}
+
+	trace((x) => at(x, width));
+	ctx.lineTo(width - 1, height);
+	ctx.lineTo(0, height);
+	const fill = ctx.createLinearGradient(0, 0, 0, height);
+	fill.addColorStop(0, `${cyan}38`);
+	fill.addColorStop(1, `${cyan}00`);
+	ctx.fillStyle = fill;
+	ctx.fill();
+	ctx.setLineDash([]);
+	ctx.lineWidth = 1.5;
+	ctx.strokeStyle = cyan;
+	trace((x) => at(x, width));
+	ctx.stroke();
+
+	ctx.lineWidth = 1;
+	ctx.strokeStyle = faint;
+	ctx.setLineDash([3, 3]);
+	if (previous.length) {
+		trace((x) => sample(previous, x, width));
+		ctx.stroke();
+	}
+
+	if (hover !== null && values.length) {
+		const x = Math.round((hover / Math.max(1, values.length - 1)) * (width - 1)) + 0.5;
+		ctx.beginPath();
+		ctx.moveTo(x, 0);
+		ctx.lineTo(x, height);
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.arc(x, top(values[hover] ?? 0), 3.5, 0, Math.PI * 2);
+		ctx.lineWidth = 3;
+		ctx.strokeStyle = panel;
+		ctx.setLineDash([]);
+		ctx.stroke();
+		ctx.fillStyle = fg;
+		ctx.fill();
+	}
 }

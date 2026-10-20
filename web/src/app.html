@@ -18,7 +18,7 @@
 			}
 		</style>
 		<script>
-			// the saved theme before anything paints, so it doesn't flash
+			// the saved theme and style before anything paints, so it doesn't flash
 			try {
 				const t = localStorage.getItem("theme");
 				if (
@@ -28,6 +28,8 @@
 					document.documentElement.dataset.theme = "light";
 					document.querySelector('meta[name="theme-color"]').content = "#f3f6f7";
 				}
+				if (localStorage.getItem("style") === "plain")
+					document.documentElement.dataset.style = "plain";
 			} catch {}
 		</script>
 		<script>

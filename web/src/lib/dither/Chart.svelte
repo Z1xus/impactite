@@ -2,7 +2,7 @@
 	import { untrack } from "svelte";
 	import { theme } from "#lib/theme.svelte.ts";
 	import { css } from "./bayer";
-	import { chart, COLORS, sample } from "./chart.ts";
+	import { chart, COLORS, sample, smooth } from "./chart.ts";
 	import { paint } from "./pixels.ts";
 	import Pixels from "./Pixels.svelte";
 
@@ -96,6 +96,14 @@
 	function draw() {
 		const ctx = canvas?.getContext("2d");
 		if (!ctx || !width) return;
+		if (theme.style === "plain") {
+			canvas.width = Math.round(width * devicePixelRatio);
+			canvas.height = Math.round(height * devicePixelRatio);
+			ctx.scale(devicePixelRatio, devicePixelRatio);
+			smooth(ctx, width, height, peak, axes, shown, shownPrevious, hover, at);
+			ready = true;
+			return;
+		}
 		const columns = Math.max(1, Math.floor(width / cell));
 		const rows = Math.floor(height / cell);
 		canvas.width = columns;
@@ -166,6 +174,7 @@
 		void width;
 		void hover;
 		void theme.shown;
+		void theme.style;
 		draw();
 	});
 

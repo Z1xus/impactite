@@ -1,11 +1,12 @@
 import { api } from "./api";
-import { applyTheme, type Theme } from "./theme.svelte.ts";
+import { applyTheme, type Style, type Theme } from "./theme.svelte.ts";
 
 export type Display = {
 	week: "monday" | "sunday";
 	clock: "24" | "12";
 	numbers: "en-US" | "de-DE" | "fr-FR";
 	theme: Theme;
+	style: Style;
 	all: "show" | "hide";
 };
 
@@ -14,6 +15,7 @@ export const display = $state<Display>({
 	clock: "24",
 	numbers: "en-US",
 	theme: "dark",
+	style: "pixel",
 	all: "show"
 });
 
@@ -22,12 +24,13 @@ const choices: { [key in keyof Display]: Display[key][] } = {
 	clock: ["24", "12"],
 	numbers: ["en-US", "de-DE", "fr-FR"],
 	theme: ["dark", "light", "system"],
+	style: ["pixel", "plain"],
 	all: ["show", "hide"]
 };
 
 // follow the system while it's the choice
 globalThis.matchMedia?.("(prefers-color-scheme: light)").addEventListener("change", () => {
-	if (display.theme === "system") applyTheme("system");
+	if (display.theme === "system") applyTheme("system", display.style);
 });
 
 export function loadDisplay(value: unknown) {
@@ -36,12 +39,12 @@ export function loadDisplay(value: unknown) {
 	for (const key of Object.keys(choices) as (keyof Display)[])
 		if ((choices[key] as unknown[]).includes(saved?.[key]))
 			Object.assign(display, { [key]: saved?.[key] });
-	applyTheme(display.theme);
+	applyTheme(display.theme, display.style);
 }
 
 export function saveDisplay(next: Partial<Display>) {
 	Object.assign(display, next);
-	applyTheme(display.theme);
+	applyTheme(display.theme, display.style);
 	return api("/api/app/prefs/display", { ...display }, "PUT");
 }
 

@@ -28,6 +28,7 @@
 		"eslint-plugin-svelte": "^3.23.1",
 		"flag-icons": "^7.5.0",
 		"globals": "^17.13.0",
+		"lucide-static": "^1.60.0",
 		"pixelarticons": "^2.4.2",
 		"prettier": "^3.9.10",
 		"prettier-plugin-svelte": "^4.1.1",

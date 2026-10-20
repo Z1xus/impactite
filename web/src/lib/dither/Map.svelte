@@ -15,8 +15,9 @@
 		pick: (code: string) => void;
 	} = $props();
 
-	const CELL = 4;
 	let canvas: HTMLCanvasElement;
+	const plain = $derived(theme.style === "plain");
+	const CELL = $derived(plain ? 8 : 4);
 	let hover = $state<{ code: string; x: number; y: number } | null>(null);
 
 	const code = (col: number, row: number) => {
@@ -30,6 +31,27 @@
 		void theme.shown;
 		const max = Math.max(1, ...Object.values(values));
 		const [land, lit, active] = [css("--color-edge"), css("--color-cyan"), css("--color-fg")];
+		if (plain) {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			const rgb = (hex: string) =>
+				[16, 8, 0].map((k) => (parseInt(hex.slice(1), 16) >> k) & 255);
+			const [from, to] = [rgb(land), rgb(lit)];
+			for (let row = 0; row < ROWS; row++)
+				for (let col = 0; col < COLS; col++) {
+					const country = code(col, row);
+					if (!country) continue;
+					const visits = values[country] ?? 0;
+					const level = visits ? 0.2 + (0.8 * Math.log1p(visits)) / Math.log1p(max) : 0;
+					ctx.fillStyle =
+						hover?.code === country
+							? active
+							: `rgb(${from.map((v, k) => v + (to[k] - v) * level).join(" ")})`;
+					ctx.beginPath();
+					ctx.arc((col + 0.5) * CELL, (row + 0.5) * CELL, CELL * 0.34, 0, Math.PI * 2);
+					ctx.fill();
+				}
+			return;
+		}
 		const image = ctx.createImageData(COLS * CELL, ROWS * CELL);
 		const paint = (x: number, y: number, color: string) => {
 			const n = parseInt(color.slice(1), 16);

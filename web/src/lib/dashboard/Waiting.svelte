@@ -89,8 +89,9 @@
 	$effect(() => {
 		void theme.shown;
 		const impact = hit;
-		const g = canvas?.getContext("2d");
-		if (!g) return;
+		const target = canvas;
+		const g = target?.getContext("2d");
+		if (!target || !g) return;
 		const [panel, night, deep, cyan, fg] = [
 			"--color-panel",
 			"--color-cyan-night",
@@ -99,6 +100,11 @@
 			"--color-fg"
 		].map(css);
 		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+		const plain = theme.style === "plain";
+		const scale = plain ? 4 : 1;
+		target.width = WIDTH * scale;
+		target.height = HEIGHT * scale;
+		g.scale(scale, scale);
 		const rays = Array.from({ length: 7 }, random(domain.length + 7));
 		const [cx, cy] = [WIDTH / 2, HEIGHT / 2 + 4];
 		let frame = 0;
@@ -106,7 +112,51 @@
 			g.fillStyle = panel;
 			g.fillRect(0, 0, WIDTH, HEIGHT);
 			const since = impact === null ? -1 : still ? 9 : (now - impact) / 1000;
-			if (since < 0) {
+			if (plain) {
+				g.lineCap = "round";
+				if (since < 0) {
+					const at = (((now / 1000) * 24) % (WIDTH + 28)) - 14;
+					const scan = g.createLinearGradient(at - 14, 0, at + 14, 0);
+					scan.addColorStop(0, `${cyan}00`);
+					scan.addColorStop(0.5, cyan);
+					scan.addColorStop(1, `${cyan}00`);
+					g.strokeStyle = scan;
+					g.lineWidth = 0.5;
+					g.beginPath();
+					g.moveTo(at - 14, cy - 0.5);
+					g.lineTo(at + 14, cy - 0.5);
+					g.stroke();
+				} else if (since < 0.55) {
+					const p = since / 0.55;
+					const [x, y] = [cx + 40 * (1 - p), cy - 14 * (1 - p)];
+					const trail = g.createLinearGradient(x, y, x + 40, y - 14);
+					trail.addColorStop(0, fg);
+					trail.addColorStop(1, `${cyan}00`);
+					g.strokeStyle = trail;
+					g.lineWidth = 1;
+					g.beginPath();
+					g.moveTo(x, y);
+					g.lineTo(x + 40, y - 14);
+					g.stroke();
+				} else {
+					const p = Math.min(1, (since - 0.55) / 0.5);
+					const r = 2 + 5 * Math.sqrt(p);
+					g.lineWidth = 0.5;
+					g.globalAlpha = 1 - p;
+					g.strokeStyle = deep;
+					g.beginPath();
+					g.ellipse(cx, cy, r * 2, r * 1.74, 0, 0, Math.PI * 2);
+					g.stroke();
+					g.globalAlpha = Math.min(1, p * 1.4);
+					g.fillStyle = night;
+					g.strokeStyle = cyan;
+					g.beginPath();
+					g.ellipse(cx, cy, r, r / 1.15, 0, 0, Math.PI * 2);
+					g.fill();
+					g.stroke();
+					g.globalAlpha = 1;
+				}
+			} else if (since < 0) {
 				// a slow scan line while nothing has arrived
 				const at = (((now / 1000) * 24) % (WIDTH + 28)) - 14;
 				for (let x = 0; x < WIDTH; x++) {
@@ -154,13 +204,7 @@
 	<div
 		class="flex flex-col items-center gap-4 rounded-px border border-line bg-panel p-6 text-center"
 	>
-		<canvas
-			bind:this={canvas}
-			width={WIDTH}
-			height={HEIGHT}
-			class="w-full pixelated"
-			aria-hidden="true"
-		></canvas>
+		<canvas bind:this={canvas} class="w-full pixelated" aria-hidden="true"></canvas>
 		{#if hit === null}
 			<span class="label" role="status">listening for the first visit on {domain}</span>
 		{:else}

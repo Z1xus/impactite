@@ -4,10 +4,18 @@
 	import Toggle from "#lib/ui/Toggle.svelte";
 </script>
 
-<Section id="display" label="display">
+<Section id="theme" label="theme">
 	<div class="flex flex-wrap gap-4">
 		<Toggle
-			label="theme"
+			label="style"
+			bind:value={() => display.style, (style) => saveDisplay({ style })}
+			options={[
+				{ key: "pixel", label: "pixel" },
+				{ key: "plain", label: "plain" }
+			]}
+		/>
+		<Toggle
+			label="mode"
 			bind:value={() => display.theme, (theme) => saveDisplay({ theme })}
 			options={[
 				{ key: "dark", label: "dark" },
@@ -15,6 +23,11 @@
 				{ key: "system", label: "system" }
 			]}
 		/>
+	</div>
+</Section>
+
+<Section id="display" label="display">
+	<div class="flex flex-wrap gap-4">
 		<Toggle
 			label="week starts on"
 			bind:value={() => display.week, (week) => saveDisplay({ week })}

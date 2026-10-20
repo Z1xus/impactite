@@ -12,6 +12,7 @@
 @theme {
 	--font-sans: "IBM Plex Sans", system-ui, sans-serif;
 	--font-mono: "Departure Mono", ui-monospace, monospace;
+	--font-code: var(--font-mono);
 
 	--color-ink: #06090b;
 	--color-panel: #0a0f12;
@@ -78,6 +79,12 @@
 		--color-bar: color-mix(in srgb, var(--color-cyan-deep) 55%, var(--color-cyan-night));
 		--color-warn: #965f00;
 		--color-bad: #c5372d;
+	}
+
+	html[data-style="plain"] {
+		--font-mono: var(--font-sans);
+		--font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+		--radius-px: 6px;
 	}
 
 	* {
@@ -193,6 +200,11 @@
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	color: var(--color-dim);
+
+	[data-style="plain"] & {
+		font-weight: 500;
+		letter-spacing: 0.05em;
+	}
 }
 
 @utility gutter {
@@ -232,6 +244,15 @@
 		linear-gradient(45deg, var(--dither-gap, var(--color-panel)) 25%, transparent 25%),
 		linear-gradient(-45deg, var(--dither-gap, var(--color-panel)) 25%, transparent 25%);
 	background-size: 4px 4px;
+
+	[data-style="plain"] & {
+		background-color: color-mix(
+			in srgb,
+			var(--dither-fill, var(--color-bar)) 50%,
+			var(--dither-gap, var(--color-panel))
+		);
+		background-image: none;
+	}
 }
 
 @utility bar {
@@ -249,10 +270,18 @@
 			linear-gradient(-45deg, var(--color-panel) 25%, transparent 25%);
 		background-size: 4px 4px;
 	}
+
+	[data-style="plain"] &::after {
+		display: none;
+	}
 }
 
 @utility pixelated {
 	image-rendering: pixelated;
+
+	[data-style="plain"] & {
+		image-rendering: auto;
+	}
 }
 
 @utility rule {
@@ -266,6 +295,10 @@
 		linear-gradient(-45deg, var(--color-bar) 25%, transparent 25%);
 	background-size: 4px 4px;
 	mask-image: linear-gradient(90deg, #000, transparent 70%);
+
+	[data-style="plain"] & {
+		display: none;
+	}
 }
 
 @utility fade-x {

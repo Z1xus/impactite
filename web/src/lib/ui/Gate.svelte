@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import Meteor from "#lib/art/Meteor.svelte";
+	import { theme } from "#lib/theme.svelte.ts";
+	import Logo from "./Logo.svelte";
 
 	let { children }: { children?: Snippet } = $props();
 </script>
@@ -10,7 +12,11 @@
 >
 	<div class="flex w-full max-w-sm flex-col items-center gap-10">
 		<div class="flex flex-col items-center gap-6">
-			<Meteor size={168} pixel={3} />
+			{#if theme.style === "plain"}
+				<Logo size={88} />
+			{:else}
+				<Meteor size={168} pixel={3} />
+			{/if}
 			<span class="font-mono text-num tracking-tight">impactite</span>
 		</div>
 		<div class="min-h-96 w-full [&_p]:text-center">
