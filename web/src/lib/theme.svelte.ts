@@ -4,7 +4,7 @@ export type Style = "pixel" | "plain";
 // what the page shows now, charts redraw when it changes
 export const theme = $state<{ shown: "dark" | "light"; style: Style }>({
 	shown: "dark",
-	style: document.documentElement.dataset.style === "plain" ? "plain" : "pixel"
+	style: globalThis.document?.documentElement.dataset.style === "plain" ? "plain" : "pixel"
 });
 
 export function applyTheme(choice: Theme, style: Style) {
