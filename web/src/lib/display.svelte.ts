@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { session } from "./session.svelte.ts";
 import { applyTheme, type Style, type Theme } from "./theme.svelte.ts";
 
 export type Display = {
@@ -39,14 +40,23 @@ export function loadDisplay(value: unknown) {
 	for (const key of Object.keys(choices) as (keyof Display)[])
 		if ((choices[key] as unknown[]).includes(saved?.[key]))
 			Object.assign(display, { [key]: saved?.[key] });
-	applyTheme(display.theme, display.style);
+	apply();
 }
 
 export function saveDisplay(next: Partial<Display>) {
 	Object.assign(display, next);
-	applyTheme(display.theme, display.style);
-	return api("/api/app/prefs/display", { ...display }, "PUT");
+	apply();
+	if (session.me) return api("/api/app/prefs/display", { ...display }, "PUT");
 }
+
+function apply() {
+	applyTheme(display.theme, display.style);
+	localStorage.setItem("display", JSON.stringify(display));
+}
+
+// visitors without an account keep their choices on this device
+const stored = localStorage.getItem("display");
+if (stored) loadDisplay(JSON.parse(stored));
 
 export const number = (value: number, digits = 0) =>
 	value.toLocaleString(display.numbers, {

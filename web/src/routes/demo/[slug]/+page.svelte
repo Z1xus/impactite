@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { api } from "#lib/api.ts";
+	import { session } from "#lib/session.svelte.ts";
 	import { absorb } from "#lib/art/absorb.ts";
 	import Form from "#lib/ui/Form.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
@@ -22,6 +23,8 @@
 			.then((opened) => sessionStorage.setItem(`share:${slug}`, JSON.stringify(opened)))
 			.catch(() => {});
 		await Promise.all([panel && absorb(panel), share]);
+		sessionStorage.setItem("demo", slug);
+		session.demo = slug;
 		await goto(target);
 	}
 </script>

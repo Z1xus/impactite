@@ -49,7 +49,11 @@
 			return ["/setup", "/share", "/demo"].some((prefix) => path.startsWith(prefix))
 				? null
 				: "/setup";
-		if (!session.me) return open.some((prefix) => path.startsWith(prefix)) ? null : "/login";
+		if (!session.me)
+			return open.some((prefix) => path.startsWith(prefix)) ||
+				(session.demo && path.startsWith("/settings"))
+				? null
+				: "/login";
 		if (path.startsWith("/admin") && !session.me.admin) return "/";
 		return null;
 	});

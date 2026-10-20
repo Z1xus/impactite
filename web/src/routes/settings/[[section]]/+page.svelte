@@ -23,7 +23,7 @@
 	import Shell from "#lib/ui/Shell.svelte";
 	import Title from "#lib/ui/Title.svelte";
 
-	const section = $derived(page.params.section ?? "profile");
+	const section = $derived(page.params.section ?? (session.me ? "profile" : "display"));
 	const sections = $derived(
 		[
 			{ id: "profile", label: "profile", icon: user, group: "account" },
@@ -34,13 +34,18 @@
 			{ id: "sessions", label: "sessions", icon: laptop, group: "sign in" },
 			{ id: "keys", label: "API keys", icon: code, group: "developers" },
 			{ id: "danger", label: "danger", icon: alert, danger: true }
-		].map((item) => ({ ...item, href: resolve("/settings/[[section]]", { section: item.id }) }))
+		]
+			.filter((item) => session.me || item.id === "display")
+			.map((item) => ({
+				...item,
+				href: resolve("/settings/[[section]]", { section: item.id })
+			}))
 	);
 </script>
 
 <Shell>
 	{#if sections.some((item) => item.id === section)}
-		<Settings {sections} current={section} loading={!session.me}>
+		<Settings {sections} current={section} loading={!session.me && !session.demo}>
 			{#snippet title()}
 				<Title>Account</Title>
 			{/snippet}

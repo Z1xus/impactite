@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { display, saveDisplay } from "#lib/display.svelte.ts";
+	import { session } from "#lib/session.svelte.ts";
 	import Section from "#lib/ui/Section.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
 </script>
@@ -53,13 +54,15 @@
 				{ key: "fr-FR", label: "1 234,5" }
 			]}
 		/>
-		<Toggle
-			label="all sites"
-			bind:value={() => display.all, (all) => saveDisplay({ all })}
-			options={[
-				{ key: "show", label: "show" },
-				{ key: "hide", label: "hide" }
-			]}
-		/>
+		{#if session.me}
+			<Toggle
+				label="all sites"
+				bind:value={() => display.all, (all) => saveDisplay({ all })}
+				options={[
+					{ key: "show", label: "show" },
+					{ key: "hide", label: "hide" }
+				]}
+			/>
+		{/if}
 	</div>
 </Section>

@@ -100,7 +100,11 @@
 		<div class="mx-auto flex h-14 max-w-page items-center gap-2 gutter sm:gap-3">
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
 			<a
-				href={session.me ? resolve("/") : page.url.pathname}
+				href={session.me
+					? resolve("/")
+					: session.demo
+						? resolve("/share/[slug]", { slug: session.demo })
+						: page.url.pathname}
 				aria-label="impactite"
 				class="-mr-1 -ml-2 flex h-control min-w-control items-center justify-center gap-2 px-2 font-mono text-body text-fg"
 			>
@@ -122,6 +126,18 @@
 				{@render actions?.()}
 				{#if session.me}
 					<Menu label={session.me.name} avatar data align="right" items={account} />
+				{:else if session.demo}
+					<Menu
+						label="Demo"
+						avatar
+						data
+						align="right"
+						items={[
+							{ label: "Account", href: resolve("/settings/[[section]]", {}) },
+							"divider",
+							{ label: "Sign in", href: resolve("/login") }
+						]}
+					/>
 				{:else if !session.ready}
 					<Skeleton class="h-control w-28" />
 				{/if}

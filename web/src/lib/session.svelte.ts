@@ -25,6 +25,7 @@ export const session = $state<{
 	alias: string | null;
 	sso: string | null;
 	update: string | null;
+	demo: string | null;
 }>({
 	ready: false,
 	setup: false,
@@ -34,7 +35,9 @@ export const session = $state<{
 	team: null,
 	alias: null,
 	sso: null,
-	update: null
+	update: null,
+	// a demo visitor browses as a stand-in account without signing in
+	demo: sessionStorage.getItem("demo")
 });
 
 export async function refresh() {
