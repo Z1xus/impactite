@@ -4,6 +4,7 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import Section from "#lib/ui/Section.svelte";
+	import Username from "#lib/ui/Username.svelte";
 
 	let current = $state("");
 	let next = $state("");
@@ -21,6 +22,7 @@
 		done="Saved."
 		submit={save}
 	>
+		<Username value={session.me?.email ?? ""} />
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#if session.me?.password}
 				<Field

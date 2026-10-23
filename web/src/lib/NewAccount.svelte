@@ -36,7 +36,7 @@
 <div class="flex flex-col gap-3">
 	<Form block action={usePassword ? "Create account" : "Create passkey"} {submit}>
 		<Field label="name" bind:value={name} autocomplete="name" required />
-		<Field label="email" type="email" bind:value={email} autocomplete="email" required />
+		<Field label="email" type="email" bind:value={email} autocomplete="username" required />
 		{#if usePassword}
 			<Field
 				label="password"

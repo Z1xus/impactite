@@ -152,6 +152,11 @@
 				<input
 					class="m-1 h-8 rounded-px border border-control bg-panel px-2 text-body text-fg outline-none placeholder:text-faint focus:border-cyan"
 					placeholder="search"
+					autocomplete="off"
+					data-1p-ignore
+					data-lpignore="true"
+					data-bwignore
+					data-form-type="other"
 					autofocus
 					bind:value={query}
 					oninput={() => (active = 0)}

@@ -95,7 +95,7 @@
 					label="email"
 					type="email"
 					bind:value={email}
-					autocomplete="email"
+					autocomplete="username"
 					autofocus
 					required
 				/>
@@ -129,7 +129,7 @@
 					label="email"
 					type="email"
 					bind:value={email}
-					autocomplete="email"
+					autocomplete="username"
 					autofocus
 					required
 				/>

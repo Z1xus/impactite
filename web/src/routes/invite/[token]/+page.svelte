@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Username from "#lib/ui/Username.svelte";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -18,11 +19,14 @@
 	let name = $state("");
 	let password = $state("");
 	let place = $state("");
+	let email = $state("");
 	let failed = $state("");
 
 	onMount(async () => {
 		try {
-			place = (await api<{ place: string }>(`/api/app/invites/${token}`)).place;
+			({ place, email } = await api<{ place: string; email: string }>(
+				`/api/app/invites/${token}`
+			));
 		} catch (err) {
 			failed = err instanceof Error ? err.message : "Something went wrong.";
 		}
@@ -68,6 +72,7 @@
 				{#if !session.me}
 					<Field label="name" bind:value={name} autocomplete="name" required />
 					{#if usePassword}
+						<Username value={email} />
 						<Field
 							label="password"
 							type="password"
