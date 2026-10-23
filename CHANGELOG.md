@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+- New: Uptime monitors
+- New: Incidents on the visitor chart
+- New: Alerts by email, Slack, Discord, Telegram, ntfy and webhook
+- New: Status pages and badges
+- New: Monitor API
+- New: Import from Uptime Kuma
+- Improved: Password manager support
+- Improved: Simpler site cards
+
 ## 0.2.2
 - New: Plain style in Account, Display: smooth charts, line icons and no dithering, in dark and light
 - New: Demo visitors can open Account, Display to change the theme and formats
