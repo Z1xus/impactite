@@ -183,6 +183,9 @@ struct Serve {
 	// the provider on the sign in button
 	#[arg(long, env = "IMPACTITE_SSO_NAME", default_value = "SSO")]
 	sso_name: String,
+	// a demo site that fills itself with made up visits as time passes
+	#[arg(long, env = "IMPACTITE_DEMO")]
+	demo: Option<String>,
 	#[arg(long, env = "IMPACTITE_NO_UPDATE_CHECK", action = clap::ArgAction::SetTrue, value_parser = clap::builder::BoolishValueParser::new())]
 	no_update_check: bool,
 	// a second path for the tracker and its events, ad blockers only know the usual ones
@@ -370,6 +373,17 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 	let scheduler = uptime::run::start(web.clone(), checks);
 
 	let checker = (!args.no_update_check).then(|| tokio::spawn(update::watch(web.clone())));
+	let demo = match args.demo.as_deref().map(|domain| web.app.site(domain)) {
+		Some(Ok(Some(site))) => Some(tokio::spawn(demo::live(
+			db.clone(),
+			web.app.clone(),
+			site.id,
+			site.domain,
+			site.timezone,
+		))),
+		Some(_) => bail!("--demo needs a site that exists"),
+		None => None,
+	};
 	let sweeper = tokio::spawn({
 		let ingest = ingest.clone();
 		let app = web.app.clone();
@@ -414,6 +428,9 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 	}
 	if let Some(checker) = checker {
 		checker.abort();
+	}
+	if let Some(demo) = demo {
+		demo.abort();
 	}
 	if let Some(task) = geo_task {
 		task.abort();

@@ -133,7 +133,7 @@ impl App {
 		self.setting("signup").as_deref() == Some("open")
 	}
 
-	fn setting(&self, key: &str) -> Option<String> {
+	pub(crate) fn setting(&self, key: &str) -> Option<String> {
 		self.conn()
 			.query_row("select value from settings where key = ?1", [key], |row| {
 				row.get(0)
@@ -143,7 +143,7 @@ impl App {
 			.flatten()
 	}
 
-	fn set_setting(&self, key: &str, value: &str) -> rusqlite::Result<()> {
+	pub(crate) fn set_setting(&self, key: &str, value: &str) -> rusqlite::Result<()> {
 		self.conn().execute(
 			"insert into settings (key, value) values (?1, ?2) on conflict (key) do update set value = ?2",
 			params![key, value],
