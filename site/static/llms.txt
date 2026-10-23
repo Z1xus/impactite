@@ -54,6 +54,8 @@ Old data can be imported from Plausible or GoatCounter CSV exports, directly fro
 - Full data export and daily exports to S3
 - Bot and IP filtering, no cookies, daily rotating salt, no raw IP or user agent stored
 - Passkeys, two-factor authentication and single sign-on (OpenID Connect)
+- Uptime monitors for http, tcp and heartbeats, with incidents, status pages, badges and alerts to email, Slack, Discord, Telegram, ntfy and webhooks
+- Import from Uptime Kuma (`impactite import uptime-kuma kuma.db`)
 - Built-in email through SMTP, Resend or Cloudflare Email
 - Tracker opt-out with `localStorage.impactite_ignore`
 

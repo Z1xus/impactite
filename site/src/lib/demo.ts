@@ -3,6 +3,7 @@ import coins from "pixelarticons/svg/coins.svg?raw";
 import download from "pixelarticons/svg/download.svg?raw";
 import filter from "pixelarticons/svg/filter.svg?raw";
 import globe from "pixelarticons/svg/globe.svg?raw";
+import heart from "pixelarticons/svg/heart.svg?raw";
 import key from "pixelarticons/svg/key.svg?raw";
 import link from "pixelarticons/svg/link.svg?raw";
 import mail from "pixelarticons/svg/mail.svg?raw";
@@ -10,6 +11,7 @@ import search from "pixelarticons/svg/search.svg?raw";
 import shield from "pixelarticons/svg/shield.svg?raw";
 import upload from "pixelarticons/svg/upload.svg?raw";
 import users from "pixelarticons/svg/users.svg?raw";
+import chart from "pixelarticons/svg/chart-line.svg?raw";
 import cloud from "pixelarticons/svg/cloud-server.svg?raw";
 import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 import lock from "pixelarticons/svg/lock.svg?raw";
@@ -63,7 +65,11 @@ export const FEATURES = [
 	{ icon: globe, label: "No cookies" },
 	{ icon: key, label: "Passkeys and two-factor" },
 	{ icon: lock, label: "Single sign-on" },
-	{ icon: users, label: "Teams and guest access" }
+	{ icon: users, label: "Teams and guest access" },
+	{ icon: heart, label: "Uptime monitors" },
+	{ icon: chart, label: "Status pages and badges" },
+	{ icon: bell, label: "Telegram and ntfy alerts" },
+	{ icon: upload, label: "Import from Uptime Kuma" }
 ];
 
 // 28 days of the demo site, with the day it hit the front page
