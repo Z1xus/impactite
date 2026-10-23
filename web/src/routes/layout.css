@@ -62,7 +62,25 @@
 		color: var(--color-ink);
 	}
 
-	html[data-theme="light"] {
+	[data-theme="dark"] {
+		color-scheme: dark;
+		--color-ink: #06090b;
+		--color-panel: #0a0f12;
+		--color-raised: #0f161a;
+		--color-line: #172127;
+		--color-edge: #24323a;
+		--color-control: #506872;
+		--color-fg: #e3eef0;
+		--color-dim: #8798a0;
+		--color-faint: #6e818b;
+		--color-cyan: #38e1f2;
+		--color-cyan-deep: #0e7f8d;
+		--color-cyan-night: #06343b;
+		--color-warn: #f0b64a;
+		--color-bad: #f0645a;
+	}
+
+	[data-theme="light"] {
 		color-scheme: light;
 		--color-ink: #f3f6f7;
 		--color-panel: #ffffff;
@@ -81,7 +99,48 @@
 		--color-bad: #c5372d;
 	}
 
-	html[data-style="plain"] {
+	[data-accent="green"] {
+		--color-cyan: #4ade80;
+		--color-cyan-deep: #1f8a4c;
+		--color-cyan-night: #0b3320;
+	}
+	[data-accent="blue"] {
+		--color-cyan: #6aa8ff;
+		--color-cyan-deep: #2d63b8;
+		--color-cyan-night: #0c2547;
+	}
+	[data-accent="violet"] {
+		--color-cyan: #a991ff;
+		--color-cyan-deep: #5c46b0;
+		--color-cyan-night: #211946;
+	}
+	[data-accent="mono"] {
+		--color-cyan: #e3eef0;
+		--color-cyan-deep: #6f7f86;
+		--color-cyan-night: #1d2529;
+	}
+	[data-theme="light"][data-accent="green"] {
+		--color-cyan: #17803f;
+		--color-cyan-deep: #6ccf95;
+		--color-cyan-night: #d7f5e3;
+	}
+	[data-theme="light"][data-accent="blue"] {
+		--color-cyan: #1d5fd1;
+		--color-cyan-deep: #8ab8f5;
+		--color-cyan-night: #dbe8fb;
+	}
+	[data-theme="light"][data-accent="violet"] {
+		--color-cyan: #6a3fd6;
+		--color-cyan-deep: #b9a5f5;
+		--color-cyan-night: #e9e2fc;
+	}
+	[data-theme="light"][data-accent="mono"] {
+		--color-cyan: #0c1518;
+		--color-cyan-deep: #8a989e;
+		--color-cyan-night: #e2e8eb;
+	}
+
+	[data-style="plain"] {
 		--font-mono: var(--font-sans);
 		--font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 		--radius-px: 6px;
@@ -204,6 +263,16 @@
 	[data-style="plain"] & {
 		font-weight: 500;
 		letter-spacing: 0.05em;
+	}
+}
+
+@utility meta {
+	@apply label;
+	text-transform: none;
+	letter-spacing: normal;
+
+	[data-style="plain"] & {
+		letter-spacing: normal;
 	}
 }
 

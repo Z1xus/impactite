@@ -8,6 +8,7 @@
 	import { currentTeam, refresh, teamTimezone } from "#lib/session.svelte.ts";
 	import { sparks } from "#lib/sparks.ts";
 	import { swap } from "#lib/swap.ts";
+	import { watching } from "#lib/uptime/live.svelte.ts";
 	import type { Team } from "#lib/api.ts";
 	import { warm } from "#lib/dashboard/warm.ts";
 	import Button from "#lib/ui/Button.svelte";
@@ -30,6 +31,11 @@
 		failed: boolean;
 	} | null>(null);
 	let tries = $state(0);
+
+	const monitors = watching(() => current?.id ?? null);
+	const watched = $derived(
+		new Map(monitors.monitors?.flatMap((item) => (item.site ? [[item.site, item]] : [])))
+	);
 
 	const team = $derived(shown?.team);
 	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
@@ -123,6 +129,7 @@
 								title={site.domain}
 								glyph={icon("event:hostname", site.domain)}
 								values={shown?.series[site.domain]}
+								monitor={watched.get(site.domain)}
 								warm={() => warm(site.domain, site.timezone)}
 							/>
 						</li>

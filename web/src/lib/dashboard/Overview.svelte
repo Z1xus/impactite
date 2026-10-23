@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import Chart from "#lib/dither/Chart.svelte";
+	import type { Band } from "#lib/dither/chart.ts";
 	import { clock } from "#lib/display.svelte.ts";
 	import { METRICS, cached, format, toQueryFilters, type Metric } from "#lib/stats.ts";
 	import Empty from "#lib/ui/Empty.svelte";
@@ -8,12 +9,15 @@
 	import Select from "#lib/ui/Select.svelte";
 	import Table from "#lib/ui/Table.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
+	import { local, missed, span } from "#lib/uptime/format.ts";
+	import type { SiteIncident } from "#lib/uptime/site.svelte.ts";
 	import type { Context } from "./types.ts";
 
 	let {
 		ctx,
 		metric,
 		realtime,
+		incidents = [],
 		table,
 		found,
 		pick,
@@ -23,6 +27,7 @@
 		ctx: Context;
 		metric: Metric;
 		realtime: boolean;
+		incidents?: SiteIncident[];
 		table: boolean;
 		found: (hasImports: boolean) => void;
 		pick: (metric: Metric) => void;
@@ -65,6 +70,34 @@
 				: { month: "short", day: "numeric" }
 		);
 	}
+
+	// buckets are named in the site's zone, so local incident times sort against them as text
+	const bands = $derived.by((): Band[] => {
+		const keys = lines.map((line) => line.key);
+		const last = keys.length - 1;
+		return incidents.flatMap((incident) => {
+			if (!keys.length || incident.start > `${keys[last]}\uffff`) return [];
+			if (incident.end !== null && incident.end < keys[0]) return [];
+			const at = (time: string) =>
+				Math.max(
+					0,
+					keys.findLastIndex((key) => key <= time)
+				);
+			const notes = [
+				local(incident.start),
+				incident.ended_at ? span(incident.duration) : "ongoing"
+			];
+			if (incident.visits_missed) notes.push(missed(incident.visits_missed));
+			return [
+				{
+					from: at(incident.start),
+					to: incident.end === null ? last : at(incident.end),
+					label: incident.cause,
+					notes
+				}
+			];
+		});
+	});
 
 	const key = $derived(
 		JSON.stringify([
@@ -205,6 +238,7 @@
 					previous={previousSeries}
 					{labels}
 					keys={lines.map((line) => line.key)}
+					{bands}
 					format={(value) => format(metric, value)}
 				/>
 			{/if}

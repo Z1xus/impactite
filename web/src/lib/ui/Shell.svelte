@@ -15,11 +15,13 @@
 	import Form from "./Form.svelte";
 	import Logo from "./Logo.svelte";
 	import Menu from "./Menu.svelte";
+	import Nav from "./Nav.svelte";
 	import Skeleton from "./Skeleton.svelte";
 	import Ask from "./Ask.svelte";
 	import Toasts from "./Toasts.svelte";
 
-	let { children, actions }: { children: Snippet; actions?: Snippet } = $props();
+	let { children, actions, brand }: { children: Snippet; actions?: Snippet; brand?: Snippet } =
+		$props();
 
 	let creating = $state(false);
 	let name = $state("");
@@ -62,6 +64,10 @@
 			}
 		}
 	]);
+	const onUptime = $derived(page.url.pathname.startsWith("/uptime"));
+	const onSites = $derived(
+		["/", "/all", "/[site]", "/[site]/settings/[[section]]"].includes(page.route.id ?? "")
+	);
 	const account = $derived([
 		{ label: "Account", href: resolve("/settings/[[section]]", {}) },
 		...(session.me?.admin
@@ -98,50 +104,62 @@
 <div class="min-h-dvh">
 	<header class="relative z-40 border-b border-line [view-transition-name:shell]">
 		<div class="mx-auto flex h-14 max-w-page items-center gap-2 gutter sm:gap-3">
-			<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
-			<a
-				href={session.me
-					? resolve("/")
-					: session.demo
-						? resolve("/share/[slug]", { slug: session.demo })
-						: page.url.pathname}
-				aria-label="impactite"
-				class="-mr-1 -ml-2 flex h-control min-w-control items-center justify-center gap-2 px-2 font-mono text-body text-fg"
-			>
-				<Logo />
-				<span class="hidden sm:inline">impactite</span>
-			</a>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-			{#if team}
-				<Menu
-					data
-					label={team.personal ? "Personal" : team.name}
-					icon={team.personal ? user : users}
-					items={workspace}
-				/>
-			{:else if !session.ready}
-				<Skeleton class="h-control w-32" />
-			{/if}
-			<div class="ml-auto flex items-center gap-3">
-				{@render actions?.()}
-				{#if session.me}
-					<Menu label={session.me.name} avatar data align="right" items={account} />
-				{:else if session.demo}
+			{#if brand}
+				{@render brand()}
+			{:else}
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- a visitor on a shared dashboard stays on it -->
+				<a
+					href={session.me
+						? resolve("/")
+						: session.demo
+							? resolve("/share/[slug]", { slug: session.demo })
+							: page.url.pathname}
+					aria-label="impactite"
+					class="-mr-1 -ml-2 flex h-control min-w-control items-center justify-center gap-2 px-2 font-mono text-body text-fg"
+				>
+					<Logo />
+					<span class="hidden sm:inline">impactite</span>
+				</a>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{#if team}
 					<Menu
-						label="Demo"
-						avatar
 						data
-						align="right"
-						items={[
-							{ label: "Account", href: resolve("/settings/[[section]]", {}) },
-							"divider",
-							{ label: "Sign in", href: resolve("/login") }
-						]}
+						label={team.personal ? "Personal" : team.name}
+						icon={team.personal ? user : users}
+						items={workspace}
 					/>
 				{:else if !session.ready}
-					<Skeleton class="h-control w-28" />
+					<Skeleton class="h-control w-32" />
 				{/if}
-			</div>
+				{#if session.me}
+					<Nav
+						items={[
+							{ label: "Sites", href: resolve("/"), current: onSites },
+							{ label: "Uptime", href: resolve("/uptime"), current: onUptime }
+						]}
+					/>
+				{/if}
+				<div class="ml-auto flex items-center gap-3">
+					{@render actions?.()}
+					{#if session.me}
+						<Menu label={session.me.name} avatar data align="right" items={account} />
+					{:else if session.demo}
+						<Menu
+							label="Demo"
+							avatar
+							data
+							align="right"
+							items={[
+								{ label: "Account", href: resolve("/settings/[[section]]", {}) },
+								"divider",
+								{ label: "Sign in", href: resolve("/login") }
+							]}
+						/>
+					{:else if !session.ready}
+						<Skeleton class="h-control w-28" />
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</header>
 	<main

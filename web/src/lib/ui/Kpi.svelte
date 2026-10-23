@@ -10,6 +10,8 @@
 		active = false,
 		unit = "%",
 		before,
+		blank,
+		low = false,
 		warm,
 		pick
 	}: {
@@ -20,36 +22,52 @@
 		active?: boolean;
 		unit?: string;
 		before?: string;
+		blank?: string;
+		low?: boolean;
 		warm?: () => void;
-		pick: () => void;
+		pick?: () => void;
 	} = $props();
 </script>
 
-<button
-	type="button"
-	class="flex flex-col gap-3 border-b px-4 py-4 text-left {active
-		? 'border-cyan'
-		: 'border-transparent hover:border-edge'}"
-	title={before && `Previous period: ${before}`}
-	onpointerenter={warm}
-	onfocus={warm}
-	onclick={pick}
->
+{#snippet body()}
 	<span class="label {active ? 'text-cyan' : ''}">{label}</span>
-	{#if value === null}
+	{#if blank}
+		<span class="num text-num text-faint">{blank}</span>
+	{:else if value === null}
 		<Skeleton class="h-[22px] w-20" />
 	{:else}
-		<Num {value} {format} class="text-num text-fg" />
+		<Num {value} {format} class="text-num {low ? 'text-warn' : 'text-fg'}" />
 	{/if}
-	<span
-		class="min-h-[11px] label {!change || change.change === 0
-			? 'text-faint'
-			: change.good
-				? 'text-cyan'
-				: 'text-bad'}"
+	{#if pick}
+		<span
+			class="min-h-[11px] label {!change || change.change === 0
+				? 'text-faint'
+				: change.good
+					? 'text-cyan'
+					: 'text-bad'}"
+		>
+			{#if change}
+				{change.change > 0 ? "+" : ""}{change.change}{unit}
+			{/if}
+		</span>
+	{/if}
+{/snippet}
+
+{#if !pick}
+	<div class="flex flex-col gap-3 border-b border-transparent px-4 py-4">
+		{@render body()}
+	</div>
+{:else}
+	<button
+		type="button"
+		class="flex flex-col gap-3 border-b px-4 py-4 text-left {active
+			? 'border-cyan'
+			: 'border-transparent hover:border-edge'}"
+		title={before && `Previous period: ${before}`}
+		onpointerenter={warm}
+		onfocus={warm}
+		onclick={pick}
 	>
-		{#if change}
-			{change.change > 0 ? "+" : ""}{change.change}{unit}
-		{/if}
-	</span>
-</button>
+		{@render body()}
+	</button>
+{/if}

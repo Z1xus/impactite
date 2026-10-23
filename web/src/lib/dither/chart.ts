@@ -6,10 +6,16 @@ export const COLORS = [
 	"--color-cyan-night",
 	"--color-line",
 	"--color-faint",
-	"--color-fg"
+	"--color-fg",
+	"--color-bad"
 ];
 
-const [LINE, DEEP, NIGHT, GRID, FAINT, FG] = COLORS.map((_, i) => i + 1);
+const [LINE, DEEP, NIGHT, GRID, FAINT, FG, BAD] = COLORS.map((_, i) => i + 1);
+
+export type Band = { from: number; to: number; label?: string; notes?: string[] };
+
+const edge = (index: number, count: number, columns: number) =>
+	Math.round((index / Math.max(1, count - 1)) * (columns - 1));
 
 export function sample(series: number[], x: number, columns: number) {
 	if (series.length < 2) return series[0] ?? 0;
@@ -27,7 +33,8 @@ export function chart(
 	values: number[],
 	previous: number[],
 	hover: number | null = null,
-	at = (x: number, width: number) => sample(values, x, width)
+	at = (x: number, width: number) => sample(values, x, width),
+	bands: Band[] = []
 ) {
 	const ticks = [peak, peak / 2, 0];
 	const data = new Uint8Array(columns * rows);
@@ -41,6 +48,14 @@ export function chart(
 			const y = top(tick);
 			for (let x = 0; x < columns; x += 2) put(x, y, GRID);
 		}
+	}
+
+	for (const band of bands) {
+		const start = edge(band.from, values.length, columns);
+		const end = Math.max(start + 1, edge(band.to, values.length, columns));
+		for (let x = start; x <= end; x++)
+			for (let y = 0; y < rows; y++)
+				if (x === start || x === end || threshold(x, y) < 0.3) put(x, y, BAD);
 	}
 
 	let lastY = top(at(0, columns));
@@ -78,14 +93,16 @@ export function smooth(
 	values: number[],
 	previous: number[],
 	hover: number | null,
-	at: (x: number, width: number) => number
+	at: (x: number, width: number) => number,
+	bands: Band[] = []
 ) {
-	const [cyan, grid, faint, fg, panel] = [
+	const [cyan, grid, faint, fg, panel, bad] = [
 		"--color-cyan",
 		"--color-line",
 		"--color-faint",
 		"--color-fg",
-		"--color-panel"
+		"--color-panel",
+		"--color-bad"
 	].map(css);
 	const top = (value: number) => 1 + (1 - value / peak) * (height - 2);
 	const trace = (series: (x: number) => number) => {
@@ -105,6 +122,12 @@ export function smooth(
 			ctx.lineTo(width, y);
 		}
 		ctx.stroke();
+	}
+
+	ctx.fillStyle = `${bad}30`;
+	for (const band of bands) {
+		const start = edge(band.from, values.length, width);
+		ctx.fillRect(start, 0, Math.max(2, edge(band.to, values.length, width) - start), height);
 	}
 
 	trace((x) => at(x, width));

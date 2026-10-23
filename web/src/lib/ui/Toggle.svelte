@@ -10,6 +10,11 @@
 		label?: string;
 	} = $props();
 
+	// long labels pair up on phones, short ones stay in a row
+	const crowded = $derived(
+		options.length > 3 && options.reduce((sum, option) => sum + option.label.length, 0) > 16
+	);
+
 	function move(event: KeyboardEvent, at: number) {
 		const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
 		if (!step) return;
@@ -27,8 +32,7 @@
 		<span class="label leading-[14px]">{label}</span>
 	{/if}
 	<div
-		class="flex min-h-control w-fit max-w-full shrink-0 flex-wrap rounded-px ring-1 ring-control ring-inset {options.length >
-		3
+		class="flex min-h-control w-fit max-w-full shrink-0 flex-wrap rounded-px ring-1 ring-control ring-inset {crowded
 			? 'max-sm:grid max-sm:w-full max-sm:grid-cols-2'
 			: ''}"
 		role="radiogroup"

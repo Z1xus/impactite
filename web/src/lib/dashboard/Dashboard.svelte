@@ -45,6 +45,8 @@
 	import Glyph from "#lib/ui/Glyph.svelte";
 	import Title from "#lib/ui/Title.svelte";
 	import Live from "#lib/ui/Live.svelte";
+	import State from "#lib/ui/State.svelte";
+	import { siteUptime } from "#lib/uptime/site.svelte.ts";
 	import Select from "#lib/ui/Select.svelte";
 
 	let {
@@ -95,6 +97,13 @@
 	const imports = $derived(page.url.searchParams.get("imports") !== "0");
 	const realtime = $derived(view?.period === "realtime");
 	const converting = $derived(filters.some((filter) => filter.dim === "event:goal"));
+
+	const uptime = siteUptime(
+		() => domain,
+		() => dates?.current ?? null,
+		() => !readonly && !combined && !!findSite(domain),
+		() => team?.id ?? null
+	);
 
 	const layout = createLayout(
 		() => domain,
@@ -333,6 +342,15 @@
 			/>
 		{/if}
 		{#if empty === false}<Live site={domain} />{/if}
+		{#if empty === false && uptime.value?.monitor}
+			<a
+				href={resolve("/uptime/[id]", { id: String(uptime.value.monitor.id) })}
+				class="flex h-control animate-[pop_100ms_ease-out] items-center rounded-px px-1 hover:bg-raised motion-reduce:animate-none"
+				title="uptime"
+			>
+				<State state={uptime.value.monitor.state} since={uptime.value.monitor.since} />
+			</a>
+		{/if}
 		<div class="flex items-center gap-2 max-sm:w-full sm:ml-auto">
 			{#if layout.arranging}
 				<Button
@@ -421,6 +439,7 @@
 			{ctx}
 			metric={realtime ? "pageviews" : metric}
 			{realtime}
+			incidents={uptime.value?.incidents}
 			table={layout.table}
 			found={(has) => (hasImports = has)}
 			pick={(next) => navigate((params) => params.set("metric", next))}

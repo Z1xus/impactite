@@ -33,7 +33,7 @@
 	}
 
 	$effect(() => {
-		const early = window.opened;
+		const early = window.opened as Share | undefined;
 		window.opened = undefined;
 		if (early) {
 			access.share = early.token;

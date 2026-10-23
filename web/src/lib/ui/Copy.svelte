@@ -5,15 +5,15 @@
 	import Button from "./Button.svelte";
 	import Icon from "./Icon.svelte";
 
-	let { text }: { text: string } = $props();
+	let { text, label = "Copy link" }: { text: string; label?: string } = $props();
 
 	const clipboard = copier();
 </script>
 
 <Button
 	variant="tool"
-	aria-label={clipboard.copied ? "Copied" : "Copy link"}
-	title={clipboard.copied ? "Copied" : "Copy"}
+	aria-label={clipboard.copied ? "Copied" : label}
+	title={clipboard.copied ? "Copied" : label}
 	onclick={() => clipboard.copy(text)}
 >
 	<Icon svg={clipboard.copied ? check : copy} size={12} />

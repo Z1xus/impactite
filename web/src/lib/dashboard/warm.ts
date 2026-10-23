@@ -10,6 +10,7 @@ import {
 	toQueryFilters,
 	type Filter
 } from "#lib/stats.ts";
+import { incidentsPath } from "#lib/uptime/site.svelte.ts";
 import { PANELS } from "./panels.ts";
 
 // starts the requests the dashboard makes first, for the view a url describes
@@ -51,6 +52,7 @@ export function warm(
 	const site = (name: string) =>
 		get<Record<string, unknown[]>>(`/api/app/sites/${domain}/${name}`);
 	if (!combined) {
+		if (findSite(domain)) asks.push(get(incidentsPath(domain, range)));
 		if (["owner", "admin", "editor"].includes(findSite(domain)?.role ?? ""))
 			asks.push(hint(domain));
 		asks.push(

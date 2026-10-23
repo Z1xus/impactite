@@ -56,6 +56,10 @@ import message from "pixelarticons/svg/message.svg?raw";
 import messagePlain from "lucide-static/icons/message-square.svg?raw";
 import monitor from "pixelarticons/svg/monitor.svg?raw";
 import monitorPlain from "lucide-static/icons/monitor.svg?raw";
+import heart from "pixelarticons/svg/heart.svg?raw";
+import heartPlain from "lucide-static/icons/heart.svg?raw";
+import hourglass from "pixelarticons/svg/hourglass.svg?raw";
+import hourglassPlain from "lucide-static/icons/hourglass.svg?raw";
 import moreVertical from "pixelarticons/svg/more-vertical.svg?raw";
 import moreVerticalPlain from "lucide-static/icons/ellipsis-vertical.svg?raw";
 import music from "pixelarticons/svg/music.svg?raw";
@@ -134,6 +138,8 @@ export const plain = new Map([
 	[mail, mailPlain],
 	[message, messagePlain],
 	[monitor, monitorPlain],
+	[heart, heartPlain],
+	[hourglass, hourglassPlain],
 	[moreVertical, moreVerticalPlain],
 	[music, musicPlain],
 	[pencil, pencilPlain],

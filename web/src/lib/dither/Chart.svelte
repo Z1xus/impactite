@@ -2,7 +2,7 @@
 	import { untrack } from "svelte";
 	import { theme } from "#lib/theme.svelte.ts";
 	import { css } from "./bayer";
-	import { chart, COLORS, sample, smooth } from "./chart.ts";
+	import { chart, COLORS, sample, smooth, type Band } from "./chart.ts";
 	import { paint } from "./pixels.ts";
 	import Pixels from "./Pixels.svelte";
 
@@ -14,7 +14,8 @@
 		format = (value: number) => String(value),
 		height = 220,
 		cell = 2,
-		axes = true
+		axes = true,
+		bands = []
 	}: {
 		values: number[];
 		previous?: number[];
@@ -25,6 +26,7 @@
 		height?: number;
 		cell?: number;
 		axes?: boolean;
+		bands?: Band[];
 	} = $props();
 
 	let canvas: HTMLCanvasElement;
@@ -32,6 +34,7 @@
 	let width = $state(0);
 	let ready = $state(false);
 	let hover = $state<number | null>(null);
+	let tipWidth = $state(0);
 
 	let shown: number[] = [];
 	let shownPrevious: number[] = [];
@@ -100,7 +103,7 @@
 			canvas.width = Math.round(width * devicePixelRatio);
 			canvas.height = Math.round(height * devicePixelRatio);
 			ctx.scale(devicePixelRatio, devicePixelRatio);
-			smooth(ctx, width, height, peak, axes, shown, shownPrevious, hover, at);
+			smooth(ctx, width, height, peak, axes, shown, shownPrevious, hover, at, bands);
 			ready = true;
 			return;
 		}
@@ -114,7 +117,7 @@
 		});
 		paint(
 			ctx,
-			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at),
+			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at, bands),
 			columns,
 			palette
 		);
@@ -173,6 +176,7 @@
 	$effect(() => {
 		void width;
 		void hover;
+		void bands;
 		void theme.shown;
 		void theme.style;
 		draw();
@@ -192,6 +196,9 @@
 		hover = Math.max(0, Math.min(values.length - 1, Math.round(at * (values.length - 1))));
 	}
 
+	const banded = $derived(
+		bands.find((band) => (hover ?? -1) >= band.from && (hover ?? -1) <= band.to)
+	);
 	const tipLeft = $derived(hover === null ? 0 : (hover / Math.max(1, values.length - 1)) * width);
 </script>
 
@@ -205,7 +212,7 @@
 		<div class="relative min-w-11" style:height="{height}px">
 			{#each ticks as tick, i (tick)}
 				<span
-					class="absolute right-0 label {i === 1
+					class="absolute right-0 label whitespace-nowrap {i === 1
 						? '-translate-y-1/2'
 						: i === 2
 							? '-translate-y-full'
@@ -247,14 +254,21 @@
 			></canvas>
 			{#if hover !== null}
 				<div
+					bind:clientWidth={tipWidth}
 					class="pointer-events-none absolute top-0 z-10 flex flex-col gap-1.5 rounded-px border border-edge bg-raised px-2.5 py-2 whitespace-nowrap transition-[left] duration-75 ease-out {tipLeft >
-					width / 2
+						width / 2 || tipLeft + tipWidth + 12 > width
 						? '-translate-x-[calc(100%+12px)]'
 						: 'translate-x-3'}"
 					style:left="{tipLeft}px"
 				>
 					<span class="label">{labels[hover] ?? ""}</span>
 					<span class="num text-fg">{format(values[hover] ?? 0)}</span>
+					{#if banded?.label}
+						<span class="num text-label text-bad">{banded.label}</span>
+						{#each banded.notes ?? [] as note (note)}
+							<span class="num text-label text-dim">{note}</span>
+						{/each}
+					{/if}
 					{#if previous.length}
 						<span class="num text-label text-faint">{format(previous[hover] ?? 0)}</span
 						>
@@ -263,9 +277,11 @@
 			{/if}
 		</div>
 		{#if axes && labels.length}
-			<div class="mt-2 flex justify-between">
+			<div class="mt-2 flex justify-between whitespace-nowrap">
 				<span class="label">{labels[0]}</span>
-				<span class="label">{labels[Math.floor((labels.length - 1) / 2)]}</span>
+				<span class="label {labels[0].length > 8 ? 'max-sm:hidden' : ''}"
+					>{labels[Math.floor((labels.length - 1) / 2)]}</span
+				>
 				<span class="label">{labels[labels.length - 1]}</span>
 			</div>
 		{/if}

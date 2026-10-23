@@ -14,7 +14,7 @@
 
 	let { children }: LayoutProps = $props();
 
-	const open = ["/setup", "/login", "/invite", "/signup", "/share", "/demo"];
+	const open = ["/setup", "/login", "/invite", "/signup", "/share", "/status", "/demo"];
 	const auth = [...open, "/email"];
 
 	keepScroll();
@@ -46,7 +46,9 @@
 		const path = page.url.pathname;
 		// shared dashboards stay readable before anyone has set the server up
 		if (session.setup)
-			return ["/setup", "/share", "/demo"].some((prefix) => path.startsWith(prefix))
+			return ["/setup", "/share", "/status", "/demo"].some((prefix) =>
+				path.startsWith(prefix)
+			)
 				? null
 				: "/setup";
 		if (!session.me)

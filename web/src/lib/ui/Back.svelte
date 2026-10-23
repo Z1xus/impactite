@@ -10,7 +10,7 @@
 <a
 	{href}
 	{title}
-	class="group flex h-control items-center gap-3 transition-colors duration-100 hover:text-cyan"
+	class="group flex h-control min-w-0 items-center gap-3 transition-colors duration-100 hover:text-cyan"
 >
 	<Icon
 		svg={back}

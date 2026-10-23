@@ -1,9 +1,11 @@
 <script lang="ts" generics="K extends string | number">
 	import type { Snippet } from "svelte";
 	import trash from "pixelarticons/svg/trash.svg?raw";
+	import type { Spec } from "#lib/icons/resolve.ts";
 	import Avatar from "./Avatar.svelte";
 	import Button from "./Button.svelte";
 	import Empty from "./Empty.svelte";
+	import Glyph from "./Glyph.svelte";
 	import Icon from "./Icon.svelte";
 	import Skeleton from "./Skeleton.svelte";
 
@@ -24,6 +26,8 @@
 					verb?: string;
 					// a person, null while their invite is open
 					avatar?: "joined" | "invited";
+					glyph?: Spec;
+					status?: { text: string; tone?: "bad" | "warn" };
 			  }[]
 			| null;
 		source?: { failed: boolean; load: () => unknown };
@@ -34,6 +38,7 @@
 	} = $props();
 
 	let removing = $state<K | null>(null);
+	const tones = { bad: "text-bad", warn: "text-warn", dim: "" };
 
 	async function drop(key: K) {
 		removing = key;
@@ -58,23 +63,30 @@
 				<li class="flex items-center gap-3 py-3">
 					{#if item.avatar}
 						<Avatar name={item.title} invited={item.avatar === "invited"} size={32} />
+					{:else if item.glyph}
+						<Glyph spec={item.glyph} />
 					{/if}
 					<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 						<span class="truncate text-body text-fg">{item.title}</span>
-						{#if item.meta?.length}
-							<span
-								class="flex flex-wrap gap-x-3 gap-y-1 label leading-4 tracking-normal normal-case"
-							>
-								{#each item.meta as part, i (i)}
-									{#if i}<span
-											class="h-2.5 w-px self-center bg-edge max-sm:hidden"
-										></span>{/if}
+						{#if item.meta?.length || item.status}
+							<span class="flex flex-wrap gap-x-4 gap-y-1 meta leading-4">
+								{#each item.meta ?? [] as part, i (i)}
 									<span class="max-w-full truncate" title={part}>{part}</span>
 								{/each}
+								{#if item.status}
+									<span class="sm:hidden {tones[item.status.tone ?? 'dim']}"
+										>{item.status.text}</span
+									>
+								{/if}
 							</span>
 						{/if}
 					</div>
 					<div class="flex shrink-0 items-center gap-1">
+						{#if item.status}
+							<span class="mr-2 meta max-sm:hidden {tones[item.status.tone ?? 'dim']}"
+								>{item.status.text}</span
+							>
+						{/if}
 						{@render control?.(item.key)}
 						{#if remove && item.removable !== false}
 							<Button

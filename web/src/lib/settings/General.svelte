@@ -9,6 +9,11 @@
 	import Section from "#lib/ui/Section.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import { ZONES } from "#lib/zones.ts";
+	import Button from "#lib/ui/Button.svelte";
+	import State from "#lib/ui/State.svelte";
+	import Icon from "#lib/ui/Icon.svelte";
+	import { siteUptime } from "#lib/uptime/site.svelte.ts";
+	import next from "pixelarticons/svg/chevron-right.svg?raw";
 	import { saveSite, sitePath } from "./site.ts";
 
 	let { domain, site, owner }: { domain: string; site: Site; owner: boolean } = $props();
@@ -32,6 +37,13 @@
 		(session.me?.teams ?? [])
 			.filter((team) => team.id && ["owner", "admin"].includes(team.role))
 			.map((team) => ({ key: team.id, label: team.personal ? "personal" : team.name }))
+	);
+
+	const uptime = siteUptime(
+		() => domain,
+		() => null,
+		() => true,
+		() => home?.id ?? null
 	);
 
 	async function rename() {
@@ -69,6 +81,18 @@
 				options={targets}
 				pick={(team) => saveSite(domain, { team })}
 			/>
+		{/if}
+		{#if uptime.value?.monitor}
+			<div class="flex flex-col gap-2">
+				<span class="label leading-[14px]">uptime</span>
+				<Button
+					variant="quiet"
+					href={resolve("/uptime/[id]", { id: String(uptime.value.monitor.id) })}
+				>
+					<State state={uptime.value.monitor.state} since={uptime.value.monitor.since} />
+					<Icon svg={next} size={12} class="ml-auto text-dim" />
+				</Button>
+			</div>
 		{/if}
 	</div>
 </Section>

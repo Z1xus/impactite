@@ -20,7 +20,7 @@
 
 	const variants = {
 		primary:
-			"border border-cyan bg-cyan text-ink enabled:hover:border-fg enabled:hover:bg-fg disabled:border-edge disabled:bg-raised disabled:text-faint disabled:opacity-100",
+			"border border-cyan bg-cyan text-ink enabled:not-focus-visible:hover:border-fg enabled:not-focus-visible:hover:bg-fg disabled:border-edge disabled:bg-raised disabled:text-faint disabled:opacity-100",
 		quiet: "border border-edge text-fg enabled:hover:border-dim",
 		danger: "border border-bad/50 text-bad enabled:hover:border-bad enabled:hover:bg-bad/10",
 		icon: "size-control border border-edge text-dim enabled:hover:border-dim enabled:hover:text-fg",

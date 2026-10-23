@@ -6,6 +6,7 @@ export function dismiss(isOpen: () => boolean, close: () => void) {
 		};
 		const key = (event: KeyboardEvent) => {
 			if (event.key !== "Escape" || !isOpen()) return;
+			event.preventDefault();
 			event.stopImmediatePropagation();
 			close();
 			trigger()?.focus({ preventScroll: true });

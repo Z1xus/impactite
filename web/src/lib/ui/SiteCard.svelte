@@ -2,21 +2,26 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import { compact } from "#lib/stats.ts";
+	import { percent } from "#lib/uptime/format.ts";
+	import type { Monitor } from "#lib/uptime/types.ts";
 	import Glyph from "./Glyph.svelte";
 	import Num from "./Num.svelte";
 	import Skeleton from "./Skeleton.svelte";
+	import State from "./State.svelte";
 
 	let {
 		href,
 		title,
 		glyph,
 		values,
+		monitor,
 		warm
 	}: {
 		href?: string;
 		title?: string;
 		glyph?: Spec | null;
 		values?: number[];
+		monitor?: Monitor;
 		warm?: () => void;
 	} = $props();
 </script>
@@ -34,22 +39,30 @@
 		{:else}
 			{#if glyph !== undefined}<Glyph spec={glyph} fallback={title} />{/if}
 			<span class="truncate">{title}</span>
+			{#if monitor}
+				<span
+					class="ml-auto flex shrink-0 items-center"
+					title={monitor.uptime_30d === null
+						? monitor.state
+						: `${monitor.state}, ${percent(monitor.uptime_30d)} in 30 days`}
+				>
+					<State
+						state={monitor.state}
+						since={monitor.since}
+						dot={!["down", "slow"].includes(monitor.state)}
+					/>
+				</span>
+			{/if}
 		{/if}
 	</span>
 	{#if values}
-		<span class="flex items-end justify-between gap-4">
-			<span class="flex flex-col gap-1.5">
-				<Num
-					value={values.reduce((sum, value) => sum + value, 0)}
-					format={compact}
-					class="text-num text-fg"
-				/>
-				<span class="label">visitors, 28 days</span>
-			</span>
-			<span class="flex flex-col items-end gap-1.5">
-				<Num value={values.at(-1) ?? 0} format={compact} class="text-body text-fg" />
-				<span class="label">today</span>
-			</span>
+		<span class="flex flex-col gap-1.5">
+			<Num
+				value={values.reduce((sum, value) => sum + value, 0)}
+				format={compact}
+				class="text-num text-fg"
+			/>
+			<span class="label">visitors, 28 days</span>
 		</span>
 		<Chart {values} axes={false} height={96} format={compact} />
 	{:else}
