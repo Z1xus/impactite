@@ -102,6 +102,7 @@ async fn destroy(
 		site::drop_site(&web, site).await?;
 	}
 	web.app.delete_team(team)?;
+	web.uptime.sync();
 	Ok(StatusCode::NO_CONTENT)
 }
 
@@ -451,10 +452,12 @@ impl App {
 	}
 
 	pub fn adopt_sites(&self, team: i64) -> rusqlite::Result<()> {
-		self.conn().execute(
+		let conn = self.conn();
+		conn.execute(
 			"update sites set team = ?1 where team is null and domain not like '~%'",
 			[team],
 		)?;
+		conn.execute(crate::app::HOME_MONITOR, [0])?;
 		Ok(())
 	}
 

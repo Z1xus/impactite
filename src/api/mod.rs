@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, Multipart, Request};
-use axum::http::{StatusCode, header};
+use axum::extract::{FromRequest, FromRequestParts, Multipart, Request};
+use axum::http::request::Parts;
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use serde_json::Value;
@@ -12,6 +13,7 @@ use crate::stats::{error, unauthorized};
 use crate::web::Web;
 
 mod goatcounter;
+mod monitors;
 mod sites;
 mod stats;
 
@@ -20,6 +22,7 @@ type Fail = (StatusCode, String);
 pub fn routes() -> Router<Arc<Web>> {
 	stats::routes()
 		.merge(sites::routes())
+		.merge(monitors::routes())
 		.merge(goatcounter::routes())
 }
 
@@ -30,26 +33,35 @@ struct Call {
 	params: HashMap<String, String>,
 }
 
+fn key_user(web: &Web, headers: &HeaderMap) -> Option<i64> {
+	let owner = headers
+		.get(header::AUTHORIZATION)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.strip_prefix("Bearer "))
+		.and_then(|key| web.app.key_owner(key).ok().flatten())?;
+	match owner {
+		Some(user) => Some(user),
+		None => web.app.first_user().ok().map(|user| user.unwrap_or(0)),
+	}
+}
+
+struct Key(i64);
+
+impl FromRequestParts<Arc<Web>> for Key {
+	type Rejection = Response;
+
+	async fn from_request_parts(parts: &mut Parts, web: &Arc<Web>) -> Result<Self, Response> {
+		key_user(web, &parts.headers)
+			.map(Self)
+			.ok_or_else(unauthorized)
+	}
+}
+
 impl FromRequest<Arc<Web>> for Call {
 	type Rejection = Response;
 
 	async fn from_request(request: Request, web: &Arc<Web>) -> Result<Self, Response> {
-		let owner = request
-			.headers()
-			.get(header::AUTHORIZATION)
-			.and_then(|value| value.to_str().ok())
-			.and_then(|value| value.strip_prefix("Bearer "))
-			.and_then(|key| web.app.key_owner(key).ok().flatten());
-		let user = match owner {
-			Some(Some(user)) => user,
-			// an instance key acts as the first user, or as nobody on a server without accounts yet
-			Some(None) => web
-				.app
-				.first_user()
-				.map_err(|_| unauthorized())?
-				.unwrap_or(0),
-			None => return Err(unauthorized()),
-		};
+		let user = key_user(web, request.headers()).ok_or_else(unauthorized)?;
 		let host = request
 			.headers()
 			.get(header::HOST)

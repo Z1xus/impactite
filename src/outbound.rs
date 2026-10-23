@@ -64,3 +64,24 @@ pub fn client() -> reqwest::Result<reqwest::Client> {
 		.timeout(Duration::from_secs(15))
 		.build()
 }
+
+// five redirects at most, and a fresh connection each time so latency is honest
+pub fn monitor(local: bool) -> reqwest::Result<reqwest::Client> {
+	let mut builder = reqwest::Client::builder()
+		.pool_max_idle_per_host(0)
+		.tls_info(true)
+		.user_agent(concat!("Impactite-Uptime/", env!("CARGO_PKG_VERSION")))
+		.redirect(reqwest::redirect::Policy::custom(move |attempt| {
+			if attempt.previous().len() >= 5 {
+				attempt.error("too many redirects")
+			} else if !local && !allowed(attempt.url()) {
+				attempt.error("this address is not public")
+			} else {
+				attempt.follow()
+			}
+		}));
+	if !local {
+		builder = builder.dns_resolver(Public);
+	}
+	builder.build()
+}

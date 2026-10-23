@@ -1474,6 +1474,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "x509-parser",
  "zip",
 ]
 

@@ -18,6 +18,7 @@ mod limit;
 mod mail;
 mod names;
 mod net;
+mod notify;
 mod outbound;
 mod s3;
 mod server;
@@ -25,6 +26,7 @@ mod site;
 mod stats;
 mod tracker;
 mod update;
+mod uptime;
 mod web;
 
 use std::fs;
@@ -137,6 +139,11 @@ enum ImportSource {
 		site: String,
 		#[arg(long, default_value = "UTC")]
 		timezone: String,
+	},
+	UptimeKuma {
+		file: PathBuf,
+		#[arg(long)]
+		team: Option<i64>,
 	},
 }
 
@@ -325,6 +332,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		);
 	}
 	let ingest = Arc::new(Ingest::new(db.clone(), app.clone(), geo, proxies));
+	let (uptime, checks) = uptime::Uptime::open(data).context("open uptime log")?;
 	let web = Arc::new(Web {
 		app,
 		stats: stats.clone(),
@@ -357,7 +365,9 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 			.clone()
 			.zip(args.google_client_secret.clone())
 			.map(|(id, secret)| site::google::Client { id, secret }),
+		uptime: uptime.clone(),
 	});
+	let scheduler = uptime::run::start(web.clone(), checks);
 
 	let checker = (!args.no_update_check).then(|| tokio::spawn(update::watch(web.clone())));
 	let sweeper = tokio::spawn({
@@ -365,6 +375,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 		let app = web.app.clone();
 		let db = db.clone();
 		let web = web.clone();
+		let uptime = uptime.clone();
 		async move {
 			let mut interval = tokio::time::interval(Duration::from_secs(60));
 			let mut minutes = 0u64;
@@ -373,7 +384,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 				ingest.sweep();
 				site::reports::tick(&web).await;
 				if minutes.is_multiple_of(60) {
-					prune(&app, &db);
+					prune(&app, &db, &uptime);
 				}
 				minutes += 1;
 			}
@@ -396,6 +407,11 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 
 	sweeper.abort();
 	let _ = sweeper.await;
+	scheduler.abort();
+	let _ = scheduler.await;
+	if let Err(err) = uptime.log.flush() {
+		tracing::warn!(%err, "flush uptime log");
+	}
 	if let Some(checker) = checker {
 		checker.abort();
 	}
@@ -413,6 +429,7 @@ async fn import(app: &App, data: &Path, source: ImportSource) -> anyhow::Result<
 		| ImportSource::Goatcounter { site, timezone, .. }
 		| ImportSource::Impactite { site, timezone, .. }
 		| ImportSource::Umami { site, timezone, .. } => (site, timezone),
+		ImportSource::UptimeKuma { file, team } => return import_kuma(app, data, file, *team),
 	};
 	let db = open_events(data, ", or import from the site settings")?;
 	let site = find_or_create(app, domain, timezone)?;
@@ -441,6 +458,7 @@ async fn import(app: &App, data: &Path, source: ImportSource) -> anyhow::Result<
 			(import::native_zip(&db, app, &site, &file)?, "events")
 		}
 		ImportSource::Umami { file, .. } => (import::umami_csv(&db, app, &site, &file)?, "events"),
+		ImportSource::UptimeKuma { .. } => unreachable!("returned above"),
 	};
 	db.sync()?;
 	db.close()?;
@@ -452,6 +470,55 @@ async fn import(app: &App, data: &Path, source: ImportSource) -> anyhow::Result<
 			started.elapsed()
 		),
 	);
+	Ok(())
+}
+
+fn import_kuma(app: &App, data: &Path, file: &Path, team: Option<i64>) -> anyhow::Result<()> {
+	let lock = open_events(data, ", or import from the uptime settings")?;
+	let user = app
+		.first_user()?
+		.context("Create the first account before importing.")?;
+	let team = match team {
+		Some(team) => team,
+		None => app.personal_team(user)?,
+	};
+	app.team_name(team)
+		.with_context(|| format!("No team with id {team}"))?;
+	let started = std::time::Instant::now();
+	let log = uptime::log::Log::open(data.join("uptime"))?;
+	let done = uptime::kuma(app, &log, file, team, user, false)?;
+	lock.close()?;
+	let plural = |count: u32, one: &str, many: &str| {
+		format!("{count} {}", if count == 1 { one } else { many })
+	};
+	cli::say(
+		'+',
+		&format!(
+			"{}  |  {} checks  |  {}  |  {}  |  {}  |  {}  |  {:.1?}",
+			plural(done.monitors, "monitor", "monitors"),
+			done.checks,
+			plural(done.incidents, "incident", "incidents"),
+			plural(done.alerts, "alert", "alerts"),
+			plural(done.maintenance, "maintenance", "maintenance"),
+			plural(done.pages, "status page", "status pages"),
+			started.elapsed()
+		),
+	);
+	if done.existing > 0 {
+		cli::say(
+			'*',
+			&format!(
+				"{} already here",
+				plural(done.existing, "monitor", "monitors")
+			),
+		);
+	}
+	for item in &done.noted {
+		cli::say('*', &format!("{}  |  {}", item.name, item.reason));
+	}
+	for item in &done.skipped {
+		cli::say('!', &format!("{}  |  {}", item.name, item.reason));
+	}
 	Ok(())
 }
 
@@ -575,7 +642,8 @@ fn default_team(app: &App) -> anyhow::Result<Option<i64>> {
 	})
 }
 
-fn prune(app: &App, db: &Db) {
+fn prune(app: &App, db: &Db, uptime: &uptime::Uptime) {
+	uptime.log.prune(app::now());
 	if let Err(err) = app.purge_expired() {
 		tracing::warn!(%err, "purge expired");
 	}

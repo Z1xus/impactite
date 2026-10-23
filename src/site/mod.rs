@@ -148,6 +148,7 @@ async fn update(
 		web.app.move_site(site.id, team)?;
 	}
 	web.ingest.forget(&site.domain);
+	web.uptime.sync();
 	Ok(StatusCode::NO_CONTENT)
 }
 
@@ -287,6 +288,7 @@ pub async fn drop_site(web: &Web, site: Site) -> Reply<()> {
 	blocking(move || db.drop_site(site.id)).await?;
 	web.ingest.forget(&site.domain);
 	web.app.delete_site(site.id)?;
+	web.uptime.sync();
 	Ok(())
 }
 
@@ -383,6 +385,11 @@ impl App {
 			params![site as i64, domain],
 		)?;
 		tx.execute(
+			"update monitors set name = ?2, target = 'https://' || ?2 || '/'
+			where site = ?1 and target = 'https://' || (select domain from sites where id = ?1) || '/'",
+			params![site as i64, domain],
+		)?;
+		tx.execute(
 			"update sites set domain = ?2 where id = ?1",
 			params![site as i64, domain],
 		)?;
@@ -456,8 +463,17 @@ impl App {
 	}
 
 	pub fn move_site(&self, site: u64, team: i64) -> rusqlite::Result<()> {
-		self.conn().execute(
+		let conn = self.conn();
+		conn.execute(
 			"update sites set team = ?2 where id = ?1",
+			params![site as i64, team],
+		)?;
+		conn.execute(
+			"delete from maintenance_monitors where monitor in (select id from monitors where site = ?1)",
+			[site as i64],
+		)?;
+		conn.execute(
+			"update monitors set team = ?2 where site = ?1",
 			params![site as i64, team],
 		)?;
 		Ok(())

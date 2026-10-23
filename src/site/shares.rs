@@ -192,7 +192,7 @@ async fn page(
 				let title = escape(&format!(
 					"{}: {} visitors in the last 30 days",
 					share.domain,
-					crate::site::reports::grouped(now)
+					crate::notify::grouped(now)
 				));
 				let description = match change(now, then) {
 					Some(change) if change >= 0 => format!("Up {change}% on the 30 days before."),
@@ -231,7 +231,7 @@ async fn card(State(web): State<Arc<Web>>, Path(slug): Path<String>) -> Response
 		&format!("{} last 30 days", share.domain).to_uppercase(),
 	);
 	canvas.text(1200 - 72 - 9 * 7 * 3, 64, 3, FAINT, "IMPACTITE");
-	canvas.text(66, 130, 10, FG, &crate::site::reports::grouped(now));
+	canvas.text(66, 130, 10, FG, &crate::notify::grouped(now));
 	if let Some(change) = change(now, then) {
 		let color = if change >= 0 { CYAN } else { BAD };
 		canvas.text(72, 290, 3, color, &format!("{change:+}% VISITORS"));
@@ -319,17 +319,7 @@ async fn open(
 		if !LINKS.open(&slug) || !CLIENTS.open(&client) {
 			return Err(Error::too_many());
 		}
-		let (stored, given) = (share.password.clone(), body.password.clone());
-		let valid = tokio::task::spawn_blocking(move || {
-			!given.is_empty()
-				&& argon2::PasswordHash::new(&stored).is_ok_and(|parsed| {
-					Argon2::default()
-						.verify_password(given.as_bytes(), &parsed)
-						.is_ok()
-				})
-		})
-		.await?;
-		if !valid {
+		if !matches(&share.password, &body.password).await? {
 			LINKS.strike(&slug);
 			CLIENTS.strike(&client);
 			return Ok((
@@ -340,6 +330,19 @@ async fn open(
 		}
 	}
 	Ok(Json(share.opened()).into_response())
+}
+
+pub(crate) async fn matches(stored: &str, given: &str) -> Reply<bool> {
+	let (stored, given) = (stored.to_owned(), given.to_owned());
+	Ok(tokio::task::spawn_blocking(move || {
+		!given.is_empty()
+			&& argon2::PasswordHash::new(&stored).is_ok_and(|parsed| {
+				Argon2::default()
+					.verify_password(given.as_bytes(), &parsed)
+					.is_ok()
+			})
+	})
+	.await?)
 }
 
 fn respond(web: &Web, site: u64) -> Reply {

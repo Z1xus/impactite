@@ -19,6 +19,7 @@ use crate::site;
 use crate::site::{counter, funnels, goals, google, reports, segments, shares, shields, titles};
 use crate::stats::{self, Stats};
 use crate::tracker;
+use crate::uptime;
 use crate::web::Web;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
@@ -68,6 +69,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(totp::routes())
 				.merge(sso::routes())
 				.merge(api::routes())
+				.merge(uptime::routes())
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))
@@ -77,10 +79,14 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.with_state(web.clone()),
 		)
 		.merge(scripts);
+	let pings = uptime::push::routes()
+		.with_state(web.clone())
+		.layer(map_response(cors));
 	let batch = Router::new()
 		.route("/api/app/batch", post(batch::batch))
 		.with_state(app.clone());
 	app.merge(batch)
+		.merge(pings)
 		.merge(
 			Router::new()
 				.fallback(assets::serve)

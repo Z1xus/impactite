@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use crate::app::{App, Site};
 use crate::auth::accounts::Viewer;
-use crate::card;
+use crate::notify::{self, Note, grouped};
 use crate::stats::{self, day_number};
 use crate::web::{Error, Reply, Web};
 
@@ -124,12 +124,8 @@ async fn check(web: &Web, report: &Report) -> anyhow::Result<()> {
 				"{} has {current} visitors right now. Your alert is at {}.",
 				report.site.domain, report.threshold
 			);
-			deliver(
-				web,
-				report,
-				&Note::alert(subject, line, link(web, report, None)),
-			)
-			.await?;
+			let note = Note::alert(subject, line, link(web, report, None));
+			deliver(web, report, &note).await?;
 			web.app.mark_report(report.id, ts)?;
 		}
 		_ => {
@@ -186,59 +182,6 @@ fn totals(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Result<Va
 		"bounce": metrics[2],
 		"duration": metrics[3],
 	}))
-}
-
-struct Note {
-	subject: String,
-	line: String,
-	alert: bool,
-	fields: Vec<(&'static str, String)>,
-	lists: Vec<(&'static str, Vec<(String, u64)>)>,
-	series: Vec<u64>,
-	link: String,
-}
-
-impl Note {
-	fn alert(subject: String, line: String, link: String) -> Self {
-		Self {
-			subject,
-			line,
-			alert: true,
-			fields: Vec::new(),
-			lists: Vec::new(),
-			series: Vec::new(),
-			link,
-		}
-	}
-
-	fn table(&self) -> String {
-		let fields = self
-			.fields
-			.iter()
-			.map(|(label, value)| format!("{label:<13} {value}"));
-		let lists = self.lists.iter().map(|(label, rows)| {
-			let rows = rows
-				.iter()
-				.map(|(name, count)| format!("{:>8}  {name}", grouped(*count)));
-			std::iter::once(format!("\n{label}"))
-				.chain(rows)
-				.collect::<Vec<_>>()
-				.join("\n")
-		});
-		fields.chain(lists).collect::<Vec<_>>().join("\n")
-	}
-}
-
-pub(crate) fn grouped(n: u64) -> String {
-	let digits = n.to_string();
-	let mut out = String::new();
-	for (i, ch) in digits.chars().enumerate() {
-		if i > 0 && (digits.len() - i).is_multiple_of(3) {
-			out.push(',');
-		}
-		out.push(ch);
-	}
-	out
 }
 
 async fn summary(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Result<()> {
@@ -319,119 +262,8 @@ async fn summary(web: &Web, report: &Report, from: Date, to: Date) -> anyhow::Re
 	deliver(web, report, &note).await
 }
 
-// mail, or a webhook: slack and discord get their own layout, anything else gets json
 async fn deliver(web: &Web, report: &Report, note: &Note) -> anyhow::Result<()> {
-	let to = report.email.as_str();
-	let table = note.table();
-	if !to.starts_with("https://") {
-		let lines = [note.line.clone()];
-		let letter = crate::mail::Letter {
-			base: &web.url,
-			title: &note.subject,
-			lines: &lines,
-			table: (!table.is_empty()).then_some(table.as_str()),
-			button: Some(("Open dashboard", &note.link)),
-		};
-		return web
-			.mail
-			.send(to, &note.subject, &letter.text(), &letter.html())
-			.await;
-	}
-	anyhow::ensure!(
-		url::Url::parse(to).is_ok_and(|url| crate::outbound::allowed(&url)),
-		"the webhook address is not public"
-	);
-	let request = if to.starts_with("https://hooks.slack.com/") {
-		web.hooks.post(to).json(&slack(note))
-	} else if to.contains("discord.com/api/webhooks/") {
-		discord(web, note, to)?
-	} else {
-		let text = [note.line.as_str(), &table, &note.link].join("\n\n");
-		web.hooks.post(to).json(&json!({
-			"subject": note.subject,
-			"text": text,
-			"site": report.site.domain,
-			"kind": report.kind,
-			"link": note.link,
-		}))
-	};
-	request.send().await?.error_for_status()?;
-	Ok(())
-}
-
-fn discord(web: &Web, note: &Note, to: &str) -> anyhow::Result<reqwest::RequestBuilder> {
-	let mut fields: Vec<Value> = note
-		.fields
-		.iter()
-		.take(3)
-		.map(|(name, value)| json!({ "name": name, "value": value, "inline": true }))
-		.collect();
-	fields.extend(
-		note.lists
-			.iter()
-			.filter(|(_, rows)| !rows.is_empty())
-			.map(|(name, rows)| {
-				let value = rows
-					.iter()
-					.map(|(row, count)| format!("`{}` {row}", grouped(*count)))
-					.collect::<Vec<_>>()
-					.join("\n");
-				json!({ "name": name, "value": value.chars().take(1000).collect::<String>(), "inline": true })
-			}),
-	);
-	let mut embed = json!({
-		"title": note.subject,
-		"url": note.link,
-		"description": note.line,
-		"color": if note.alert { 0xf0645a } else { 0x38e1f2 },
-		"fields": fields,
-		"footer": { "text": "impactite" },
-	});
-	if note.series.is_empty() {
-		return Ok(web.hooks.post(to).json(&json!({ "embeds": [embed] })));
-	}
-	embed["image"] = json!({ "url": "attachment://chart.png" });
-	let mut chart = card::Canvas::new(800, 200, card::INK);
-	chart.area([0, 8, 800, 192], &note.series, 8);
-	let form = reqwest::multipart::Form::new()
-		.text("payload_json", json!({ "embeds": [embed] }).to_string())
-		.part(
-			"files[0]",
-			reqwest::multipart::Part::bytes(chart.png())
-				.file_name("chart.png")
-				.mime_str("image/png")?,
-		);
-	Ok(web.hooks.post(to).multipart(form))
-}
-
-fn slack(note: &Note) -> Value {
-	let mut blocks = vec![
-		json!({ "type": "header", "text": { "type": "plain_text", "text": note.subject } }),
-		json!({ "type": "section", "text": { "type": "mrkdwn", "text": note.line } }),
-	];
-	if !note.fields.is_empty() {
-		let fields: Vec<Value> = note
-			.fields
-			.iter()
-			.map(|(name, value)| json!({ "type": "mrkdwn", "text": format!("*{name}*\n{value}") }))
-			.collect();
-		blocks.push(json!({ "type": "section", "fields": fields }));
-	}
-	for (name, rows) in note.lists.iter().filter(|(_, rows)| !rows.is_empty()) {
-		let rows = rows
-			.iter()
-			.map(|(row, count)| format!("`{}` {row}", grouped(*count)))
-			.collect::<Vec<_>>()
-			.join("\n");
-		blocks.push(
-			json!({ "type": "section", "text": { "type": "mrkdwn", "text": format!("*{name}*\n{rows}") } }),
-		);
-	}
-	blocks.push(json!({
-		"type": "actions",
-		"elements": [{ "type": "button", "text": { "type": "plain_text", "text": "Open dashboard" }, "url": note.link }],
-	}));
-	json!({ "text": format!("{}. {}", note.subject, note.line), "blocks": blocks })
+	notify::deliver(web, &report.email, note, &report.site.domain, &report.kind).await
 }
 
 fn link(web: &Web, report: &Report, range: Option<(Date, Date)>) -> String {
@@ -442,16 +274,14 @@ fn link(web: &Web, report: &Report, range: Option<(Date, Date)>) -> String {
 	}
 }
 
-fn shown(to: &str) -> String {
+fn channel(to: &str) -> Value {
 	if let Ok(bucket) = crate::s3::Bucket::parse(to) {
-		return bucket.shown();
+		return json!({ "kind": "s3", "label": bucket.shown() });
 	}
-	match url::Url::parse(to) {
-		Ok(url) if to.starts_with("https://") => {
-			format!("webhook to {}", url.host_str().unwrap_or_default())
-		}
-		_ => to.to_owned(),
-	}
+	notify::classify(to).map_or_else(
+		|_| json!({ "kind": "webhook", "label": "" }),
+		|target| json!(target),
+	)
 }
 
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
@@ -483,15 +313,11 @@ async fn add(
 			));
 		}
 	} else {
-		let webhook = to.starts_with("https://")
-			&& url::Url::parse(to).is_ok_and(|url| crate::outbound::allowed(&url));
+		notify::classify(to).map_err(|reason| Error::bad(format!("{reason}.")))?;
 		if !KINDS.contains(&body.kind.as_str())
-			|| !(webhook || to.contains('@'))
 			|| (alert && !(1..=MAX_THRESHOLD).contains(&body.threshold))
 		{
-			return Err(Error::bad(
-				"Enter an email or an https webhook. Alerts also need a threshold.",
-			));
+			return Err(Error::bad("Alerts need a threshold."));
 		}
 	}
 	// starts as sent so nothing goes out right away
@@ -554,8 +380,7 @@ impl App {
 			Ok(json!({
 				"id": row.get::<_, i64>(0)?,
 				"kind": row.get::<_, String>(1)?,
-				// a webhook url is its secret, only its host goes back
-				"email": shown(&row.get::<_, String>(2)?),
+				"to": channel(&row.get::<_, String>(2)?),
 				"threshold": row.get::<_, i64>(3)?,
 			}))
 		})?

@@ -242,9 +242,97 @@ const MIGRATIONS: &[&str] = &[
 		primary key (site, name)
 	);
 	",
+	"
+	create table monitors (
+		id integer primary key,
+		team integer not null references teams (id) on delete cascade,
+		site integer references sites (id) on delete cascade,
+		name text not null,
+		kind text not null,
+		target text not null,
+		config text not null default '{\"v\":1}',
+		interval integer not null default 60,
+		paused integer not null default 0,
+		muted integer not null default 0,
+		token text unique,
+		created_by integer references users (id) on delete set null,
+		cert_until integer not null default 0,
+		cert_warned integer not null default 0,
+		created_at integer not null
+	);
+	create index monitors_team on monitors (team);
+	create index monitors_site on monitors (site);
+	create table pauses (
+		monitor integer not null references monitors (id) on delete cascade,
+		from_at integer not null,
+		to_at integer
+	);
+	create index pauses_monitor on pauses (monitor);
+	create table incidents (
+		id integer primary key,
+		monitor integer not null references monitors (id) on delete cascade,
+		started_at integer not null,
+		ended_at integer,
+		cause text not null,
+		detail text not null default '',
+		notified integer not null default 0
+	);
+	create index incidents_monitor on incidents (monitor, started_at);
+	create table incident_notes (
+		id integer primary key,
+		incident integer not null references incidents (id) on delete cascade,
+		at integer not null,
+		text text not null,
+		public integer not null default 1
+	);
+	create index incident_notes_incident on incident_notes (incident);
+	create table maintenance (
+		id integer primary key,
+		team integer not null references teams (id) on delete cascade,
+		starts_at integer not null,
+		ends_at integer not null,
+		note text not null default ''
+	);
+	create table maintenance_monitors (
+		maintenance integer not null references maintenance (id) on delete cascade,
+		monitor integer not null references monitors (id) on delete cascade,
+		primary key (maintenance, monitor)
+	);
+	create table alerts (
+		id integer primary key,
+		team integer not null references teams (id) on delete cascade,
+		target text not null,
+		created_at integer not null
+	);
+	create table status_pages (
+		id integer primary key,
+		team integer not null references teams (id) on delete cascade,
+		slug text not null unique,
+		name text not null,
+		password text not null default '',
+		monitors text not null default '[]',
+		created_at integer not null
+	);
+	insert into monitors (team, site, name, kind, target, interval, created_at)
+	select team, id, domain, 'http', 'https://' || domain || '/', 60, unixepoch()
+	from sites where team is not null and domain not like '~%' and domain != 'localhost';
+	",
+	"
+	alter table alerts add column sent_at integer;
+	alter table alerts add column failure text not null default '';
+	",
+	"alter table status_pages add column look text not null default '{}';",
 ];
 
-const SITE_TABLES: [&str; 13] = [
+pub(crate) const HOME_MONITOR: &str = "
+	insert into monitors (team, site, name, kind, target, interval, created_at)
+	select team, id, domain, 'http', 'https://' || domain || '/', 60, unixepoch()
+	from sites
+	where (?1 = 0 or id = ?1) and team is not null and domain not like '~%' and domain != 'localhost'
+	and not exists (select 1 from monitors where monitors.site = sites.id)";
+
+const SITE_TABLES: [&str; 14] = [
+	"monitors",
 	"goals",
 	"imports",
 	"salts",
@@ -298,8 +386,10 @@ impl App {
 			"insert into sites (domain, timezone, team, created_at) values (?1, ?2, ?3, unixepoch())",
 			params![domain, timezone, team],
 		)?;
+		let id = conn.last_insert_rowid();
+		conn.execute(HOME_MONITOR, [id])?;
 		Ok(Site {
-			id: conn.last_insert_rowid() as u64,
+			id: id as u64,
 			domain: domain.to_owned(),
 			timezone: timezone.to_owned(),
 			created_at: jiff::Timestamp::now().as_second(),

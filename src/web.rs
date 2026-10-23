@@ -32,6 +32,7 @@ pub struct Web {
 	pub updates: Mutex<crate::update::Status>,
 	pub sso: Option<crate::auth::sso::Provider>,
 	pub google: Option<crate::site::google::Client>,
+	pub uptime: Arc<crate::uptime::Uptime>,
 }
 
 // what a handler returns when it can't answer, sent as `{ "error": message }`
