@@ -1,43 +1,18 @@
-<script lang="ts">
+<script lang="ts" module>
 	import { number } from "#lib/display.svelte.ts";
-	import { icon } from "#lib/icons/resolve.ts";
 	import type { Range } from "#lib/period.ts";
-	import { display, format, query } from "#lib/stats.ts";
-	import Button from "#lib/ui/Button.svelte";
-	import Empty from "#lib/ui/Empty.svelte";
-	import Field from "#lib/ui/Field.svelte";
-	import Table from "#lib/ui/Table.svelte";
-
-	let {
-		domain,
-		dim,
-		range,
-		filters,
-		imports,
-		converting,
-		revenue,
-		iconic,
-		pick
-	}: {
-		domain: string;
-		dim: string;
-		range: Range;
-		filters: unknown[];
-		imports: boolean;
-		converting: boolean;
-		revenue: boolean;
-		iconic: boolean;
-		pick: (value: string) => void;
-	} = $props();
+	import { cached, format } from "#lib/stats.ts";
 
 	const PAGE = 100;
+	// goals have no text filter, and country and language names only exist here
+	const LOCAL = ["event:goal", "visit:country", "visit:language"];
 	const percent = (value: number | null) => (value === null ? "-" : `${value}%`);
 	const seconds = (value: number | null) =>
 		value === null ? "-" : format("visit_duration", value);
 	const money = (value: number | null) => (value === null ? "-" : number(value, 2));
 	const count = (value: number | null) => (value === null ? "-" : format("visitors", value));
 
-	const columns = $derived.by(() => {
+	function columnsOf(dim: string, converting: boolean, revenue: boolean) {
 		const visitors = {
 			key: "visitors",
 			label: converting ? "conversions" : "visitors",
@@ -86,7 +61,59 @@
 			{ key: "bounce_rate", label: "bounce", format: percent },
 			{ key: "visit_duration", label: "duration", format: seconds }
 		];
-	});
+	}
+
+	type Report = {
+		domain: string;
+		dim: string;
+		range: Range;
+		filters: unknown[];
+		imports: boolean;
+		converting: boolean;
+		revenue: boolean;
+	};
+
+	function ask(
+		{ domain, dim, range, filters, imports, converting, revenue }: Report,
+		typed = "",
+		sort: [string, "asc" | "desc"] = ["visitors", "desc"],
+		limit = PAGE
+	) {
+		const local = LOCAL.includes(dim);
+		return cached(
+			domain,
+			{
+				metrics: columnsOf(dim, converting, revenue).map((column) => column.key),
+				date_range: range,
+				dimensions: [dim],
+				filters: typed && !local ? [...filters, ["contains", dim, [typed]]] : filters,
+				order_by: [sort],
+				pagination: { limit: local ? 1000 : limit + 1 }
+			},
+			imports
+		);
+	}
+
+	export const prefetch = (report: Report) => ask(report).catch(() => {});
+</script>
+
+<script lang="ts">
+	import { icon } from "#lib/icons/resolve.ts";
+	import { display } from "#lib/stats.ts";
+	import Button from "#lib/ui/Button.svelte";
+	import Empty from "#lib/ui/Empty.svelte";
+	import Field from "#lib/ui/Field.svelte";
+	import Table from "#lib/ui/Table.svelte";
+
+	let {
+		pick,
+		...report
+	}: Report & {
+		iconic: boolean;
+		pick: (value: string) => void;
+	} = $props();
+
+	const columns = $derived(columnsOf(report.dim, report.converting, report.revenue));
 
 	let search = $state("");
 	let sort = $state<[string, "asc" | "desc"]>(["visitors", "desc"]);
@@ -106,24 +133,16 @@
 
 	$effect(() => {
 		const typed = search.trim();
-		const keys = columns.map((column) => column.key);
 		const limit = pages * PAGE;
+		const { dim, iconic } = report;
+		const local = LOCAL.includes(dim);
+		const order = sort;
 		void tries;
-		// goals have no text filter, and country and language names only exist here
-		const local = ["event:goal", "visit:country", "visit:language"].includes(dim);
-		const body = {
-			metrics: keys,
-			date_range: range,
-			dimensions: [dim],
-			filters: typed && !local ? [...filters, ["contains", dim, [typed]]] : filters,
-			order_by: [sort],
-			pagination: { limit: local ? 1000 : limit + 1 }
-		};
 		let stale = false;
 		failed = false;
 		const timer = setTimeout(
 			() => {
-				query(domain, body, imports)
+				ask(report, typed, order, limit)
 					.then((result) => {
 						if (stale) return;
 						const all = result.results

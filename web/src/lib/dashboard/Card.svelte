@@ -261,6 +261,7 @@
 	expand={tab === "funnels" || tab === "flow"
 		? undefined
 		: () => ctx.expand(dim, panel.tabs.find((item) => item.key === tab)?.label ?? "")}
+	prefetch={() => ctx.prefetch(dim)}
 	actions={["props", "utm", "funnels"].includes(tab) ? picker : undefined}
 >
 	{#if tab === "flow"}

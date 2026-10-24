@@ -28,7 +28,7 @@
 	import Overview from "./Overview.svelte";
 	import type { Context, Funnel, Note } from "./types.ts";
 	import Notes from "./Notes.svelte";
-	import Details from "./Details.svelte";
+	import Details, { prefetch } from "./Details.svelte";
 	import Sections from "./Sections.svelte";
 	import SitePicker from "./SitePicker.svelte";
 	import FilterDialog from "./FilterDialog.svelte";
@@ -173,7 +173,17 @@
 			funnels,
 			vitals: readonly || combined || !findSite(domain)?.skip.includes("vitals"),
 			add: (dim, value) => setFilter({ op: "is", dim, values: [value] }),
-			expand: (dim, title) => (details = { dim, title })
+			expand: (dim, title) => (details = { dim, title }),
+			prefetch: (dim) =>
+				prefetch({
+					domain,
+					dim,
+					range: dates.current,
+					filters: toQueryFilters(filters),
+					imports,
+					converting,
+					revenue
+				})
 		}
 	);
 

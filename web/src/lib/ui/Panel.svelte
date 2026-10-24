@@ -13,6 +13,7 @@
 		warm,
 		actions,
 		expand: open,
+		prefetch,
 		arranging = false,
 		hide,
 		move,
@@ -24,6 +25,7 @@
 		warm?: (key: string) => void;
 		actions?: Snippet;
 		expand?: () => void;
+		prefetch?: () => void;
 		// layout editing shows a close button and the whole panel drags
 		arranging?: boolean;
 		hide?: () => void;
@@ -113,6 +115,8 @@
 					aria-label="expand report"
 					title="expand report"
 					class="grid size-control place-items-center text-dim hover:text-fg"
+					onpointerenter={prefetch}
+					onfocus={prefetch}
 					onclick={open}
 				>
 					<Icon svg={expand} size={16} />

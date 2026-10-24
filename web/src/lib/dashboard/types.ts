@@ -29,6 +29,7 @@ export type Context = {
 	vitals: boolean;
 	add: (dim: string, value: string) => void;
 	expand: (dim: string, title: string) => void;
+	prefetch: (dim: string) => void;
 };
 
 type Tab = { key: string; label: string };
