@@ -18,7 +18,7 @@ use crate::app::Site;
 use crate::export;
 use crate::ingest::{Client, Hit};
 use crate::names;
-use crate::stats::{self, answer, period};
+use crate::stats::{self, answer, day_number, period};
 use crate::web::Web;
 
 const LIMIT: usize = 100;
@@ -678,7 +678,14 @@ async fn download(State(web): State<Arc<Web>>, Path(_id): Path<u64>, call: Call)
 	let titles = web.app.titles(site.id).unwrap_or_default();
 	let name = format!("{}.goatcounter.csv.gz", site.domain);
 	match tokio::task::spawn_blocking(move || {
-		export::goatcounter(Vec::new(), &db, &site, &titles, all.from, all.to)
+		export::goatcounter(
+			Vec::new(),
+			&|_| {},
+			&db,
+			&site,
+			&titles,
+			day_number(all.from)..=day_number(all.to),
+		)
 	})
 	.await
 	{

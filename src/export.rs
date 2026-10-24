@@ -1,16 +1,17 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{BufWriter, Cursor, Read, Seek, Write};
+use std::ops::RangeInclusive;
 use std::path::{Path as FilePath, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use crater::{Db, Dim, Field, Filter, Metrics, Query, Report};
+use crater::{Db, Dim, Event, Field, Filter, Metrics, Report};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use jiff::civil::Date;
@@ -63,6 +64,7 @@ struct Job {
 	name: String,
 	kind: &'static str,
 	state: Progress,
+	done: f32,
 	email: bool,
 	at: i64,
 }
@@ -76,6 +78,7 @@ fn file(data: &FilePath, id: &str) -> PathBuf {
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
 		.route("/api/app/export", post(export))
+		.route("/api/app/exports", get(latest))
 		.route("/api/app/exports/{id}", get(status))
 		.route("/api/app/exports/{id}/email", post(email))
 		.route("/api/app/exports/{id}/file", get(download))
@@ -128,6 +131,7 @@ async fn export(
 			name,
 			kind,
 			state: Progress::Running,
+			done: 0.0,
 			email: false,
 			at: now(),
 		},
@@ -137,24 +141,41 @@ async fn export(
 	let format = body.format;
 	let job = id.clone();
 	tokio::spawn(async move {
+		let tracked = job.clone();
 		let built = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+			let progress = |done: f32| {
+				if let Some(entry) = lock(&JOBS).get_mut(&tracked) {
+					entry.done = done;
+				}
+			};
 			let out = BufWriter::new(fs::File::create(&path)?);
 			let out = match format {
-				Format::Plausible => {
-					build(out, &db, period.site.id, period.from, period.to, filters)?
-				}
+				Format::Plausible => build(
+					out,
+					&progress,
+					&db,
+					period.site.id,
+					period.from,
+					period.to,
+					filters,
+				)?,
 				Format::Impactite => native(
 					out,
+					&progress,
 					&db,
 					&period.site,
 					&goals,
 					&titles,
-					period.from,
-					period.to,
+					day_number(period.from)..=day_number(period.to),
 				)?,
-				Format::Goatcounter => {
-					goatcounter(out, &db, &period.site, &titles, period.from, period.to)?
-				}
+				Format::Goatcounter => goatcounter(
+					out,
+					&progress,
+					&db,
+					&period.site,
+					&titles,
+					day_number(period.from)..=day_number(period.to),
+				)?,
 			};
 			out.into_inner()?.sync_all()?;
 			Ok(())
@@ -217,6 +238,25 @@ async fn tell(web: &Web, user: i64, site: &str, id: &str, done: bool) -> anyhow:
 		.await
 }
 
+fn describe(web: &Web, id: &str, job: &Job) -> Value {
+	json!({ "id": id, "state": job.state, "name": job.name, "done": job.done, "mail": web.mail.ready(), "email": job.email })
+}
+
+#[derive(Deserialize)]
+struct Latest {
+	site_id: String,
+}
+
+async fn latest(State(web): State<Arc<Web>>, viewer: Viewer, Query(ask): Query<Latest>) -> Reply {
+	let jobs = lock(&JOBS);
+	let job = jobs
+		.iter()
+		.filter(|(_, job)| job.user == viewer.user && job.site == ask.site_id)
+		.max_by_key(|(_, job)| job.at)
+		.map(|(id, job)| describe(&web, id, job));
+	Ok(Json(job.unwrap_or(Value::Null)))
+}
+
 fn mine(user: i64, id: &str) -> Reply<(Progress, String, &'static str)> {
 	lock(&JOBS)
 		.get(id)
@@ -226,10 +266,12 @@ fn mine(user: i64, id: &str) -> Reply<(Progress, String, &'static str)> {
 }
 
 async fn status(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Reply {
-	let (state, name, _) = mine(viewer.user, &id)?;
-	Ok(Json(
-		json!({ "state": state, "name": name, "mail": web.mail.ready() }),
-	))
+	mine(viewer.user, &id)?;
+	let jobs = lock(&JOBS);
+	let job = jobs
+		.get(&id)
+		.ok_or_else(|| Error::not_found("This export expired. Start a new one."))?;
+	Ok(Json(describe(&web, &id, job)))
 }
 
 async fn email(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Reply {
@@ -304,6 +346,7 @@ pub fn prune(data: &FilePath) {
 
 fn build<W: Write + Seek>(
 	out: W,
+	progress: &dyn Fn(f32),
 	db: &Db,
 	site: u64,
 	from: Date,
@@ -311,7 +354,7 @@ fn build<W: Write + Seek>(
 	filters: Vec<Filter>,
 ) -> anyhow::Result<W> {
 	let query = |breakdown: Option<Field>| -> anyhow::Result<Report> {
-		Ok(db.query(&Query {
+		Ok(db.query(&crater::Query {
 			site,
 			days: day_number(from)..=day_number(to),
 			filters: filters.clone(),
@@ -329,6 +372,7 @@ fn build<W: Write + Seek>(
 	};
 	let stamp = format!("{}_{}", from.strftime("%Y%m%d"), to.strftime("%Y%m%d"));
 	let mut zip = ZipWriter::new(out);
+	let mut written = 0;
 	let mut add = |table: &str, header: &[&str], rows: Vec<Vec<String>>| -> anyhow::Result<()> {
 		zip.start_file(
 			format!("imported_{table}_{stamp}.csv"),
@@ -340,6 +384,9 @@ fn build<W: Write + Seek>(
 			csv.write_record(row.into_iter().map(cell))?;
 		}
 		zip.write_all(&csv.into_inner()?)?;
+		written += 1;
+		// the plausible archive has ten tables
+		progress(written as f32 / 10.0);
 		Ok(())
 	};
 	let n = |value: u64| value.to_string();
@@ -599,24 +646,24 @@ pub(crate) fn day_archive(web: &Web, site: &Site, day: Date) -> anyhow::Result<V
 	let titles = web.app.titles(site.id)?;
 	Ok(native(
 		Cursor::new(Vec::new()),
+		&|_| {},
 		&web.stats.db,
 		site,
 		&goals,
 		&titles,
-		day,
-		day,
+		day_number(day)..=day_number(day),
 	)?
 	.into_inner())
 }
 
 fn native<W: Write + Seek>(
 	out: W,
+	progress: &dyn Fn(f32),
 	db: &Db,
 	site: &Site,
 	goals: &[Goal],
 	titles: &HashMap<String, String>,
-	from: Date,
-	to: Date,
+	days: RangeInclusive<i32>,
 ) -> anyhow::Result<W> {
 	let mut zip = ZipWriter::new(out);
 	zip.start_file("site.json", SimpleFileOptions::default())?;
@@ -633,7 +680,7 @@ fn native<W: Write + Seek>(
 	)?;
 	zip.start_file("events.ndjson", SimpleFileOptions::default())?;
 	let mut failed = None;
-	db.events(site.id, day_number(from)..=day_number(to), |event| {
+	let mut each = |event: Event| {
 		let mut line = Map::new();
 		let local = Timestamp::from_second(event.ts)
 			.map(|ts| ts.to_zoned(TimeZone::UTC).datetime().to_string())
@@ -669,7 +716,12 @@ fn native<W: Write + Seek>(
 		if let Err(err) = writeln!(zip, "{}", Value::Object(line)) {
 			failed.get_or_insert(err);
 		}
-	})?;
+	};
+	let (first, last) = days.into_inner();
+	for day in first..=last {
+		db.events(site.id, day..=day, &mut each)?;
+		progress((day - first + 1) as f32 / (last - first + 1) as f32);
+	}
 	if let Some(err) = failed {
 		return Err(err.into());
 	}
@@ -678,11 +730,11 @@ fn native<W: Write + Seek>(
 
 pub(crate) fn goatcounter<W: Write>(
 	out: W,
+	progress: &dyn Fn(f32),
 	db: &Db,
 	site: &Site,
 	titles: &HashMap<String, String>,
-	from: Date,
-	to: Date,
+	days: RangeInclusive<i32>,
 ) -> anyhow::Result<W> {
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
 	let mut csv = csv::Writer::from_writer(GzEncoder::new(out, Compression::default()));
@@ -704,7 +756,7 @@ pub(crate) fn goatcounter<W: Write>(
 	])?;
 	let mut seen = HashSet::new();
 	let mut failed = None;
-	db.events(site.id, day_number(from)..=day_number(to), |event| {
+	let mut each = |event: Event| {
 		let name = &event.dims[Dim::Name];
 		if name == "engagement" || name.starts_with('~') {
 			return;
@@ -766,7 +818,12 @@ pub(crate) fn goatcounter<W: Write>(
 		if let Err(err) = csv.write_record(row.map(cell)) {
 			failed.get_or_insert(err);
 		}
-	})?;
+	};
+	let (first, last) = days.into_inner();
+	for day in first..=last {
+		db.events(site.id, day..=day, &mut each)?;
+		progress((day - first + 1) as f32 / (last - first + 1) as f32);
+	}
 	if let Some(err) = failed {
 		return Err(err.into());
 	}

@@ -7,6 +7,7 @@
 	import Button from "#lib/ui/Button.svelte";
 	import Form from "#lib/ui/Form.svelte";
 	import List from "#lib/ui/List.svelte";
+	import Meter from "#lib/ui/Meter.svelte";
 	import Message from "#lib/ui/Message.svelte";
 	import Note from "#lib/ui/Note.svelte";
 	import Section from "#lib/ui/Section.svelte";
@@ -25,7 +26,13 @@
 		error: string | null;
 	};
 	type Source = "impactite" | "plausible" | "goatcounter" | "umami";
-	type Export = { state: "running" | "done" | "failed"; name: string; mail: boolean };
+	type Export = {
+		id: string;
+		state: "running" | "done" | "failed";
+		done: number;
+		mail: boolean;
+		email: boolean;
+	};
 
 	const imports = collection<{ id: number; source: string; first: string; last: string }>(
 		() => `${sitePath(domain)}/imports`,
@@ -36,8 +43,8 @@
 	let file = $state<File | null>(null);
 	let analytics = $state.raw<Analytics | null>(null);
 	let property = $state("");
-	let exporting = $state<{ id: string; mail: boolean; email: boolean } | null>(null);
-	let ready = $state<{ id: string; fetched: boolean } | null>(null);
+	let job = $state<Export | null>(null);
+	let fetched = $state(false);
 
 	const accept = $derived(
 		source === "goatcounter" ? ".csv,.gz" : source === "umami" ? ".csv" : ".zip"
@@ -55,29 +62,37 @@
 		return () => clearInterval(timer);
 	});
 
+	// an export keeps going on the server, so coming back picks up the latest one
 	$effect(() => {
 		const id = page.url.searchParams.get("export");
-		if (id) untrack(() => follow(id, false).catch(() => {}));
-		return () => (exporting = null);
+		untrack(() => resume(id));
+		return () => (job = null);
 	});
+
+	async function resume(id: string | null) {
+		const found = await api<Export | null>(
+			id ? `/api/app/exports/${id}` : `/api/app/exports?site_id=${encodeURIComponent(domain)}`
+		).catch(() => null);
+		if (found) await follow(found, false).catch(() => {});
+	}
 
 	const fetchFile = (id: string) =>
 		Object.assign(document.createElement("a"), { href: `/api/app/exports/${id}/file` }).click();
 
-	// an export runs on the server, so this checks back until the file is ready
-	async function follow(id: string, fetch: boolean) {
-		ready = null;
-		let job = await api<Export>(`/api/app/exports/${id}`);
-		exporting = { id, mail: job.mail, email: false };
-		while (job.state === "running") {
-			await new Promise((wait) => setTimeout(wait, 1500));
-			if (exporting?.id !== id) return;
-			job = await api<Export>(`/api/app/exports/${id}`);
+	async function follow(next: Export, fetch: boolean) {
+		job = next;
+		fetched = false;
+		while (job?.id === next.id && job.state === "running") {
+			await new Promise((wait) => setTimeout(wait, 1000));
+			if (job?.id !== next.id) return;
+			job = await api<Export>(`/api/app/exports/${next.id}`);
 		}
-		exporting = null;
+		if (job?.id !== next.id) return;
 		if (job.state === "failed") throw new Error("Your export didn't finish. Try again.");
-		ready = { id, fetched: fetch };
-		if (fetch) fetchFile(id);
+		if (fetch) {
+			fetched = true;
+			fetchFile(job.id);
+		}
 	}
 
 	async function startExport() {
@@ -86,16 +101,16 @@
 			date_range: "all",
 			format
 		});
-		await follow(id, true);
+		await follow(await api<Export>(`/api/app/exports/${id}`), true);
 	}
 
 	async function emailWhenReady() {
-		if (!exporting) return;
+		if (!job) return;
 		const { state } = await api<{ state: Export["state"] }>(
-			`/api/app/exports/${exporting.id}/email`,
+			`/api/app/exports/${job.id}/email`,
 			{}
 		);
-		if (state === "running") exporting.email = true;
+		if (job && state === "running") job.email = true;
 	}
 
 	async function loadAnalytics() {
@@ -151,27 +166,25 @@
 				]}
 			/>
 		</Form>
-		{#if exporting}
+		{#if job?.state === "running"}
+			<Meter value={job.done} label="Export progress" />
 			<div class="flex flex-wrap items-center justify-between gap-3">
-				{#if exporting.email}
-					<Note
-						>Preparing your export. We'll email you when it's ready, so you can leave
-						this page.</Note
+				<Note
+					>{job.email
+						? "You can leave this page. We'll email you when your export is ready."
+						: "You can leave this page. Your export will keep going."}</Note
+				>
+				{#if job.mail && !job.email}
+					<Button variant="quiet" onclick={emailWhenReady}
+						>Email me when it's ready</Button
 					>
-				{:else}
-					<Note>Preparing your export. This can take a few minutes for big sites.</Note>
-					{#if exporting.mail}
-						<Button variant="quiet" onclick={emailWhenReady}
-							>Email me when it's ready</Button
-						>
-					{/if}
 				{/if}
 			</div>
-		{:else if ready}
+		{:else if job?.state === "done"}
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<Note>Your export is ready. It's available for 24 hours.</Note>
-				<Button variant="quiet" onclick={() => ready && fetchFile(ready.id)}
-					>{ready.fetched ? "Download again" : "Download"}</Button
+				<Button variant="quiet" onclick={() => job && fetchFile(job.id)}
+					>{fetched ? "Download again" : "Download"}</Button
 				>
 			</div>
 		{/if}
