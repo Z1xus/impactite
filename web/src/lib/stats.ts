@@ -95,6 +95,12 @@ export const vitals = (site: string, body: Record<string, unknown>) =>
 export const vitalPages = (site: string, body: Record<string, unknown>) =>
 	api<{ pages: Vital[] }>("/api/app/vitals/pages", { site_id: site, ...body });
 
+export const vitalTrend = (site: string, body: Record<string, unknown>) =>
+	api<{ trend: { time: string; p75: number; samples: number }[]; good: number; poor: number }>(
+		"/api/app/vitals/trend",
+		{ site_id: site, ...body }
+	);
+
 export function speed(key: string, value: number) {
 	if (key === "cls") return number(value, 2);
 	return value >= 1000 ? `${number(value / 1000, 1)} s` : `${Math.round(value)} ms`;

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
 
@@ -101,6 +102,7 @@ pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
 		.route("/api/app/vitals", post(overview))
 		.route("/api/app/vitals/pages", post(pages))
+		.route("/api/app/vitals/trend", post(trend))
 }
 
 #[derive(Deserialize)]
@@ -110,6 +112,16 @@ struct Ask {
 	#[serde(default)]
 	filters: Vec<Value>,
 	metric: Option<String>,
+	grain: Option<String>,
+}
+
+impl Ask {
+	fn vital(&self) -> Result<&'static Vital, String> {
+		VITALS
+			.iter()
+			.find(|vital| Some(vital.key) == self.metric.as_deref())
+			.ok_or_else(|| "Pick lcp, inp, cls, fcp or ttfb.".to_owned())
+	}
 }
 
 fn histogram(
@@ -150,19 +162,23 @@ fn histogram(
 	Ok(bins)
 }
 
+// bins are sorted by value
+fn p75(bins: &[(f64, f64)], samples: f64) -> f64 {
+	let mut seen = 0.0;
+	bins.iter()
+		.find(|&&(_, count)| {
+			seen += count;
+			seen >= samples * 0.75
+		})
+		.map_or(0.0, |&(value, _)| value)
+}
+
 fn summary(vital: &Vital, bins: &[(f64, f64)]) -> Value {
 	let samples = bins.iter().fold(0.0, |sum, &(_, count)| sum + count);
 	if samples == 0.0 {
 		return json!({ "key": vital.key, "samples": 0 });
 	}
-	let mut seen = 0.0;
-	let p75 = bins
-		.iter()
-		.find(|&&(_, count)| {
-			seen += count;
-			seen >= samples * 0.75
-		})
-		.map_or(0.0, |&(value, _)| value);
+	let p75 = p75(bins, samples);
 	let share = |rating: &str| {
 		bins.iter()
 			.filter(|&&(value, _)| vital.rating(value) == rating)
@@ -206,6 +222,13 @@ async fn pages(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Valu
 	Ok(Json(slowest(&web.stats, raw).map_err(Error::bad)?))
 }
 
+async fn trend(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Value>) -> Reply {
+	if !reader.reads(&web, raw["site_id"].as_str().unwrap_or_default()) {
+		return Err(Error::not_found("This site doesn't exist."));
+	}
+	Ok(Json(over_time(&web.stats, raw).map_err(Error::bad)?))
+}
+
 pub fn measure(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let vitals = parallel(VITALS.iter().map(|vital| {
@@ -217,10 +240,7 @@ pub fn measure(stats: &Stats, raw: Value) -> Result<Value, String> {
 
 pub fn slowest(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
-	let vital = VITALS
-		.iter()
-		.find(|vital| Some(vital.key) == ask.metric.as_deref())
-		.ok_or("Pick lcp, inp, cls, fcp or ttfb.")?;
+	let vital = ask.vital()?;
 	let mut filters = ask.filters.clone();
 	filters.push(json!(["is", "event:name", [EVENT]]));
 	let top = run(
@@ -255,4 +275,45 @@ pub fn slowest(stats: &Stats, raw: Value) -> Result<Value, String> {
 		p75(b).total_cmp(&p75(a))
 	});
 	Ok(json!({ "pages": pages }))
+}
+
+pub fn over_time(stats: &Stats, raw: Value) -> Result<Value, String> {
+	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
+	let vital = ask.vital()?;
+	let mut filters = ask.filters.clone();
+	filters.push(json!(["is", "event:name", [EVENT]]));
+	let reply = run(
+		stats,
+		json!({
+			"site_id": ask.site_id,
+			"metrics": ["events"],
+			"date_range": ask.date_range,
+			"dimensions": [ask.grain.as_deref().unwrap_or("time:day"), vital.prop()],
+			"filters": filters,
+			"include": { "imports": false },
+			"pagination": { "limit": 10000 },
+		}),
+	)?;
+	let mut buckets: BTreeMap<&str, Vec<(f64, f64)>> = BTreeMap::new();
+	for row in reply["results"].as_array().into_iter().flatten() {
+		let (Some(time), Some(value), Some(count)) = (
+			row["dimensions"][0].as_str(),
+			row["dimensions"][1]
+				.as_str()
+				.and_then(|value| value.parse().ok()),
+			row["metrics"][0].as_f64(),
+		) else {
+			continue;
+		};
+		buckets.entry(time).or_default().push((value, count));
+	}
+	let trend: Vec<Value> = buckets
+		.into_iter()
+		.map(|(time, mut bins)| {
+			bins.sort_by(|a, b| a.0.total_cmp(&b.0));
+			let samples = bins.iter().fold(0.0, |sum, &(_, count)| sum + count);
+			json!({ "time": time, "p75": p75(&bins, samples), "samples": samples })
+		})
+		.collect();
+	Ok(json!({ "trend": trend, "good": vital.good, "poor": vital.poor }))
 }

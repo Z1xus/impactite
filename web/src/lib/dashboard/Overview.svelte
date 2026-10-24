@@ -2,8 +2,8 @@
 	import { untrack } from "svelte";
 	import Chart from "#lib/dither/Chart.svelte";
 	import type { Band, Mark } from "#lib/dither/chart.ts";
-	import { clock } from "#lib/display.svelte.ts";
 	import { icon } from "#lib/icons/resolve.ts";
+	import { point } from "#lib/period.ts";
 	import {
 		METRICS,
 		cached,
@@ -77,17 +77,6 @@
 	const columns = $derived(
 		realtime ? METRICS.filter((item) => item.key === "pageviews") : METRICS
 	);
-
-	function label(raw: string, grain: string) {
-		if (grain === "time:hour" || grain === "time:minute") return clock(raw.slice(11, 16));
-		const date = new Date(raw.replace(" ", "T") + (raw.length === 10 ? "T00:00:00" : ""));
-		return date.toLocaleDateString(
-			"en-US",
-			grain === "time:month"
-				? { month: "short", year: "2-digit" }
-				: { month: "short", day: "numeric" }
-		);
-	}
 
 	// buckets are named in the site's zone, so local incident times sort against them as text
 	const bands = $derived.by((): Band[] => {
@@ -220,7 +209,7 @@
 				series = line.results.map((row) => row.metrics[Math.max(at, 0)]);
 				lines = line.results.map((row) => ({
 					key: row.dimensions[0],
-					label: label(row.dimensions[0], grain),
+					label: point(row.dimensions[0], grain),
 					values: row.metrics
 				}));
 				previousSeries = previousLine

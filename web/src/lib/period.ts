@@ -1,3 +1,5 @@
+import { clock } from "./display.svelte.ts";
+
 const PERIODS = [
 	"realtime",
 	"day",
@@ -217,4 +219,15 @@ export function step(view: View, direction: -1 | 1): string | null {
 	if (!next) return null;
 	const start = view.period === "day" ? next : `${next.slice(0, view.period === "year" ? 4 : 7)}`;
 	return start > view.today.slice(0, start.length) ? null : next;
+}
+
+export function point(raw: string, grain: string) {
+	if (grain === "time:hour" || grain === "time:minute") return clock(raw.slice(11, 16));
+	const date = new Date(raw.replace(" ", "T") + (raw.length === 10 ? "T00:00:00" : ""));
+	return date.toLocaleDateString(
+		"en-US",
+		grain === "time:month"
+			? { month: "short", year: "2-digit" }
+			: { month: "short", day: "numeric" }
+	);
 }

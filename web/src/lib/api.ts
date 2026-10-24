@@ -46,6 +46,7 @@ const READS = new Set([
 	"/api/app/insights",
 	"/api/app/vitals",
 	"/api/app/vitals/pages",
+	"/api/app/vitals/trend",
 	"/api/app/heatmap"
 ]);
 let waiting: Waiting[] = [];

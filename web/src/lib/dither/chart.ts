@@ -7,13 +7,15 @@ export const COLORS = [
 	"--color-line",
 	"--color-faint",
 	"--color-fg",
-	"--color-bad"
+	"--color-bad",
+	"--color-warn"
 ];
 
-const [LINE, DEEP, NIGHT, GRID, FAINT, FG, BAD] = COLORS.map((_, i) => i + 1);
+const [LINE, DEEP, NIGHT, GRID, FAINT, FG, BAD, WARN] = COLORS.map((_, i) => i + 1);
 
 export type Band = { from: number; to: number; label?: string; notes?: string[] };
 export type Mark = { at: number; tone: "note" | "spike"; lines: string[] };
+export type Guide = { value: number; tone: "warn" | "bad" };
 
 const edge = (index: number, count: number, columns: number) =>
 	Math.round((index / Math.max(1, count - 1)) * (columns - 1));
@@ -36,7 +38,8 @@ export function chart(
 	hover: number | null = null,
 	at = (x: number, width: number) => sample(values, x, width),
 	bands: Band[] = [],
-	marks: Mark[] = []
+	marks: Mark[] = [],
+	guides: Guide[] = []
 ) {
 	const ticks = [peak, peak / 2, 0];
 	const data = new Uint8Array(columns * rows);
@@ -49,6 +52,14 @@ export function chart(
 		for (const tick of ticks) {
 			const y = top(tick);
 			for (let x = 0; x < columns; x += 2) put(x, y, GRID);
+		}
+	}
+
+	for (const guide of guides) {
+		const y = top(guide.value);
+		for (let x = 0; x < columns; x += 4) {
+			put(x, y, guide.tone === "bad" ? BAD : WARN);
+			put(x + 1, y, guide.tone === "bad" ? BAD : WARN);
 		}
 	}
 
@@ -104,15 +115,17 @@ export function smooth(
 	hover: number | null,
 	at: (x: number, width: number) => number,
 	bands: Band[] = [],
-	marks: Mark[] = []
+	marks: Mark[] = [],
+	guides: Guide[] = []
 ) {
-	const [cyan, grid, faint, fg, panel, bad] = [
+	const [cyan, grid, faint, fg, panel, bad, warn] = [
 		"--color-cyan",
 		"--color-line",
 		"--color-faint",
 		"--color-fg",
 		"--color-panel",
-		"--color-bad"
+		"--color-bad",
+		"--color-warn"
 	].map(css);
 	const top = (value: number) => 1 + (1 - value / peak) * (height - 2);
 	const trace = (series: (x: number) => number) => {
@@ -131,6 +144,16 @@ export function smooth(
 			ctx.moveTo(0, y);
 			ctx.lineTo(width, y);
 		}
+		ctx.stroke();
+	}
+
+	ctx.setLineDash([4, 4]);
+	for (const guide of guides) {
+		const y = Math.round(top(guide.value)) + 0.5;
+		ctx.strokeStyle = guide.tone === "bad" ? bad : warn;
+		ctx.beginPath();
+		ctx.moveTo(0, y);
+		ctx.lineTo(width, y);
 		ctx.stroke();
 	}
 

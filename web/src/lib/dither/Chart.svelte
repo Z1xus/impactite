@@ -2,7 +2,7 @@
 	import { untrack } from "svelte";
 	import { theme } from "#lib/theme.svelte.ts";
 	import { css } from "./bayer";
-	import { chart, COLORS, sample, smooth, type Band, type Mark } from "./chart.ts";
+	import { chart, COLORS, sample, smooth, type Band, type Guide, type Mark } from "./chart.ts";
 	import { paint } from "./pixels.ts";
 	import Pixels from "./Pixels.svelte";
 
@@ -17,6 +17,7 @@
 		axes = true,
 		bands = [],
 		marks = [],
+		guides = [],
 		mark
 	}: {
 		values: number[];
@@ -30,6 +31,8 @@
 		axes?: boolean;
 		bands?: Band[];
 		marks?: Mark[];
+		// dotted levels across the chart, always inside its scale
+		guides?: Guide[];
 		// clicking a point with a mouse, like adding a note there
 		mark?: { label: string; pick: (at: number) => void };
 	} = $props();
@@ -57,7 +60,9 @@
 	let slide: { series: number[]; shift: number; offset: number } | null = null;
 	const ease = (t: number) => 1 - (1 - t) ** 3;
 
-	const peak = $derived(nice(Math.max(1, ...values, ...previous)));
+	const peak = $derived(
+		nice(Math.max(0, ...values, ...previous, ...guides.map((guide) => guide.value)) || 1)
+	);
 	const ticks = $derived([peak, peak / 2, 0]);
 
 	function nice(max: number) {
@@ -108,7 +113,20 @@
 			canvas.width = Math.round(width * devicePixelRatio);
 			canvas.height = Math.round(height * devicePixelRatio);
 			ctx.scale(devicePixelRatio, devicePixelRatio);
-			smooth(ctx, width, height, peak, axes, shown, shownPrevious, hover, at, bands, marks);
+			smooth(
+				ctx,
+				width,
+				height,
+				peak,
+				axes,
+				shown,
+				shownPrevious,
+				hover,
+				at,
+				bands,
+				marks,
+				guides
+			);
 			ready = true;
 			return;
 		}
@@ -122,7 +140,7 @@
 		});
 		paint(
 			ctx,
-			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at, bands, marks),
+			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at, bands, marks, guides),
 			columns,
 			palette
 		);
@@ -183,6 +201,7 @@
 		void hover;
 		void bands;
 		void marks;
+		void guides;
 		void theme.shown;
 		void theme.style;
 		draw();

@@ -18,12 +18,7 @@
 		...PANELS,
 		{
 			id: "vitals",
-			tabs: ctx.vitals
-				? [
-						{ key: "vitals", label: "vitals" },
-						{ key: "pages", label: "pages" }
-					]
-				: []
+			tabs: ctx.vitals ? [{ key: "vitals", label: "page speed" }] : []
 		},
 		{
 			id: "goals",
