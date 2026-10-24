@@ -51,7 +51,7 @@ t.send = (name, o = {}) => {
 			if (name == "pageview" && !w.impactite) {
 				w.impactite = t;
 				response.text().then((body) => {
-					for (const module of body.split(" ").slice(1))
+					for (const module of body.split(" ").slice(1).filter((name) => /^\w+$/.test(name)))
 						d.head.append(
 							Object.assign(d.createElement("script"), {
 								src: new URL(module + ".js", s.src),

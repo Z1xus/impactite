@@ -1,5 +1,8 @@
 import { record } from "@rrweb/record";
 
+const hide = (text, element) =>
+	element?.closest("[data-impactite-unmask]") ? text : text.replace(/\S/g, "*");
+
 const t = window.impactite;
 const src = document.currentScript.src;
 const KEY = "impactite_replay";
@@ -33,7 +36,8 @@ const flush = () => {
 record({
 	emit: (event) => events.push(event),
 	maskAllInputs: true,
-	maskTextSelector: "[data-impactite-mask]",
+	maskTextSelector: "*",
+	maskTextFn: hide,
 	blockSelector: "[data-impactite-block]",
 	sampling: { mousemove: 50, scroll: 150, input: "last" },
 	slimDOMOptions: "all",

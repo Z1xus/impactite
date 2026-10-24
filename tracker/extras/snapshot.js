@@ -1,5 +1,8 @@
 import { snapshot } from "rrweb-snapshot";
 
+const hide = (text, element) =>
+	element?.closest("[data-impactite-unmask]") ? text : text.replace(/\S/g, "*");
+
 const t = window.impactite;
 const src = document.currentScript.src;
 const root = document.documentElement;
@@ -10,7 +13,8 @@ const body = JSON.stringify({
 	height: root.scrollHeight,
 	node: snapshot(document, {
 		maskAllInputs: true,
-		maskTextSelector: "[data-impactite-mask]",
+		maskTextSelector: "*",
+		maskTextFn: hide,
 		blockSelector: "[data-impactite-block]",
 		inlineStylesheet: true,
 	}),

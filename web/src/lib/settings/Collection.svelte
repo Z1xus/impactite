@@ -51,6 +51,9 @@
 		options={RECORDED}
 	/>
 	{#if keys(RECORDED).some((key) => !site.skip.includes(key))}
-		<Note>Inputs are always hidden. Add data-impactite-mask to hide more.</Note>
+		<Note>
+			Page text and typing stay hidden. To show some text, add
+			<code class="font-code text-fg">data-impactite-unmask</code> to it.
+		</Note>
 	{/if}
 </Section>

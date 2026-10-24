@@ -49,7 +49,7 @@ Old data can be imported from Plausible or GoatCounter CSV exports, directly fro
 - Goals, custom events, funnels and revenue tracking
 - Web vitals (LCP, INP, CLS, FCP, TTFB) per page
 - Paths between pages, spike explanations and notes on the chart
-- Opt-in click heatmaps and session replays, inputs always hidden
+- Opt-in click heatmaps and session replays, page text and inputs hidden by default
 - MCP server at `/mcp` for Claude and other AI assistants
 - Google search keywords
 - Shareable public dashboards and embeds
