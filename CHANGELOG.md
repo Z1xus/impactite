@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+- New: Clicked elements in heatmaps
+- New: Scroll map in heatmaps
+- New: Pick a vital to see its trend and slowest pages
+- Improved: Typed text shows in unmasked parts, passwords stay hidden
+- Improved: Exports run in the background with progress and can email you when ready
+- Improved: Flags and logos without frames
+
 ## 0.4.0
 - New: Notes on the visitor chart
 - New: Traffic spikes explained
