@@ -36,9 +36,10 @@ pub fn tracker() -> Router<Arc<Web>> {
 }
 
 pub fn routes() -> Router<Arc<Web>> {
-	Router::new()
-		.route("/api/app/heatmap", post(clicks))
-		.route("/api/app/sites/{domain}/snapshot", get(snapshot))
+	Router::new().route("/api/app/heatmap", post(clicks)).route(
+		"/api/app/sites/{domain}/snapshot",
+		get(snapshot).delete(retake),
+	)
 }
 
 pub fn class(width: f64) -> &'static str {
@@ -126,6 +127,8 @@ struct Snapshot {
 	w: String,
 	width: u32,
 	height: u32,
+	#[serde(default)]
+	view: u32,
 	node: Value,
 }
 
@@ -157,8 +160,7 @@ async fn upload(
 		return StatusCode::NO_CONTENT;
 	}
 	let path = file(&web, site, &snapshot.p, &snapshot.w);
-	let stored =
-		json!({ "width": snapshot.width, "height": snapshot.height, "node": snapshot.node });
+	let stored = json!({ "width": snapshot.width, "height": snapshot.height, "view": snapshot.view, "node": snapshot.node });
 	let saved = blocking(move || {
 		fs::create_dir_all(path.parent().unwrap_or(&path))?;
 		let mut gz = GzEncoder::new(Vec::new(), Compression::default());
@@ -316,6 +318,27 @@ async fn clicks(State(web): State<Arc<Web>>, viewer: Viewer, Json(ask): Json<Ask
 struct Which {
 	page: String,
 	class: String,
+}
+
+// the page changed, so the next visit takes a fresh snapshot
+async fn retake(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+	Query(which): Query<Which>,
+) -> Reply<StatusCode> {
+	let site = web.editable(viewer.user, &domain)?;
+	web.app.conn().execute(
+		"delete from snapshots where site = ?1 and page = ?2 and class = ?3",
+		params![site.id as i64, which.page, which.class],
+	)?;
+	let path = file(&web, site.id, &which.page, &which.class);
+	blocking(move || match fs::remove_file(path) {
+		Err(err) if err.kind() != ErrorKind::NotFound => Err(err),
+		_ => Ok(()),
+	})
+	.await?;
+	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn snapshot(

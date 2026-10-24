@@ -6,6 +6,7 @@
 	let {
 		domain,
 		node,
+		view,
 		href,
 		width,
 		height,
@@ -14,6 +15,7 @@
 	}: {
 		domain: string;
 		node: unknown;
+		view: number;
 		href: string;
 		width: number;
 		height: number;
@@ -25,7 +27,7 @@
 
 	// a stored page rebuilt in a sandboxed frame, never running its scripts
 	$effect(() => {
-		localize(domain, node);
+		localize(domain, node, view);
 		const replayer = new Replayer(
 			[
 				{ type: 4, data: { href, width, height }, timestamp: 0 },

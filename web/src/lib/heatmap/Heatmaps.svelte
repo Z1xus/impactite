@@ -46,6 +46,7 @@
 	let reach = $state.raw<number[]>([]);
 	let size = $state.raw<Size | null>(null);
 	let node = $state.raw<unknown>(null);
+	let tall = $state(0);
 	let snapshot = $state.raw<Document | null>(null);
 	let hovered = $state<string | null>(null);
 	let loading = $state(true);
@@ -54,7 +55,22 @@
 	let box = $state(0);
 	let canvas = $state<HTMLCanvasElement>();
 
-	const chosen = $derived(page.url.searchParams.get("page") ?? pages?.[0]?.key ?? "");
+	const chosen = $derived(
+		page.url.searchParams.get("page") ??
+			pages?.find((item) => item.key === "/")?.key ??
+			pages?.[0]?.key ??
+			""
+	);
+
+	async function retake() {
+		await api(
+			`/api/app/sites/${domain}/snapshot?page=${encodeURIComponent(chosen)}&class=${screen}`,
+			undefined,
+			"DELETE"
+		);
+		size = null;
+		node = null;
+	}
 	const scale = $derived(size ? Math.min(1, box / size.width) : 1);
 	const total = $derived(clicks.reduce((sum, click) => sum + click[2], 0));
 
@@ -166,7 +182,7 @@
 			})
 				.then(async (result) => {
 					const stored = result.snapshot
-						? await get<{ node: unknown }>(
+						? await get<{ node: unknown; view?: number }>(
 								`/api/app/sites/${domain}/snapshot?page=${encodeURIComponent(target)}&class=${screen}`
 							)
 						: null;
@@ -176,6 +192,8 @@
 					reach = result.reach;
 					size = result.snapshot;
 					node = stored?.node ?? null;
+					// older snapshots don't know the screen, so a typical one for the class
+					tall = stored?.view || { desktop: 900, tablet: 1100, mobile: 800 }[screen];
 					loading = false;
 				})
 				.catch(() => {
@@ -261,6 +279,9 @@
 			/>
 			{#if size && !loading}
 				<span class="label sm:ml-auto">{compact(total)} clicks</span>
+				{#if editable}
+					<Button variant="quiet" onclick={retake}>Retake snapshot</Button>
+				{/if}
 			{/if}
 		</div>
 
@@ -287,6 +308,7 @@
 							<Frame
 								{domain}
 								{node}
+								view={tall}
 								href="https://{domain}{chosen}"
 								width={size.width}
 								height={size.height}

@@ -19,6 +19,7 @@ const body = JSON.stringify({
 	d: t.domain.split(",")[0],
 	...t.shot,
 	width: root.clientWidth,
+	view: innerHeight,
 	height: root.scrollHeight,
 	node: snapshot(document, {
 		maskAllInputs: true,

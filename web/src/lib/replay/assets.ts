@@ -15,10 +15,17 @@ const sources = (domain: string, text: string) =>
 
 const LINKED = new Set(["link", "image", "use"]);
 
+// a snapshot is drawn as tall as the whole page, so screen heights become the visitor's pixels
+const screens = (text: string, view: number) =>
+	text.replace(
+		/(-?\d*\.?\d+)[dsl]?vh\b/g,
+		(_, size: string) => `${(Number(size) * view) / 100}px`
+	);
+
 // recorded pages point at their own servers, which the dashboard blocks, so they load through ours
-export function localize(domain: string, value: unknown, tag = ""): void {
+export function localize(domain: string, value: unknown, view = 0, tag = ""): void {
 	if (Array.isArray(value)) {
-		for (const item of value) localize(domain, item, tag);
+		for (const item of value) localize(domain, item, view, tag);
 		return;
 	}
 	if (!value || typeof value !== "object") return;
@@ -26,14 +33,19 @@ export function localize(domain: string, value: unknown, tag = ""): void {
 	const name = typeof node.tagName === "string" ? node.tagName : tag;
 	for (const [key, item] of Object.entries(node)) {
 		if (typeof item !== "string") {
-			localize(domain, item, name);
+			localize(domain, item, view, name);
 			continue;
 		}
 		if (key === "src" || key === "poster" || key === "xlink:href")
 			node[key] = proxy(domain, item);
 		else if (key === "href" && LINKED.has(name)) node[key] = proxy(domain, item);
 		else if (key === "srcset") node[key] = sources(domain, item);
-		else if ((key !== "textContent" || node.isStyle) && item.includes("url("))
-			node[key] = styles(domain, item);
+		else if (key !== "textContent" || node.isStyle) {
+			const styled = item.includes("url(") ? styles(domain, item) : item;
+			node[key] =
+				view && (key === "style" || key === "_cssText" || node.isStyle)
+					? screens(styled, view)
+					: styled;
+		}
 	}
 }
