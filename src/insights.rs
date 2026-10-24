@@ -35,7 +35,7 @@ fn yes() -> bool {
 
 async fn insights(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Value>) -> Reply {
 	if !reader.reads(&web, raw["site_id"].as_str().unwrap_or_default()) {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	Ok(Json(explain(&web.stats, raw).map_err(Error::bad)?))
 }

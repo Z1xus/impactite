@@ -157,7 +157,7 @@
 
 	{#if !on}
 		<section class="rounded-px border border-line bg-panel">
-			<Empty text="Heatmaps are off.">
+			<Empty text="Heatmaps are off. Turn them on to see where visitors click.">
 				{#if editable}
 					<Button
 						variant="quiet"
@@ -208,7 +208,9 @@
 			{:else if loading && !size}
 				<Skeleton class="h-[60vh] w-full" />
 			{:else if !size || !node}
-				<Empty text="No snapshot of this page yet." />
+				<Empty
+					text="No snapshot of this page yet. One is taken the next time someone visits it."
+				/>
 			{:else}
 				<div
 					class="relative mx-auto"

@@ -78,12 +78,12 @@ pub struct Target {
 
 pub fn classify(to: &str) -> Result<Target, &'static str> {
 	if to.len() > 500 {
-		return Err("This is too long");
+		return Err("This is too long.");
 	}
 	if !to.contains("://") {
 		let mailbox: lettre::message::Mailbox = to
 			.parse()
-			.map_err(|_| "Enter an email address or an https URL")?;
+			.map_err(|_| "Enter an email address or an https URL.")?;
 		return Ok(Target {
 			kind: Kind::Email,
 			label: mailbox.email.to_string(),
@@ -93,9 +93,9 @@ pub fn classify(to: &str) -> Result<Target, &'static str> {
 	if !to.starts_with("https://") {
 		return Err("Use an https URL");
 	}
-	let url = url::Url::parse(to).map_err(|_| "This is not a valid URL")?;
+	let url = url::Url::parse(to).map_err(|_| "This isn't a valid URL.")?;
 	if !crate::outbound::allowed(&url) {
-		return Err("This address is not public");
+		return Err("This address isn't public.");
 	}
 	let host = url.host_str().unwrap_or_default().to_owned();
 	let path = url.path().trim_end_matches('/');
@@ -128,12 +128,12 @@ pub fn classify(to: &str) -> Result<Target, &'static str> {
 		let chat = url
 			.query_pairs()
 			.find(|(key, id)| key == "chat_id" && !id.is_empty());
-		let chat = chat.ok_or("Add chat_id to the Telegram URL")?;
+		let chat = chat.ok_or("Add chat_id to the Telegram URL.")?;
 		(Kind::Telegram, format!("chat {}", tail(&chat.1)))
 	} else if host.starts_with("ntfy.") {
 		let topic = path.trim_start_matches('/');
 		if topic.is_empty() || topic.contains('/') {
-			return Err("Add a topic to the ntfy URL");
+			return Err("Add a topic to the ntfy URL.");
 		}
 		(Kind::Ntfy, format!("{host} {}", tail(topic)))
 	} else {
@@ -152,7 +152,7 @@ pub fn failure(err: &anyhow::Error) -> String {
 			format!("HTTP {}", err.status().map_or(0, |code| code.as_u16()))
 		}
 		Some(err) if err.is_timeout() => "Timed out".to_owned(),
-		Some(_) => "Could not connect".to_owned(),
+		Some(_) => "Couldn't connect.".to_owned(),
 		None => err.to_string(),
 	}
 }

@@ -219,7 +219,7 @@
 		{#each strays as stray (stray)}
 			<Banner
 				tone="warn"
-				text="Visits are arriving for {stray}. Set data-domain to {domain} in the snippet, or add {stray} as its own site."
+				text="Visits are coming in for {stray}. Change data-domain to {domain} in your snippet, or add {stray} as a separate site."
 			/>
 		{/each}
 	{/if}

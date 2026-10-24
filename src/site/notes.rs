@@ -44,12 +44,12 @@ pub fn checked(day: &str, text: &str) -> Result<(String, String), &'static str> 
 
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
 	if web.app.site_role(viewer.user, &domain)?.is_none() {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let site = web
 		.app
 		.site(&domain)?
-		.ok_or_else(|| Error::not_found("Site not found."))?;
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
 	Ok(Json(json!({ "notes": web.app.site_notes(site.id)? })))
 }
 

@@ -55,7 +55,7 @@
 			if (next === "owner") {
 				const yes = await ask({
 					title: "Hand over this team?",
-					body: "You become an admin.",
+					body: "They will become the owner, and you'll become an admin.",
 					action: "Hand over"
 				});
 				if (!yes) return;
@@ -75,7 +75,7 @@
 			},
 			{
 				title: "Remove this member?",
-				body: "They lose access to the team's sites.",
+				body: "They will no longer be able to see this team's sites.",
 				action: "Remove member"
 			}
 		);
@@ -88,7 +88,7 @@
 			},
 			{
 				title: "Revoke this invite?",
-				body: "The link stops working.",
+				body: "The invite link will stop working.",
 				action: "Revoke invite"
 			}
 		);
@@ -115,7 +115,7 @@
 		</Form>
 		{#if link}
 			<Code code={link} />
-			<Message>Mail is not set up, so share this link yourself.</Message>
+			<Message>Mail isn't set up, so you'll need to share this link yourself.</Message>
 		{/if}
 	</div>
 </Dialog>

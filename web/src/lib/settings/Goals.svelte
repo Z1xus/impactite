@@ -65,7 +65,7 @@
 			},
 			{
 				title: "Delete this goal?",
-				body: "Its conversions stop showing.",
+				body: "Its conversions will no longer appear on your dashboard. Your visits won't change.",
 				action: "Delete goal"
 			}
 		);
@@ -96,7 +96,7 @@
 					type="number"
 					min="0"
 					max="100"
-					placeholder="0 for any visit"
+					placeholder="0 counts every visit"
 					bind:value={scroll}
 				/>
 			{:else if kind === "revenue"}

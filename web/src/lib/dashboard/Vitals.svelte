@@ -139,7 +139,7 @@
 			{/each}
 		</div>
 	{:else if !shown.length}
-		<Empty text="No page speed yet." compact />
+		<Empty text="No page speed data yet." compact />
 	{:else}
 		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
 			{#each shown as item (item.key)}

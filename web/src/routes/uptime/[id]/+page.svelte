@@ -137,7 +137,7 @@
 			},
 			{
 				title: "Delete this monitor?",
-				body: "Its history is removed.",
+				body: "Its check history will also be deleted. You can't undo this action.",
 				action: "Delete monitor"
 			}
 		);

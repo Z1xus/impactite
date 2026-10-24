@@ -134,7 +134,7 @@ impl Web {
 		self.app
 			.site(domain)?
 			.filter(|_| reader.reads(self, domain))
-			.ok_or_else(|| Error::not_found("Site not found."))
+			.ok_or_else(|| Error::not_found("This site doesn't exist."))
 	}
 }
 

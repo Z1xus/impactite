@@ -96,7 +96,7 @@ async fn add(
 		kind => KINDS.contains(&kind) && !value.is_empty() && value.len() <= 300,
 	};
 	if !valid || value.is_empty() {
-		return Err(Error::bad("This rule is not valid."));
+		return Err(Error::bad("This rule isn't valid."));
 	}
 	let value = match body.kind.as_str() {
 		"country" => value.to_uppercase(),

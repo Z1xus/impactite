@@ -18,7 +18,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => segments.remove(id), {
 			title: "Delete this segment?",
-			body: "Everyone it's shared with loses it too.",
+			body: "It will also be removed for everyone you shared it with.",
 			action: "Delete segment"
 		});
 </script>

@@ -53,7 +53,9 @@ async fn add(
 		.all(|id| goals.iter().any(|goal| goal.id == *id));
 	let name = body.name.trim();
 	if name.is_empty() || !(2..=8).contains(&body.steps.len()) || !known {
-		return Err(Error::bad("Name the funnel and pick 2 to 8 goals."));
+		return Err(Error::bad(
+			"Enter a name for this funnel and choose 2 to 8 goals.",
+		));
 	}
 	web.app
 		.add_funnel(site, name, &json!(body.steps).to_string())?;
@@ -72,7 +74,7 @@ async fn remove(
 
 async fn compute(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<Request>) -> Reply {
 	if !reader.reads(&web, &body.site_id) {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let bad = |message: String| Error::bad(message);
 	let period = stats::period(&web.stats, &body.site_id, &body.date_range, false).map_err(bad)?;
@@ -82,7 +84,7 @@ async fn compute(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<R
 		.funnels(period.site.id)?
 		.into_iter()
 		.find(|funnel| funnel["id"] == body.funnel)
-		.ok_or_else(|| Error::bad("Funnel not found."))?;
+		.ok_or_else(|| Error::bad("This funnel doesn't exist."))?;
 	let steps: Vec<_> = funnel["steps"]
 		.as_array()
 		.into_iter()

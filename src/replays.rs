@@ -207,12 +207,12 @@ struct Replay<'a> {
 
 fn member(web: &Web, user: i64, domain: &str) -> Reply<u64> {
 	if web.app.site_role(user, domain)?.is_none() {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	Ok(web
 		.app
 		.site(domain)?
-		.ok_or_else(|| Error::not_found("Site not found."))?
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?
 		.id)
 }
 
@@ -243,7 +243,7 @@ async fn show(
 	let replay = web
 		.app
 		.replay(site, &key)?
-		.ok_or_else(|| Error::not_found("This replay is gone."))?;
+		.ok_or_else(|| Error::not_found("This replay was deleted."))?;
 	let path =
 		dir(&web.data, site).join(format!("{}.gz", replay["key"].as_str().unwrap_or_default()));
 	let (send, receive) = tokio::sync::mpsc::channel::<Bytes>(4);

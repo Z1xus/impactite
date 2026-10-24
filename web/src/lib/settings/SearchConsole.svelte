@@ -42,7 +42,7 @@
 			},
 			{
 				title: "Disconnect Search Console?",
-				body: "Search terms stop showing until you connect again.",
+				body: "Search terms won't appear on your dashboard until you connect again.",
 				action: "Disconnect"
 			}
 		);
@@ -60,7 +60,7 @@
 	{/snippet}
 	{#if google}
 		{#if failed && !google.connected}
-			<Message tone="bad">Google didn't accept the sign-in. Connect again.</Message>
+			<Message tone="bad">Google didn't accept the sign-in. Try connecting again.</Message>
 		{/if}
 		{#if !google.configured}
 			<Note>

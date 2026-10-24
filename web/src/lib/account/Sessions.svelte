@@ -27,7 +27,7 @@
 			},
 			{
 				title: "Sign out other devices?",
-				body: "They need to sign in again.",
+				body: "Your other devices will need to sign in again.",
 				action: "Sign out others"
 			}
 		);
@@ -35,7 +35,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => sessions.remove(id), {
 			title: "End this session?",
-			body: "That device needs to sign in again.",
+			body: "That device will need to sign in again.",
 			action: "End session"
 		});
 </script>

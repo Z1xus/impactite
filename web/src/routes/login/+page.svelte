@@ -30,7 +30,7 @@
 	const SSO_ERRORS: Record<string, string> = {
 		expired: "That sign-in took too long. Try again.",
 		denied: "Sign-in was canceled.",
-		email: "Your account there has no verified email.",
+		email: "Your account with this provider doesn't have a verified email.",
 		invite: "There's no account for that email here yet. Ask an admin for an invite.",
 		provider: "Sign-in didn't work. Try again, or ask an admin to check the SSO settings.",
 		off: "Single sign-on isn't set up on this server."
@@ -135,7 +135,9 @@
 				/>
 			</Form>
 			{#if sent}
-				<Message tone="cyan">If the account exists, the link is on its way.</Message>
+				<Message tone="cyan"
+					>If there's an account with this email, we've sent it a sign-in link.</Message
+				>
 			{/if}
 		{:else}
 			<Form block action="Sign in with passkey" submit={withPasskey} />

@@ -48,7 +48,7 @@ pub async fn export(
 	Json(body): Json<ExportRequest>,
 ) -> Reply<Response> {
 	if web.app.site_role(viewer.user, &body.site_id)?.is_none() {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let period =
 		stats::period(&web.stats, &body.site_id, &body.date_range, false).map_err(Error::bad)?;
@@ -80,7 +80,10 @@ pub async fn export(
 	.await?
 	.map_err(|err| {
 		tracing::error!(%err, "export");
-		Error::new(StatusCode::INTERNAL_SERVER_ERROR, "The export failed.")
+		Error::new(
+			StatusCode::INTERNAL_SERVER_ERROR,
+			"Couldn't export your data. Try again.",
+		)
 	})?;
 	let mut response = bytes.into_response();
 	let headers = response.headers_mut();

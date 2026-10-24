@@ -50,7 +50,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => alerts.remove(id), {
 			title: "Delete this alert?",
-			body: "Nothing is sent here any more.",
+			body: "You'll no longer get alerts here.",
 			action: "Delete alert"
 		});
 

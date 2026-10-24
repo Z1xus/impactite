@@ -52,7 +52,7 @@
 		</Form>
 	{:else}
 		<div class="flex flex-col items-center gap-4">
-			<Message tone={error ? "bad" : "dim"}>{error || "Signing you in."}</Message>
+			<Message tone={error ? "bad" : "dim"}>{error || "Signing you in…"}</Message>
 			{#if error}
 				<Button variant="quiet" href={resolve("/login")}>Sign in</Button>
 			{/if}

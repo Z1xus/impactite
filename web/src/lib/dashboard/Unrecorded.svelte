@@ -19,17 +19,18 @@
 </script>
 
 {#if visited !== null}
-	<Empty
-		{compact}
-		text={visited ? `${text} Your site may load a script that can't record them.` : text}
-	>
+	<Empty {compact} {text}>
 		{#if visited}
+			<p class="-mt-2 max-w-md text-center text-body text-dim">
+				If you moved from Plausible, your site might still be using the Plausible script.
+				Switch to the impactite tracker to start recording.
+			</p>
 			<Button
 				variant="quiet"
 				href={resolve("/[site]/settings/[[section]]", {
 					site: domain,
 					section: "tracking"
-				})}>Get the script</Button
+				})}>Get the impactite tracker</Button
 			>
 		{/if}
 	</Empty>

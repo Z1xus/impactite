@@ -57,7 +57,7 @@
 		analytics = await api<Analytics>(`${sitePath(domain)}/analytics`);
 		property ||= analytics.properties[0]?.key ?? "";
 		if (was && !analytics.importing && !analytics.error) {
-			toast("Google Analytics history imported.");
+			toast("Your Google Analytics history was imported.");
 			await imports.load();
 		}
 	}
@@ -81,7 +81,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => imports.remove(id), {
 			title: "Delete this import?",
-			body: "Its imported stats are deleted.",
+			body: "The stats from this import will be deleted. You can't undo this action.",
 			action: "Delete import"
 		});
 </script>
@@ -89,7 +89,9 @@
 <Section id="data" label="data">
 	<div class="flex flex-col gap-3">
 		<span class="text-body text-fg">Export data</span>
-		<Note>Export collected events from all dates. Imported summaries are not included.</Note>
+		<Note
+			>Download every event you've collected. Imported data isn't included in the export.</Note
+		>
 		<Form action="Download" submit={() => archive(domain, format)} inline>
 			<Select
 				label="export format"

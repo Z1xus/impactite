@@ -129,7 +129,7 @@ fn use_tool(web: &Web, key: &str, user: i64, name: &str, args: Value) -> Result<
 				.app
 				.site(domain)
 				.map_err(|err| err.to_string())?
-				.ok_or("Site not found.")?;
+				.ok_or("This site doesn't exist.")?;
 			Ok(json!({ "visitors": web.ingest.current_visitors(site.id) }))
 		}
 		"add_note" => {

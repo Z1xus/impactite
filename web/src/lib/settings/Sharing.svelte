@@ -49,7 +49,7 @@
 				publicLink &&
 				(await ask({
 					title: "Make the dashboard private?",
-					body: "The public link stops working.",
+					body: "The public link will stop working, and only your team will be able to see the dashboard.",
 					action: "Make private"
 				}))
 			)
@@ -61,7 +61,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => links.remove(id), {
 			title: "Delete this shared link?",
-			body: "Anyone with the link loses access.",
+			body: "Anyone with this link will lose access.",
 			action: "Delete link"
 		});
 </script>

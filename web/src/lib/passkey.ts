@@ -15,13 +15,13 @@ function text(buffer: ArrayBuffer | null) {
 
 function explain(error: unknown): never {
 	if (error instanceof DOMException && error.name === "NotAllowedError")
-		throw new Error("Passkey request was cancelled.");
+		throw new Error("Passkey canceled.");
 	if (error instanceof DOMException && error.name === "InvalidStateError")
 		throw new Error("This passkey is already saved.");
 	// the server's address and this page's don't match, passkeys belong to one site
 	if (error instanceof DOMException && error.name === "SecurityError")
 		throw new Error("Passkeys only work at the address this server is set up for.");
-	throw error instanceof Error ? error : new Error("Passkeys are not available here.");
+	throw error instanceof Error ? error : new Error("Passkeys aren't available in this browser.");
 }
 
 export async function create(options: Options) {

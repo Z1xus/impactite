@@ -29,7 +29,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => windows.remove(id), {
 			title: "Cancel this maintenance?",
-			body: "Monitors are checked again at once.",
+			body: "Monitors will go back to normal checks right away.",
 			action: "Cancel maintenance"
 		});
 </script>

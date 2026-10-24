@@ -131,7 +131,7 @@ pub(crate) fn new_account(
 		rusqlite::Error::SqliteFailure(failure, _)
 			if failure.code == rusqlite::ErrorCode::ConstraintViolation =>
 		{
-			Error::conflict("This email already has an account. Sign in instead.")
+			Error::conflict("An account with this email already exists. Sign in instead.")
 		}
 		err => err.into(),
 	};
@@ -148,7 +148,7 @@ pub(crate) fn new_account(
 			.app
 			.create_user(name, email, Some(password))
 			.map_err(created),
-		(None, Some(_)) => Err(Error::bad("Use at least 10 characters for the password.")),
+		(None, Some(_)) => Err(Error::bad("Your password needs at least 10 characters.")),
 		(None, None) => Err(Error::bad("Create a passkey to continue.")),
 	}
 }
@@ -204,10 +204,10 @@ async fn logout(State(web): State<Arc<Web>>, headers: HeaderMap) -> Response {
 
 fn valid_identity(name: &str, email: &str) -> Result<(), &'static str> {
 	if name.trim().is_empty() {
-		return Err("Tell us your name.");
+		return Err("Enter your name.");
 	}
 	if !email.contains('@') {
-		return Err("Use a valid email.");
+		return Err("Enter a valid email address.");
 	}
 	Ok(())
 }

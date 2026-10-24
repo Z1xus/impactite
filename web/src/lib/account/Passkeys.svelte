@@ -33,7 +33,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => passkeys.remove(id), {
 			title: "Delete this passkey?",
-			body: "You can't sign in with it anymore.",
+			body: "You won't be able to sign in with this passkey anymore.",
 			action: "Delete passkey"
 		});
 </script>

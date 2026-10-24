@@ -50,13 +50,13 @@ export function detect(raw: string): { kind: Channel | null; error: string } {
 	if (!to.includes("://")) {
 		return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)
 			? { kind: "email", error: "" }
-			: { kind: null, error: "Enter an email address or an https URL" };
+			: { kind: null, error: "Enter an email address or an https URL." };
 	}
 	let url: URL;
 	try {
 		url = new URL(to);
 	} catch {
-		return { kind: null, error: "This is not a valid URL" };
+		return { kind: null, error: "This isn't a valid URL." };
 	}
 	if (url.protocol !== "https:") return { kind: null, error: "Use an https URL" };
 	const host = url.hostname;
@@ -75,13 +75,13 @@ export function detect(raw: string): { kind: Channel | null; error: string } {
 			return { kind: "telegram", error: "Use the bot sendMessage URL" };
 		return url.searchParams.get("chat_id")
 			? { kind: "telegram", error: "" }
-			: { kind: "telegram", error: "Add chat_id to the Telegram URL" };
+			: { kind: "telegram", error: "Add chat_id to the Telegram URL." };
 	}
 	if (host.startsWith("ntfy.")) {
 		const topic = path.replace(/^\//, "");
 		return topic && !topic.includes("/")
 			? { kind: "ntfy", error: "" }
-			: { kind: "ntfy", error: "Add a topic to the ntfy URL" };
+			: { kind: "ntfy", error: "Add a topic to the ntfy URL." };
 	}
 	return { kind: "webhook", error: "" };
 }

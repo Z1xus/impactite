@@ -47,7 +47,11 @@
 				await api(`/api/app/sites/${domain}/replays/${id}`, undefined, "DELETE");
 				await goto(list);
 			},
-			{ title: "Delete this replay?", action: "Delete replay" }
+			{
+				title: "Delete this replay?",
+				body: "You can't undo this action.",
+				action: "Delete replay"
+			}
 		);
 </script>
 

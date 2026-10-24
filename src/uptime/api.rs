@@ -102,7 +102,7 @@ pub struct Fields {
 pub(super) fn member(web: &Web, user: i64, team: i64) -> Reply<String> {
 	web.app
 		.role(user, team)?
-		.ok_or_else(|| Error::not_found("Team not found."))
+		.ok_or_else(|| Error::not_found("This team doesn't exist."))
 }
 
 pub(super) fn editor(web: &Web, user: i64, team: i64) -> Reply<()> {
@@ -116,9 +116,9 @@ pub(super) fn owned(web: &Web, user: i64, id: i64) -> Reply<(Monitor, String)> {
 	let monitor = web
 		.app
 		.monitor(id)?
-		.ok_or_else(|| Error::not_found("Monitor not found."))?;
-	let role =
-		member(web, user, monitor.team).map_err(|_| Error::not_found("Monitor not found."))?;
+		.ok_or_else(|| Error::not_found("This monitor doesn't exist."))?;
+	let role = member(web, user, monitor.team)
+		.map_err(|_| Error::not_found("This monitor doesn't exist."))?;
 	Ok((monitor, role))
 }
 
@@ -282,7 +282,7 @@ fn fill(web: &Web, user: i64, monitor: &mut Monitor, fields: Fields) -> Reply<()
 		.filter(|_| monitor.kind != Kind::Heartbeat)
 	{
 		if raw.len() > 2048 {
-			return Err(Error::bad("That address is too long."));
+			return Err(Error::bad("This address is too long."));
 		}
 		let (kind, target, name) = parse(raw)
 			.ok_or_else(|| Error::bad("Enter a URL like https://example.com or a host:port."))?;
@@ -310,7 +310,7 @@ fn fill(web: &Web, user: i64, monitor: &mut Monitor, fields: Fields) -> Reply<()
 		monitor.name = host.unwrap_or_else(|| "Heartbeat".to_owned());
 	}
 	if monitor.name.chars().count() > 80 {
-		return Err(Error::bad("Use a shorter name."));
+		return Err(Error::bad("This name is too long."));
 	}
 	if let Some(interval) = fields.interval {
 		monitor.interval = interval;
@@ -321,7 +321,7 @@ fn fill(web: &Web, user: i64, monitor: &mut Monitor, fields: Fields) -> Reply<()
 		INTERVALS.contains(&monitor.interval)
 	};
 	if !allowed {
-		return Err(Error::bad("Pick an interval from the list."));
+		return Err(Error::bad("Choose an interval from the list."));
 	}
 	if let Some(muted) = fields.muted {
 		monitor.muted = muted;
@@ -470,7 +470,9 @@ pub(super) fn hold(web: &Web, user: i64, id: i64, paused: bool) -> Reply<()> {
 async fn check(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<i64>) -> Reply {
 	let monitor = changeable(&web, viewer.user, id)?;
 	if monitor.kind == Kind::Heartbeat {
-		return Err(Error::bad("A heartbeat waits for its ping."));
+		return Err(Error::bad(
+			"Heartbeat monitors can't be checked manually. They wait for your service to check in.",
+		));
 	}
 	let who = viewer.user.to_string();
 	if !CHECKS.open(&who) {
@@ -483,14 +485,16 @@ async fn check(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<i64>)
 	let out = tokio::time::timeout(wait, result)
 		.await
 		.map_err(|_| Error::new(StatusCode::GATEWAY_TIMEOUT, "The check took too long."))?
-		.map_err(|_| Error::not_found("The monitor is not ready yet. Try again."))?;
+		.map_err(|_| Error::not_found("This monitor isn't ready yet. Try again in a moment."))?;
 	Ok(Json(outcome(&monitor, &out)))
 }
 
 async fn probe(State(web): State<Arc<Web>>, viewer: Viewer, Json(fields): Json<Fields>) -> Reply {
 	let monitor = draft(&web, viewer.user, fields)?;
 	if monitor.kind == Kind::Heartbeat {
-		return Err(Error::bad("A heartbeat waits for its ping."));
+		return Err(Error::bad(
+			"Heartbeat monitors can't be checked manually. They wait for your service to check in.",
+		));
 	}
 	let who = viewer.user.to_string();
 	if !CHECKS.open(&who) {
@@ -668,9 +672,9 @@ async fn site_incidents(
 	let site = web
 		.app
 		.site(&domain)?
-		.ok_or_else(|| Error::not_found("Site not found."))?;
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
 	let team = web.app.site_team(site.id)?;
-	member(&web, viewer.user, team).map_err(|_| Error::not_found("Site not found."))?;
+	member(&web, viewer.user, team).map_err(|_| Error::not_found("This site doesn't exist."))?;
 	let Some(monitor) = web.app.site_monitor(site.id)? else {
 		return Ok(Json(json!({ "monitor": null, "incidents": [] })));
 	};
@@ -782,7 +786,7 @@ fn incident_team(web: &Web, user: i64, incident: i64) -> Reply<()> {
 	let team = web
 		.app
 		.incident_team(incident)
-		.ok_or_else(|| Error::not_found("Incident not found."))?;
+		.ok_or_else(|| Error::not_found("This incident doesn't exist."))?;
 	editor(web, user, team)
 }
 
@@ -795,7 +799,7 @@ async fn add_note(
 	incident_team(&web, viewer.user, id)?;
 	let text = body.text.trim();
 	if text.is_empty() || text.chars().count() > 1000 {
-		return Err(Error::bad("Write a short update."));
+		return Err(Error::bad("Enter a short update."));
 	}
 	Ok(Json(web.app.add_note(
 		id,
@@ -954,7 +958,7 @@ async fn test_alert(
 	let to = web
 		.app
 		.alert(query.team, id)
-		.ok_or_else(|| Error::not_found("Alert not found."))?;
+		.ok_or_else(|| Error::not_found("This alert doesn't exist."))?;
 	let note = Note::alert(
 		"Test alert".to_owned(),
 		"Uptime alerts reach this address.".to_owned(),

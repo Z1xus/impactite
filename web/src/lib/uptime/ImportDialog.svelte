@@ -28,7 +28,8 @@
 			.then((result) => !stale && (preview = result))
 			.catch(
 				(err) =>
-					!stale && (error = err instanceof Error ? err.message : "Couldn't read it.")
+					!stale &&
+					(error = err instanceof Error ? err.message : "Couldn't read this file.")
 			);
 		return () => (stale = true);
 	});

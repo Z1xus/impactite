@@ -50,7 +50,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => shields.remove(id), {
 			title: "Delete this rule?",
-			body: "It stops applying.",
+			body: "Visits it was blocking will be counted again.",
 			action: "Delete rule"
 		});
 </script>
@@ -69,7 +69,7 @@
 				/>
 			</div>
 			{#if kind === "ip"}
-				<Button type="button" variant="quiet" onclick={useMyIp}>Use my ip</Button>
+				<Button type="button" variant="quiet" onclick={useMyIp}>Use my IP</Button>
 			{/if}
 		</div>
 	</Form>

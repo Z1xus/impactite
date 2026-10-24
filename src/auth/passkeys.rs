@@ -80,14 +80,14 @@ pub fn registered(web: &Web, proof: &Proof, purpose: &Purpose) -> Result<Key, Fa
 	if web.take(&proof.challenge).as_ref() != Some(purpose) {
 		return Err((
 			StatusCode::BAD_REQUEST,
-			"This passkey request expired. Try again.",
+			"This passkey request has expired. Try again.",
 		));
 	}
 	webauthn::register(&web.rp, &proof.challenge, &proof.credential).map_err(|err| {
 		tracing::warn!(err, "passkey registration");
 		(
 			StatusCode::BAD_REQUEST,
-			"This passkey could not be verified.",
+			"This passkey couldn't be verified.",
 		)
 	})
 }
@@ -133,7 +133,7 @@ async fn signup(
 		let invitation = web
 			.app
 			.open_invite(&body.token)?
-			.ok_or_else(|| Error::not_found("This invite expired or was already used."))?;
+			.ok_or_else(|| Error::not_found("This invite has expired or was already used."))?;
 		(Purpose::Invite(body.token.clone()), invitation.email)
 	} else {
 		let expected = lock(&web.setup).clone();
@@ -178,7 +178,7 @@ async fn list(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Reply {
 	let id = B64
 		.decode(&id)
-		.map_err(|_| Error::not_found("Passkey not found."))?;
+		.map_err(|_| Error::not_found("This passkey doesn't exist."))?;
 	let last = web
 		.app
 		.passkey_ids(viewer.user)
@@ -190,7 +190,7 @@ async fn remove(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<Stri
 		));
 	}
 	if !web.app.remove_passkey(viewer.user, &id)? {
-		return Err(Error::not_found("Passkey not found."));
+		return Err(Error::not_found("This passkey doesn't exist."));
 	}
 	list(State(web), viewer).await
 }
@@ -216,11 +216,11 @@ async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Reply<Re
 	let unknown = || {
 		Error::new(
 			StatusCode::UNAUTHORIZED,
-			"This passkey is not registered here.",
+			"This passkey isn't registered on this server.",
 		)
 	};
 	if web.take(&body.challenge) != Some(Purpose::Login) {
-		return Err(Error::bad("This sign-in expired. Try again."));
+		return Err(Error::bad("This sign-in has expired. Try again."));
 	}
 	let id = body.credential.credential().ok_or_else(unknown)?;
 	let (user, key) = web.app.passkey(&id)?.ok_or_else(unknown)?;
@@ -229,7 +229,7 @@ async fn login(State(web): State<Arc<Web>>, Json(body): Json<Login>) -> Reply<Re
 			tracing::warn!(err, "passkey login");
 			Error::new(
 				StatusCode::UNAUTHORIZED,
-				"This passkey could not be verified.",
+				"This passkey couldn't be verified.",
 			)
 		})?;
 	let _ = web.app.touch_passkey(&id, counter);

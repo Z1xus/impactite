@@ -49,7 +49,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => pages.remove(id), {
 			title: "Delete this status page?",
-			body: "Its link and badges stop working.",
+			body: "Its link and badges will stop working.",
 			action: "Delete page"
 		});
 </script>

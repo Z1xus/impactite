@@ -32,7 +32,7 @@
 <Gate>
 	<div class="flex flex-col items-center gap-4">
 		<Message tone={failed ? "bad" : result ? "cyan" : "dim"}
-			>{result || "Confirming your email."}</Message
+			>{result || "Confirming your email…"}</Message
 		>
 		{#if result}
 			<Button variant="quiet" href={resolve("/")}>Continue</Button>

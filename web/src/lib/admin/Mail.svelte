@@ -11,7 +11,7 @@
 	const test = () =>
 		attempt(async () => {
 			const { sent } = await api<{ sent: string }>("/api/app/admin/mail", {});
-			toast(`Sent a test mail to ${sent}.`);
+			toast(`We sent a test email to ${sent}.`);
 		});
 </script>
 

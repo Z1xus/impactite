@@ -15,6 +15,6 @@
 	{#if token}
 		<NewAccount {token} />
 	{:else}
-		<Message>Open the setup link from the server log.</Message>
+		<Message>To finish setting up, open the setup link from the server log.</Message>
 	{/if}
 </Gate>

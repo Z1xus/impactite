@@ -13,7 +13,7 @@
 	let path = $state("");
 
 	async function purge() {
-		if (!path.startsWith("/")) throw new Error("Use a path like /old-page.");
+		if (!path.startsWith("/")) throw new Error("Enter a path like /old-page.");
 		await api(`${sitePath(domain)}/purge`, { page: path });
 		path = "";
 	}
@@ -30,7 +30,7 @@
 <Section id="danger" label="danger" danger>
 	<Danger
 		title="Remove a page"
-		body="All stats for this page are deleted permanently. Imported data is kept."
+		body="All stats for this page will be deleted. Imported data will stay. You can't undo this action."
 		action="Remove page"
 		submit={purge}
 	>
@@ -38,14 +38,14 @@
 	</Danger>
 	<Danger
 		title="Reset stats"
-		body="All stats are deleted permanently. The site and its settings are kept."
+		body="All stats for this site will be deleted. The site and its settings will stay. You can't undo this action."
 		action="Reset stats"
 		submit={wipe}
 		confirm="reset"
 	/>
 	<Danger
 		title="Delete site"
-		body="This is permanent. You lose the site and all its data."
+		body="This site and all its data will be deleted. You can't undo this action."
 		action="Delete site"
 		submit={destroy}
 		confirm={domain}

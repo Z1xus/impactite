@@ -95,7 +95,7 @@ pub fn verify(app: &App, user: i64, given: &str) -> Result<(), &'static str> {
 		.get(&user)
 		.is_some_and(|&(count, until)| count >= TRIES && until > now())
 	{
-		return Err("Too many wrong codes. Wait a few minutes.");
+		return Err("Too many incorrect codes. Wait a few minutes, then try again.");
 	}
 	let Ok(Some((secret, last, recovery))) = app.totp(user) else {
 		return Err("Two factor is not on.");
@@ -150,8 +150,11 @@ async fn enable(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<En
 			"Turn two-factor off before setting it up again.",
 		));
 	}
-	let step = matching(&body.secret, &body.code)
-		.ok_or_else(|| Error::bad("Wrong code. Check the time on your phone."))?;
+	let step = matching(&body.secret, &body.code).ok_or_else(|| {
+		Error::bad(
+			"That code didn't work. Make sure the time on your phone is correct, then try again.",
+		)
+	})?;
 	let mut codes = Vec::new();
 	for _ in 0..8 {
 		let token = token()?;

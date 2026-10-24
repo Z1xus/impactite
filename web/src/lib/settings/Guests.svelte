@@ -60,12 +60,12 @@
 		String(key).startsWith("g")
 			? drop(`${path}/${String(key).slice(1)}`, {
 					title: "Remove this guest?",
-					body: "They lose access to this site.",
+					body: "They will no longer be able to see this site.",
 					action: "Remove guest"
 				})
 			: drop(`${path}/invites/${String(key).slice(1)}`, {
 					title: "Revoke this invite?",
-					body: "The link stops working.",
+					body: "The invite link will stop working.",
 					action: "Revoke invite"
 				});
 </script>
@@ -110,6 +110,6 @@
 	</Form>
 	{#if link}
 		<Code code={link} />
-		<Message>Mail is not set up, so share this link yourself.</Message>
+		<Message>Mail isn't set up, so you'll need to share this link yourself.</Message>
 	{/if}
 </Section>

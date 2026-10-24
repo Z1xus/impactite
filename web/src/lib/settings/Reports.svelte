@@ -71,7 +71,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => reports.remove(id), {
 			title: "Delete this report?",
-			body: "It stops being sent.",
+			body: "No more emails will be sent for this report.",
 			action: "Delete report"
 		});
 </script>

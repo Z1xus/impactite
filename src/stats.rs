@@ -171,7 +171,7 @@ pub(crate) fn unauthorized() -> Response {
 pub async fn dashboard(State(web): State<Arc<Web>>, reader: Reader, body: Json<Value>) -> Reply {
 	let domain = body.0["site_id"].as_str().unwrap_or_default();
 	if !reader.reads(&web, domain) {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	Ok(Json(run(&web.stats, body.0).map_err(Error::bad)?))
 }
@@ -188,7 +188,7 @@ pub async fn props(
 	Json(body): Json<PropsRequest>,
 ) -> Reply {
 	if !reader.reads(&web, &body.site_id) {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let period = period(&web.stats, &body.site_id, &body.date_range, false).map_err(Error::bad)?;
 	let keys = web

@@ -280,7 +280,7 @@ async fn add(
 	} else {
 		let name = body.name.trim();
 		if name.is_empty() || name.len() > 80 {
-			return Err(Error::bad("Name the link."));
+			return Err(Error::bad("Enter a name for this link."));
 		}
 		let password = if body.password.is_empty() {
 			String::new()
@@ -313,7 +313,7 @@ async fn open(
 	let share = web
 		.app
 		.share(&slug)?
-		.ok_or_else(|| Error::not_found("This link does not exist."))?;
+		.ok_or_else(|| Error::not_found("This link doesn't exist."))?;
 	if !share.password.is_empty() {
 		let client = web.client(peer, &headers);
 		if !LINKS.open(&slug) || !CLIENTS.open(&client) {

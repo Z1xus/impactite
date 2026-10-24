@@ -176,7 +176,7 @@
 				...fields()
 			});
 		} catch (err) {
-			failure = err instanceof Error ? err.message : "The check didn't run.";
+			failure = err instanceof Error ? err.message : "The check didn't run. Try again.";
 		} finally {
 			testing = false;
 		}

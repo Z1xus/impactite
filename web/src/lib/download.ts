@@ -17,7 +17,7 @@ export async function archive(site: string, format: string) {
 	});
 	if (!response.ok) {
 		const body = await response.json().catch(() => ({}));
-		throw new ApiError(response.status, body.error ?? "The export failed.");
+		throw new ApiError(response.status, body.error ?? "Couldn't export your data. Try again.");
 	}
 	const name =
 		response.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "export.zip";

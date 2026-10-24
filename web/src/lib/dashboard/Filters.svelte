@@ -63,7 +63,7 @@
 				},
 				{
 					title: `Delete ${active.name}?`,
-					body: "Everyone it's shared with loses it too.",
+					body: "It will also be removed for everyone you shared it with.",
 					action: "Delete segment"
 				}
 			);

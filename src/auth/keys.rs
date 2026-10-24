@@ -27,7 +27,7 @@ async fn list(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 async fn add(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<NewKey>) -> Reply {
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 100 {
-		return Err(Error::bad("Name the key."));
+		return Err(Error::bad("Enter a name for this key."));
 	}
 	let key = web.app.create_key(name, Some(viewer.user))?;
 	respond(&web, viewer.user, Some(key))

@@ -33,7 +33,7 @@
 	{#if owner}
 		<Danger
 			title="Delete team"
-			body="This is permanent. You lose the team and all its sites."
+			body="This team and all its sites will be deleted. You can't undo this action."
 			action="Delete team"
 			submit={destroy}
 			confirm={team.name}
@@ -41,7 +41,7 @@
 	{:else}
 		<Danger
 			title="Leave team"
-			body="You lose access to its sites until someone invites you again."
+			body="You'll lose access to its sites until someone invites you again."
 			action="Leave team"
 			submit={leave}
 		/>

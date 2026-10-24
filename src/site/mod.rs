@@ -103,11 +103,11 @@ async fn update(
 	if let Some(timezone) = &body.timezone
 		&& TimeZone::get(timezone).is_err()
 	{
-		return Err(Error::bad("Use a valid timezone."));
+		return Err(Error::bad("Choose a valid time zone."));
 	}
 	let renamed = match &body.domain {
 		Some(raw) => {
-			Some(clean_domain(raw).ok_or_else(|| Error::bad("Use a domain like example.com."))?)
+			Some(clean_domain(raw).ok_or_else(|| Error::bad("Enter a domain like example.com."))?)
 		}
 		None => None,
 	};
@@ -161,7 +161,7 @@ fn taken(err: rusqlite::Error) -> Error {
 		rusqlite::Error::SqliteFailure(failure, _)
 			if failure.code == rusqlite::ErrorCode::ConstraintViolation =>
 		{
-			Error::conflict("This domain is already tracked.")
+			Error::conflict("This domain is already being tracked.")
 		}
 		err => err.into(),
 	}
@@ -204,7 +204,7 @@ async fn purge(
 	)?;
 	let page = body.page.trim().to_owned();
 	if !page.starts_with('/') {
-		return Err(Error::bad("Use a path like /old-page."));
+		return Err(Error::bad("Enter a path like /old-page."));
 	}
 	let db = web.stats.db.clone();
 	blocking(move || db.purge(site.id, Dim::Page, &page)).await?;
@@ -224,7 +224,7 @@ async fn invite_guest(
 ) -> Reply {
 	let site = managed(&web, viewer.user, &domain, CHANGE)?;
 	if !matches!(body.role.as_str(), "viewer" | "editor") || !body.email.contains('@') {
-		return Err(Error::bad("Use a valid email and role."));
+		return Err(Error::bad("Enter a valid email address and choose a role."));
 	}
 	let team = web.app.site_team(site.id)?;
 	let token = web
@@ -359,7 +359,7 @@ async fn remove(
 	let (first, last) = web
 		.app
 		.remove_import(site.id, id)?
-		.ok_or_else(|| Error::not_found("Import not found."))?;
+		.ok_or_else(|| Error::not_found("This import doesn't exist."))?;
 	let days = days(&first, &last).ok_or_else(Error::broken)?;
 	web.stats.db.drop_imports(site.id, days)?;
 	respond(&web, &site)
@@ -554,9 +554,9 @@ async fn add_site(State(web): State<Arc<Web>>, viewer: Viewer, Json(body): Json<
 		return Err(Error::forbidden("You can't add sites to this team."));
 	}
 	let domain =
-		clean_domain(&body.domain).ok_or_else(|| Error::bad("Use a domain like example.com."))?;
+		clean_domain(&body.domain).ok_or_else(|| Error::bad("Enter a domain like example.com."))?;
 	if TimeZone::get(&body.timezone).is_err() {
-		return Err(Error::bad("Pick a timezone from the list."));
+		return Err(Error::bad("Choose a time zone from the list."));
 	}
 	let site = web
 		.app

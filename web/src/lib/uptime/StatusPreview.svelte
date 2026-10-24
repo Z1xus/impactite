@@ -71,7 +71,7 @@
 					</span>
 				</div>
 			{:else}
-				<span class="meta">No services yet</span>
+				<span class="meta">No services yet.</span>
 			{/each}
 		</div>
 		{#if look.brand}

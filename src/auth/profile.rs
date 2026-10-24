@@ -80,11 +80,11 @@ async fn update(
 ) -> Reply<Response> {
 	let name = body.name.as_deref().map(str::trim);
 	if name.is_some_and(|name| name.is_empty() || name.len() > 80) {
-		return Err(Error::bad("Tell us your name."));
+		return Err(Error::bad("Enter your name."));
 	}
 	let email = body.email.as_deref().map(str::trim);
 	if email.is_some_and(|email| !email.contains('@')) {
-		return Err(Error::bad("Use a valid email."));
+		return Err(Error::bad("Enter a valid email address."));
 	}
 	if let Some(name) = name {
 		web.app.set_user(viewer.user, Column::Name, name)?;
@@ -97,7 +97,7 @@ async fn update(
 		return Ok(StatusCode::NO_CONTENT.into_response());
 	}
 	if web.app.user_by_email(email)?.is_some() {
-		return Err(Error::conflict("This email is already used."));
+		return Err(Error::conflict("This email address is already in use."));
 	}
 	// with mail the new address confirms itself first, the old one hears about it
 	if web.mail.ready() {
@@ -105,7 +105,7 @@ async fn update(
 			.await
 			.map_err(|err| {
 				tracing::warn!(%err, "email change mail");
-				Error::new(StatusCode::BAD_GATEWAY, "The mail couldn't be sent.")
+				Error::new(StatusCode::BAD_GATEWAY, "The email couldn't be sent.")
 			})?;
 		return Ok(Json(json!({ "pending": email })).into_response());
 	}
@@ -121,7 +121,7 @@ fn used(err: rusqlite::Error) -> Error {
 		rusqlite::Error::SqliteFailure(failure, _)
 			if failure.code == rusqlite::ErrorCode::ConstraintViolation =>
 		{
-			Error::conflict("This email is already used.")
+			Error::conflict("This email address is already in use.")
 		}
 		err => err.into(),
 	}
@@ -132,7 +132,7 @@ async fn confirm_email(web: &Web, user: i64, old: &str, new: &str) -> anyhow::Re
 	let base = web.url.trim_end_matches('/');
 	let link = format!("{base}/email/{token}");
 	let lines = [
-		"Confirm this address to use it for your impactite account. The link works for a day."
+		"Confirm this address to use it with your impactite account. This link expires in 24 hours."
 			.to_owned(),
 	];
 	let letter = Letter {
@@ -152,7 +152,7 @@ async fn confirm_email(web: &Web, user: i64, old: &str, new: &str) -> anyhow::Re
 		.await?;
 	let lines = [
 		format!(
-			"Someone asked to change your account's email to {new}. It changes once that address confirms."
+			"Someone asked to change your account's email to {new}. It will change once that address is confirmed."
 		),
 		"If that wasn't you, sign in and check your account.".to_owned(),
 	];
@@ -177,7 +177,7 @@ async fn accept_email(State(web): State<Arc<Web>>, Json(body): Json<Token>) -> R
 	let (user, email) = web
 		.app
 		.take_email_change(&body.token)?
-		.ok_or_else(|| Error::bad("This link expired or was already used."))?;
+		.ok_or_else(|| Error::bad("This link has expired or was already used."))?;
 	web.app
 		.set_user(user, Column::Email, &email)
 		.map_err(used)?;
@@ -198,10 +198,12 @@ async fn password(
 		})
 	});
 	if !stored.is_empty() && !matches {
-		return Err(Error::forbidden("The current password is wrong."));
+		return Err(Error::forbidden(
+			"The current password you entered is incorrect.",
+		));
 	}
 	if body.password.chars().count() < 10 {
-		return Err(Error::bad("Use at least 10 characters for the password."));
+		return Err(Error::bad("Your password needs at least 10 characters."));
 	}
 	// a new password signs out every other device
 	web.app
@@ -264,7 +266,7 @@ async fn send_link(
 	Json(body): Json<Confirm>,
 ) -> Reply<StatusCode> {
 	if !web.mail.ready() {
-		return Err(Error::bad("Mail is not set up on this server."));
+		return Err(Error::bad("Mail isn't set up on this server."));
 	}
 	let client = web.client(peer, &headers);
 	let account = body.email.trim().to_lowercase();
@@ -280,8 +282,10 @@ async fn send_link(
 	let token = web.app.create_login(user)?;
 	let base = web.url.trim_end_matches('/');
 	let link = format!("{base}/login/link/{token}");
-	let lines =
-		["The link works for 15 minutes. If you didn't ask for it, ignore this mail.".to_owned()];
+	let lines = [
+		"This link expires in 15 minutes. If you didn't ask for it, you can ignore this email."
+			.to_owned(),
+	];
 	let letter = Letter {
 		base,
 		title: "Sign in to impactite",
@@ -299,13 +303,13 @@ async fn send_link(
 		.await
 		.map_err(|err| {
 			tracing::warn!(%err, "login mail");
-			Error::new(StatusCode::BAD_GATEWAY, "The mail could not be sent.")
+			Error::new(StatusCode::BAD_GATEWAY, "The email couldn't be sent.")
 		})?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
 async fn accept_link(State(web): State<Arc<Web>>, Json(body): Json<Link>) -> Reply<Response> {
-	let expired = || Error::not_found("This link expired or was already used.");
+	let expired = || Error::not_found("This link has expired or was already used.");
 	let user = web.app.login_user(&body.token)?.ok_or_else(expired)?;
 	let totp_needed = |message: &str| {
 		(

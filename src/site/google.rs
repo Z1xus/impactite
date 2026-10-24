@@ -165,12 +165,12 @@ async fn callback(State(web): State<Arc<Web>>, Query(query): Query<Callback>) ->
 	let site = match web.take(&query.state) {
 		Some(Purpose::Google(site)) => site,
 		Some(Purpose::Analytics(site)) => return analytics_callback(&web, site, query).await,
-		_ => return Err(Error::bad("This link expired. Connect again.")),
+		_ => return Err(Error::bad("This link has expired. Try connecting again.")),
 	};
 	let domain = web
 		.app
 		.site_domain(site)?
-		.ok_or_else(|| Error::not_found("Site not found."))?;
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
 	let back = format!("/{domain}/settings/search-console");
 	let failed = format!("/{domain}/settings/search-console?google=failed");
 	let (Some(code), None, Some(client)) = (query.code, query.error, &web.google) else {
@@ -218,12 +218,12 @@ async fn disconnect(
 
 async fn keywords(State(web): State<Arc<Web>>, reader: Reader, Json(body): Json<Ask>) -> Reply {
 	if !reader.reads(&web, &body.site_id) {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let range = period(&web.stats, &body.site_id, &body.date_range, true).map_err(Error::bad)?;
 	let property = match web.app.google(range.site.id)? {
 		Some((_, property)) if !property.is_empty() => property,
-		_ => return Err(Error::not_found("Search Console is not connected.")),
+		_ => return Err(Error::not_found("Search Console isn't connected.")),
 	};
 	let mut query = json!({
 		"startDate": range.from.to_string(),
@@ -388,7 +388,7 @@ async fn connect_analytics(
 	Path(domain): Path<String>,
 ) -> Reply<Response> {
 	let (Some(site), Some(client)) = (web.app.editable(viewer.user, &domain), &web.google) else {
-		return Err(Error::forbidden("Google is not set up on this server."));
+		return Err(Error::forbidden("Google isn't set up on this server."));
 	};
 	consent(&web, client, Purpose::Analytics(site.id))
 }
@@ -397,7 +397,7 @@ async fn analytics_callback(web: &Web, site: u64, query: Callback) -> Reply<Resp
 	let domain = web
 		.app
 		.site_domain(site)?
-		.ok_or_else(|| Error::not_found("Site not found."))?;
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
 	let back = format!("/{domain}/settings/data");
 	if let (Some(code), None, Some(client)) = (query.code, query.error, &web.google)
 		&& let Some(body) = exchange(web, client, &code).await
@@ -470,7 +470,7 @@ async fn start_import(
 		.strip_prefix("properties/")
 		.is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
 	{
-		return Err(Error::bad("Pick a property."));
+		return Err(Error::bad("Choose a property."));
 	}
 	{
 		let mut imports = lock(&IMPORTS);

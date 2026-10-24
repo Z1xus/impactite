@@ -16,7 +16,7 @@
 		<NewAccount />
 	{:else}
 		<div class="flex flex-col items-center gap-4">
-			<Message>This server is invite only.</Message>
+			<Message>This server is invite-only.</Message>
 			<Button variant="quiet" href={resolve("/login")}>Sign in</Button>
 		</div>
 	{/if}

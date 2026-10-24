@@ -45,7 +45,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => funnels.remove(id), {
 			title: "Delete this funnel?",
-			body: "Its report stops showing.",
+			body: "This funnel and its report will be removed from your dashboard.",
 			action: "Delete funnel"
 		});
 </script>
@@ -105,7 +105,7 @@
 		})) ?? null}
 		source={funnels}
 		empty={goals.items && goals.items.length < 2
-			? "Add two goals to build a funnel."
+			? "Add at least two goals to build a funnel."
 			: "No funnels yet."}
 		{remove}
 	/>

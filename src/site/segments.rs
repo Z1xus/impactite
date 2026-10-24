@@ -29,7 +29,7 @@ fn access(web: &Web, user: i64, domain: &str) -> Reply<(u64, String)> {
 	let site = web.app.site(domain)?;
 	role.zip(site)
 		.map(|(role, site)| (site.id, role))
-		.ok_or_else(|| Error::not_found("Site not found."))
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))
 }
 
 async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
@@ -46,7 +46,9 @@ async fn add(
 	let (site, role) = access(&web, viewer.user, &domain)?;
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 80 || body.filters.is_empty() {
-		return Err(Error::bad("Name the segment and add a filter."));
+		return Err(Error::bad(
+			"Enter a name for this segment and add at least one filter.",
+		));
 	}
 	if body.shared && role == "viewer" {
 		return Err(Error::forbidden("Viewers can only save personal segments."));

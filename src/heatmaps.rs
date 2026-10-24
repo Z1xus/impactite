@@ -214,7 +214,7 @@ struct Ask {
 
 async fn clicks(State(web): State<Arc<Web>>, viewer: Viewer, Json(ask): Json<Ask>) -> Reply {
 	if web.app.site_role(viewer.user, &ask.site_id)?.is_none() {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let mut filters = ask.filters.clone();
 	filters.extend([
@@ -250,7 +250,7 @@ async fn clicks(State(web): State<Arc<Web>>, viewer: Viewer, Json(ask): Json<Ask
 	let site = web
 		.app
 		.site(&ask.site_id)?
-		.ok_or_else(|| Error::not_found("Site not found."))?;
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
 	let snapshot = web.app.snapshot_size(site.id, &ask.page, &ask.class)?;
 	Ok(Json(json!({ "clicks": clicks, "snapshot": snapshot })))
 }
@@ -268,12 +268,12 @@ async fn snapshot(
 	Query(which): Query<Which>,
 ) -> Reply<Response> {
 	if web.app.site_role(viewer.user, &domain)?.is_none() {
-		return Err(Error::not_found("Site not found."));
+		return Err(Error::not_found("This site doesn't exist."));
 	}
 	let site = web
 		.app
 		.site(&domain)?
-		.ok_or_else(|| Error::not_found("Site not found."))?;
+		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
 	let path = file(&web, site.id, &which.page, &which.class);
 	let packed = blocking(move || fs::read(path))
 		.await

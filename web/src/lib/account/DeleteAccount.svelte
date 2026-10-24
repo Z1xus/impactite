@@ -18,7 +18,7 @@
 <Section id="danger" label="danger" danger>
 	<Danger
 		title="Delete account"
-		body="This is permanent. You lose your account and your personal sites."
+		body="Your account and your personal sites will be deleted. You can't undo this action."
 		action="Delete account"
 		submit={destroy}
 		confirm={email}

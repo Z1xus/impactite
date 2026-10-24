@@ -158,7 +158,7 @@ async fn add(
 	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
 	let value = body.value.trim();
 	if value.is_empty() || value.len() > 300 || (body.page && !value.starts_with('/')) {
-		return Err(Error::bad("Use an event name or a path like /pricing."));
+		return Err(Error::bad("Enter an event name or a path like /pricing."));
 	}
 	let scroll = if body.page { body.scroll.min(100) } else { 0 };
 	let currency = body.currency.trim().to_uppercase();
@@ -194,7 +194,7 @@ async fn rename(
 	let Site { id: site, .. } = web.editable(viewer.user, &domain)?;
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 120 {
-		return Err(Error::bad("Name the goal."));
+		return Err(Error::bad("Enter a name for this goal."));
 	}
 	web.app
 		.rename_goal(site, id, name)

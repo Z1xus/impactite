@@ -63,7 +63,7 @@ pub(crate) fn manager(web: &Web, user: i64, team: i64) -> bool {
 
 async fn show(State(web): State<Arc<Web>>, viewer: Viewer, Path(team): Path<i64>) -> Reply {
 	if role(&web, viewer.user, team).is_none() {
-		return Err(Error::not_found("Team not found."));
+		return Err(Error::not_found("This team doesn't exist."));
 	}
 	Ok(Json(web.app.team(team, manager(&web, viewer.user, team))?))
 }
@@ -81,7 +81,7 @@ async fn rename(
 		));
 	}
 	if name.is_empty() || name.len() > 80 {
-		return Err(Error::bad("Give the team a name."));
+		return Err(Error::bad("Enter a name for this team."));
 	}
 	web.app.rename_team(team, name)?;
 	Ok(StatusCode::NO_CONTENT)
@@ -118,7 +118,7 @@ async fn set_role(
 		return Err(Error::forbidden("You can't change this role."));
 	}
 	if !ROLES[1..].contains(&body.role.as_str()) {
-		return Err(Error::bad("Pick admin, editor or viewer."));
+		return Err(Error::bad("Choose admin, editor, or viewer."));
 	}
 	web.app.set_role(team, user, &body.role)?;
 	Ok(StatusCode::NO_CONTENT)
@@ -139,7 +139,7 @@ async fn transfer(
 		));
 	}
 	if web.app.is_personal(team).unwrap_or(true) {
-		return Err(Error::bad("Your personal workspace stays yours."));
+		return Err(Error::bad("You can't hand over your personal workspace."));
 	}
 	web.app.set_role(team, body.user, "owner")?;
 	web.app.set_role(team, viewer.user, "admin")?;
@@ -263,7 +263,7 @@ async fn create_team(
 ) -> Reply {
 	let name = body.name.trim();
 	if name.is_empty() || name.len() > 80 {
-		return Err(Error::bad("Give the team a name."));
+		return Err(Error::bad("Enter a name for this team."));
 	}
 	let team = web.app.create_team(viewer.user, name, false)?;
 	Ok(Json(json!({ "id": team })))
@@ -282,13 +282,15 @@ async fn invite(
 	Json(body): Json<Invite>,
 ) -> Reply {
 	if !manager(&web, viewer.user, team) {
-		return Err(Error::forbidden("Only owners and admins can invite."));
+		return Err(Error::forbidden(
+			"Only owners and admins can invite people.",
+		));
 	}
 	if web.app.is_personal(team).unwrap_or(true) {
 		return Err(Error::bad("Create a team to invite people."));
 	}
 	if !ROLES[1..].contains(&body.role.as_str()) || !body.email.contains('@') {
-		return Err(Error::bad("Use a valid email and role."));
+		return Err(Error::bad("Enter a valid email address and choose a role."));
 	}
 	let token = web.app.invite(team, None, &body.email, &body.role)?;
 	let name = web.app.team_name(team)?;
@@ -312,7 +314,7 @@ pub async fn mail_invite(
 	let link = format!("{base}/invite/{token}");
 	let lines = [
 		format!("{inviter} invited you to {place} on impactite."),
-		"The link works for 7 days.".to_owned(),
+		"This link expires in 7 days.".to_owned(),
 	];
 	let title = format!("Join {place}");
 	let letter = Letter {
@@ -355,7 +357,7 @@ async fn invitation(State(web): State<Arc<Web>>, Path(token): Path<String>) -> R
 	))
 }
 
-const EXPIRED: &str = "This invite expired or was already used.";
+const EXPIRED: &str = "This invite has expired or was already used.";
 
 async fn accept(
 	State(web): State<Arc<Web>>,

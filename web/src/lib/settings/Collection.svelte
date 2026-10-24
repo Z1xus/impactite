@@ -34,7 +34,7 @@
 
 <Section id="collection" label="collection">
 	{#if site.skip.includes("session")}
-		<Note tone="warn">Without sessions, every pageview counts as a new visitor.</Note>
+		<Note tone="warn">Without sessions, every pageview will count as a new visitor.</Note>
 	{/if}
 	<Checks
 		bind:value={
@@ -52,7 +52,7 @@
 	/>
 	{#if keys(RECORDED).some((key) => !site.skip.includes(key))}
 		<Note>
-			Page text and typing stay hidden. To show some text, add
+			Recordings hide all page text and anything visitors type. To show some text, add
 			<code class="font-code text-fg">data-impactite-unmask</code> to it.
 		</Note>
 	{/if}

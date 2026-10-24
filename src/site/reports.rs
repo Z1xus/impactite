@@ -309,7 +309,7 @@ async fn add(
 		};
 		if !reachable {
 			return Err(Error::forbidden(
-				"This bucket is not reachable. A bucket on the local network needs an instance admin.",
+				"This bucket isn't reachable. Only a server admin can use a bucket on the local network.",
 			));
 		}
 	} else {
@@ -317,7 +317,7 @@ async fn add(
 		if !KINDS.contains(&body.kind.as_str())
 			|| (alert && !(1..=MAX_THRESHOLD).contains(&body.threshold))
 		{
-			return Err(Error::bad("Alerts need a threshold."));
+			return Err(Error::bad("Set a threshold for this alert."));
 		}
 	}
 	// starts as sent so nothing goes out right away

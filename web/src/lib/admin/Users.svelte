@@ -23,7 +23,7 @@
 			},
 			{
 				title: "Delete this user?",
-				body: "Sites only they own are deleted too.",
+				body: "Their account and any sites only they own will be deleted. You can't undo this action.",
 				action: "Delete user"
 			}
 		);

@@ -53,7 +53,11 @@
 				await api(`${path}/${key}`, undefined, "DELETE");
 				replays = replays?.filter((item) => item.key !== key) ?? null;
 			},
-			{ title: "Delete this replay?", action: "Delete replay" }
+			{
+				title: "Delete this replay?",
+				body: "You can't undo this action.",
+				action: "Delete replay"
+			}
 		);
 </script>
 
@@ -65,7 +69,7 @@
 
 	<section class="rounded-px border border-line bg-panel px-4 py-3">
 		{#if !on}
-			<Empty text="Replays are off.">
+			<Empty text="Replays are off. Turn them on to watch how visitors use your site.">
 				{#if editable}
 					<Button
 						variant="quiet"

@@ -28,7 +28,7 @@
 	const remove = (id: string | number) =>
 		attempt(() => keys.remove(id), {
 			title: "Delete this API key?",
-			body: "Anything that uses it stops working.",
+			body: "Apps and scripts that use this key will stop working. You can't undo this action.",
 			action: "Delete key"
 		});
 </script>

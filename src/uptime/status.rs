@@ -120,7 +120,7 @@ fn looked(look: Look) -> Reply<Look> {
 			|| (home.len() <= 300
 				&& url::Url::parse(&home).is_ok_and(|url| url.scheme() == "https")));
 	if !fine {
-		return Err(Error::bad("Use an https link for your website."));
+		return Err(Error::bad("Enter an https link for your website."));
 	}
 	Ok(Look { home, ..look })
 }
@@ -620,7 +620,7 @@ fn chosen(web: &Web, team: i64, monitors: Vec<i64>) -> Reply<Vec<i64>> {
 		|| monitors.len() > MONITORS
 		|| !monitors.iter().all(|id| known.contains(id))
 	{
-		return Err(Error::bad("Pick up to 50 monitors."));
+		return Err(Error::bad("You can choose up to 50 monitors."));
 	}
 	Ok(monitors)
 }
@@ -628,7 +628,7 @@ fn chosen(web: &Web, team: i64, monitors: Vec<i64>) -> Reply<Vec<i64>> {
 fn titled(name: &str) -> Reply<String> {
 	let name = name.trim();
 	if name.chars().count() > 80 {
-		return Err(Error::bad("Use a shorter title."));
+		return Err(Error::bad("This title is too long."));
 	}
 	Ok(name.to_owned())
 }
@@ -736,7 +736,7 @@ fn taken(err: rusqlite::Error) -> Error {
 		rusqlite::Error::SqliteFailure(err, _)
 			if err.code == rusqlite::ErrorCode::ConstraintViolation =>
 		{
-			Error::conflict("That address is taken.")
+			Error::conflict("This address is already in use.")
 		}
 		err => err.into(),
 	}

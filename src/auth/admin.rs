@@ -40,7 +40,7 @@ fn admin(web: &Web, user: i64, other: Option<i64>) -> Reply<()> {
 	if web.app.is_admin(user) && other != Some(user) {
 		Ok(())
 	} else {
-		Err(Error::forbidden("Only instance admins can do this."))
+		Err(Error::forbidden("Only server admins can do this."))
 	}
 }
 
@@ -58,7 +58,7 @@ async fn show(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 async fn check_update(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 	admin(&web, viewer.user, None)?;
 	crate::update::check(&web).await.map_err(|err| match err {
-		CheckError::Disabled => Error::forbidden("Update checks are disabled."),
+		CheckError::Disabled => Error::forbidden("Update checks are off."),
 		CheckError::Busy => Error::conflict("An update check is already running."),
 		CheckError::Recent => Error::new(
 			StatusCode::TOO_MANY_REQUESTS,
@@ -97,7 +97,7 @@ async fn test_mail(State(web): State<Arc<Web>>, viewer: Viewer) -> Reply {
 		.map_err(|err| Error::new(StatusCode::BAD_GATEWAY, err.to_string()))?;
 	if !web.mail.ready() {
 		return Err(Error::bad(
-			"Mail is not set up. Start the server with --mail.",
+			"Mail isn't set up. Start the server with --mail.",
 		));
 	}
 	Ok(Json(json!({ "sent": email })))

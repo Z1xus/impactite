@@ -63,7 +63,7 @@
 				{/each}
 			{/each}
 		</div>
-		<Note>Run impactite update or pull the new image, then restart.</Note>
+		<Note>To update, run impactite update or pull the new image, then restart the server.</Note>
 	{:else}
 		<ul class="-my-3 flex flex-col divide-y divide-line text-body">
 			<li class="flex items-center justify-between gap-4 py-3">
@@ -75,7 +75,7 @@
 				{#if !info.update.enabled}
 					<span class="text-dim">Off</span>
 				{:else if info.update.failed}
-					<span class="text-warn">Could not check</span>
+					<span class="text-warn">Couldn't check.</span>
 				{:else if checked !== null}
 					<span class="text-dim">
 						Up to date, checked {date(checked)} at {clock(
