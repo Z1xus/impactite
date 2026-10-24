@@ -3,6 +3,7 @@
 	import { flip } from "svelte/animate";
 	import AddPanel from "#lib/ui/AddPanel.svelte";
 	import Card from "./Card.svelte";
+	import Vitals from "./Vitals.svelte";
 	import type { createLayout } from "./layout.svelte.ts";
 	import { PANELS } from "./panels.ts";
 	import type { Context, PanelSpec } from "./types.ts";
@@ -15,6 +16,15 @@
 
 	const panels = $derived<PanelSpec[]>([
 		...PANELS,
+		{
+			id: "vitals",
+			tabs: ctx.vitals
+				? [
+						{ key: "vitals", label: "vitals" },
+						{ key: "pages", label: "pages" }
+					]
+				: []
+		},
 		{
 			id: "goals",
 			tabs: [
@@ -124,7 +134,9 @@
 			role="listitem"
 			data-panel={panel.id}
 			animate:flip={{ duration: 200 }}
-			class="min-w-0 transition-opacity duration-150 {panel.id === 'goals' && !hidden
+			class="min-w-0 transition-opacity duration-150 {['goals', 'vitals'].includes(
+				panel.id
+			) && !hidden
 				? 'md:col-span-2'
 				: ''} {dragging === panel.id ? 'opacity-40' : ''} {layout.arranging
 				? 'select-none'
@@ -138,6 +150,14 @@
 		>
 			{#if hidden}
 				<AddPanel label={panel.tabs[0].label} onclick={() => layout.show(panel.id)} />
+			{:else if panel.id === "vitals"}
+				<Vitals
+					{panel}
+					{ctx}
+					arranging={layout.arranging}
+					hide={() => layout.hide(panel.id)}
+					move={(step) => shift(panel.id, step)}
+				/>
 			{:else}
 				<Card
 					{panel}

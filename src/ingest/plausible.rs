@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{Client, Hit, Ingest};
-use crate::{net, stats};
+use crate::{net, stats, vitals};
 
 #[derive(Deserialize)]
 struct Payload {
@@ -67,9 +67,14 @@ pub async fn event(
 		return invalid("url", "is invalid");
 	}
 
-	let props = match props(payload.p.or(payload.m)) {
-		Ok(props) => props,
-		Err(field) => return invalid("props", field),
+	let raw = payload.p.or(payload.m);
+	let props = if name == vitals::EVENT {
+		vitals::props(raw.as_ref().unwrap_or(&Value::Null))
+	} else {
+		match props(raw) {
+			Ok(props) => props,
+			Err(field) => return invalid("props", field),
+		}
 	};
 	let hostname = url.host_str().unwrap_or("(none)");
 	let hostname = hostname.strip_prefix("www.").unwrap_or(hostname).to_owned();
@@ -128,6 +133,7 @@ pub async fn event(
 		});
 	let domains = payload.d.unwrap_or_else(|| hostname.clone());
 	let mut dropped = 0;
+	let mut modules = Vec::new();
 	for domain in domains
 		.split(',')
 		.map(str::trim)
@@ -138,7 +144,11 @@ pub async fn event(
 			let keyed = reported
 				.as_ref()
 				.filter(|_| stats::keyed(&ingest.app, &headers, domain));
-			ingest.track(&site, hit(), keyed.unwrap_or(&client))
+			let tracked = ingest.track(&site, hit(), keyed.unwrap_or(&client));
+			if tracked.is_ok() && name == "pageview" {
+				modules.extend(site.modules());
+			}
+			tracked
 		} else {
 			ingest.stray(domain);
 			Err(super::Rejected::Failed)
@@ -146,7 +156,14 @@ pub async fn event(
 		dropped += usize::from(tracked.is_err());
 	}
 
-	let mut response = (StatusCode::ACCEPTED, "ok").into_response();
+	modules.sort_unstable();
+	modules.dedup();
+	// the tracker loads the modules named after "ok"
+	let body = std::iter::once("ok")
+		.chain(modules)
+		.collect::<Vec<_>>()
+		.join(" ");
+	let mut response = (StatusCode::ACCEPTED, body).into_response();
 	if dropped > 0
 		&& let Ok(value) = dropped.to_string().parse()
 	{
@@ -172,7 +189,7 @@ fn props(raw: Option<Value>) -> Result<Vec<(String, String)>, &'static str> {
 			Value::Bool(value) => value.to_string(),
 			_ => continue,
 		};
-		if key.is_empty() || value.is_empty() || props.len() == 30 {
+		if key.is_empty() || key.starts_with('~') || value.is_empty() || props.len() == 30 {
 			continue;
 		}
 		if key.len() > 300 || value.len() > 2000 {

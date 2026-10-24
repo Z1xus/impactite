@@ -14,7 +14,8 @@
 		{ key: "location", label: "countries" },
 		{ key: "region", label: "regions and cities" },
 		{ key: "language", label: "languages" },
-		{ key: "session", label: "sessions" }
+		{ key: "session", label: "sessions" },
+		{ key: "vitals", label: "page speed" }
 	];
 </script>
 
@@ -27,9 +28,12 @@
 			() => COLLECTED.map((item) => item.key).filter((key) => !site.skip.includes(key)),
 			(collected) =>
 				saveSite(domain, {
-					skip: COLLECTED.map((item) => item.key).filter(
-						(key) => !collected.includes(key)
-					)
+					skip: [
+						...site.skip.filter((key) => !COLLECTED.some((item) => item.key === key)),
+						...COLLECTED.map((item) => item.key).filter(
+							(key) => !collected.includes(key)
+						)
+					]
 				})
 		}
 		options={COLLECTED}

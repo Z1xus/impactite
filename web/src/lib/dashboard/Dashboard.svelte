@@ -182,6 +182,7 @@
 			goals,
 			propKeys: propNames,
 			funnels,
+			vitals: readonly || combined || !findSite(domain)?.skip.includes("vitals"),
 			add: (dim, value) => setFilter({ op: "is", dim, values: [value] }),
 			expand: (dim, title) => (details = { dim, title })
 		}

@@ -27,11 +27,24 @@ const MODULES: [&str; 10] = [
 	"titles",
 ];
 
+// loaded by the tracker when the pageview answer names them
+const EXTRAS: [&str; 1] = ["vitals"];
+
 type Built = Arc<(Vec<u8>, Vec<u8>)>;
 
 static BUILT: LazyLock<Mutex<HashMap<Vec<&str>, Built>>> = LazyLock::new(Mutex::default);
+static BUILT_EXTRAS: LazyLock<Mutex<HashMap<&str, Built>>> = LazyLock::new(Mutex::default);
 
 pub async fn script(Path(file): Path<String>, headers: HeaderMap) -> Response {
+	if let Some(extra) = EXTRAS
+		.into_iter()
+		.find(|extra| file.strip_suffix(".js") == Some(*extra))
+	{
+		return match build_extra(extra) {
+			Some(built) => javascript(&built, &headers),
+			None => (StatusCode::NOT_FOUND, "tracker not built").into_response(),
+		};
+	}
 	let Some(flags) = file
 		.strip_prefix("script")
 		.and_then(|rest| rest.strip_suffix(".js"))
@@ -100,6 +113,16 @@ fn build(modules: Vec<&'static str>) -> Option<Built> {
 	js.extend_from_slice(b"})()");
 	let built = compress(js)?;
 	cache.insert(modules, built.clone());
+	Some(built)
+}
+
+fn build_extra(extra: &'static str) -> Option<Built> {
+	let mut cache = lock(&BUILT_EXTRAS);
+	if let Some(built) = cache.get(extra) {
+		return Some(built.clone());
+	}
+	let built = compress(Modules::get(&format!("{extra}.js"))?.data.into_owned())?;
+	cache.insert(extra, built.clone());
 	Some(built)
 }
 

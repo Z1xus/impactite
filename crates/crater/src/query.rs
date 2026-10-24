@@ -122,6 +122,11 @@ impl Matcher {
 		}
 	}
 
+	// a filter that asks for these values, not one that leaves them out
+	pub(crate) fn selects(&self, slot: Slot) -> bool {
+		self.slot == slot && !self.negate
+	}
+
 	pub(crate) fn matches(&self, id: u32) -> bool {
 		match self.min {
 			// scroll is stored as depth + 1

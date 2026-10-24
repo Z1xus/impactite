@@ -424,7 +424,7 @@ impl Db {
 		let dict = dict.read().unwrap_or_else(PoisonError::into_inner);
 		Ok(keys
 			.into_iter()
-			.filter_map(|(key, _)| dict.get(key).cloned())
+			.filter_map(|(key, _)| dict.get(key).filter(|key| !key.starts_with('~')).cloned())
 			.collect())
 	}
 
@@ -1307,13 +1307,14 @@ impl Writer {
 }
 
 fn rollup(seg: &Segment, dict: &Dict) -> Counts {
+	let names = Names::new(dict);
 	let mut counts = Counts::scan(
 		&[&seg.cols],
 		seg.visitors.len(),
 		seg.sessions.len(),
-		&Names::new(dict),
+		&names,
 		&[],
-		&Counts::rollup_slots(&[&seg.cols]),
+		&Counts::rollup_slots(&[&seg.cols], &names),
 		None,
 	);
 	counts.seq = seg.seq;

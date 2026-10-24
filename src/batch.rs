@@ -65,7 +65,11 @@ fn readable(method: &Method, path: &str) -> bool {
 		}
 		Method::POST => matches!(
 			path,
-			"/api/app/query" | "/api/app/props" | "/api/app/insights"
+			"/api/app/query"
+				| "/api/app/props"
+				| "/api/app/insights"
+				| "/api/app/vitals"
+				| "/api/app/vitals/pages"
 		),
 		_ => false,
 	}

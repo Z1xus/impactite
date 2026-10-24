@@ -23,6 +23,7 @@
 					href?: string;
 					extra?: string;
 					note?: string;
+					tone?: "warn" | "bad";
 			  }[]
 			| null;
 		loading?: boolean;
@@ -109,7 +110,11 @@
 						<Num
 							value={row.value}
 							{format}
-							class="min-w-12 text-right text-label text-dim group-hover:text-fg"
+							class="min-w-12 text-right text-label {row.tone === 'bad'
+								? 'text-bad'
+								: row.tone === 'warn'
+									? 'text-warn'
+									: 'text-dim group-hover:text-fg'}"
 						/>
 					</span>
 				</span>

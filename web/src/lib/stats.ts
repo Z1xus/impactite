@@ -71,6 +71,35 @@ export type Insights = {
 export const insights = (site: string, body: Record<string, unknown>) =>
 	api<Insights>("/api/app/insights", { site_id: site, ...body });
 
+export type Rating = "good" | "ni" | "poor";
+export type Vital = {
+	key: string;
+	samples: number;
+	p75?: number;
+	rating?: Rating;
+	shares?: number[];
+	page?: string;
+};
+
+export const VITALS = [
+	{ key: "lcp", label: "LCP", title: "Largest contentful paint" },
+	{ key: "inp", label: "INP", title: "Interaction to next paint" },
+	{ key: "cls", label: "CLS", title: "Cumulative layout shift" },
+	{ key: "fcp", label: "FCP", title: "First contentful paint" },
+	{ key: "ttfb", label: "TTFB", title: "Time to first byte" }
+];
+
+export const vitals = (site: string, body: Record<string, unknown>) =>
+	api<{ vitals: Vital[] }>("/api/app/vitals", { site_id: site, ...body });
+
+export const vitalPages = (site: string, body: Record<string, unknown>) =>
+	api<{ pages: Vital[] }>("/api/app/vitals/pages", { site_id: site, ...body });
+
+export function speed(key: string, value: number) {
+	if (key === "cls") return number(value, 2);
+	return value >= 1000 ? `${number(value / 1000, 1)} s` : `${Math.round(value)} ms`;
+}
+
 export const propKeys = (site: string, range: Range) =>
 	get<string[]>("/api/app/props", {
 		site_id: site,

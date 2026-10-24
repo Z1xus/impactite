@@ -16,6 +16,7 @@ use crate::app::{App, Site, lock};
 use crate::geo::Geo;
 use crate::net::Proxies;
 use crate::site::shields::Shields;
+use crate::vitals;
 
 const SESSION_SECS: i64 = 30 * 60;
 const SHARDS: usize = 64;
@@ -35,8 +36,27 @@ pub struct Tracked {
 	pub site: Site,
 	tz: TimeZone,
 	shields: Shields,
-	// data the site chose not to collect: referrer, agent, device, location, region, language, session
+	// data the site chose not to collect: referrer, agent, device, location, region, language,
+	// session, vitals, heatmaps, replays
 	skip: HashSet<String>,
+}
+
+impl Tracked {
+	// tracker modules the pageview answer asks for
+	pub fn modules(&self) -> Vec<&'static str> {
+		[("vitals", "vitals")]
+			.into_iter()
+			.filter(|(collected, _)| !self.skip.contains(*collected))
+			.map(|(_, module)| module)
+			.collect()
+	}
+
+	fn collects(&self, name: &str) -> bool {
+		match name {
+			vitals::EVENT => !self.skip.contains("vitals"),
+			_ => !name.starts_with('~'),
+		}
+	}
 }
 
 pub struct Hit {
@@ -74,6 +94,8 @@ pub enum Rejected {
 struct Session {
 	id: u64,
 	last: i64,
+	// the last page viewed, so the next pageview knows where it came from
+	page: String,
 }
 
 type Shard = Mutex<HashMap<(u64, u64), Session>>;
@@ -183,22 +205,24 @@ impl Ingest {
 		if ua::is_bot(client.ua) {
 			return Err(Rejected::Bot);
 		}
+		if !site.collects(&hit.name) {
+			return Err(Rejected::Blocked);
+		}
 		let now = hit.at.unwrap_or_else(Timestamp::now);
 		let ts = now.as_second();
 		let offset = site.tz.to_offset(now).seconds();
 		let day = (ts + i64::from(offset)).div_euclid(86_400) as i32;
-		let (visitor, session) = if site.skip.contains("session") {
+		let (visitor, session, from) = if site.skip.contains("session") {
 			let mut id = [0; 8];
 			getrandom::fill(&mut id).map_err(|_| Rejected::Failed)?;
 			let id = u64::from_le_bytes(id);
-			(id, id)
+			(id, id, None)
 		} else {
 			let visitor = self.visitor(site, day, client)?;
 			let previous = self.visitor(site, day - 1, client)?;
-			(
-				visitor,
-				self.session(site.site.id, visitor, previous, ts, &hit.name)?,
-			)
+			let (session, from) =
+				self.session(site.site.id, visitor, previous, ts, &hit.name, &hit.path)?;
+			(visitor, session, from)
 		};
 
 		let param = |key: &str| {
@@ -290,6 +314,7 @@ impl Ingest {
 			.props
 			.into_iter()
 			.filter(|(key, _)| site.shields.keeps(key))
+			.chain(from.map(|page| ("~from".to_owned(), page)))
 			.collect();
 
 		self.db
@@ -370,6 +395,7 @@ impl Ingest {
 		Ok(salt)
 	}
 
+	// the session id, and for a pageview the page viewed before it in that session
 	fn session(
 		&self,
 		site: u64,
@@ -377,21 +403,30 @@ impl Ingest {
 		previous: u64,
 		ts: i64,
 		name: &str,
-	) -> Result<u64, Rejected> {
+		path: &str,
+	) -> Result<(u64, Option<String>), Rejected> {
 		let shard = |visitor: u64| &self.sessions[(visitor % SHARDS as u64) as usize];
 		let live = |visitor: u64| {
 			lock(shard(visitor))
 				.get(&(site, visitor))
 				.filter(|session| ts - session.last <= SESSION_SECS)
-				.map(|session| session.id)
+				.map(|session| (session.id, session.page.clone()))
 		};
-		let id = match live(visitor).or_else(|| live(previous)) {
-			Some(id) => id,
-			None if name == "engagement" => return Err(Rejected::NoSession),
-			None => getrandom::u64().map_err(|_| Rejected::Failed)?,
+		let (id, page) = match live(visitor).or_else(|| live(previous)) {
+			Some(live) => live,
+			None if name == "engagement" || name.starts_with('~') => {
+				return Err(Rejected::NoSession);
+			}
+			None => (
+				getrandom::u64().map_err(|_| Rejected::Failed)?,
+				String::new(),
+			),
 		};
-		lock(shard(visitor)).insert((site, visitor), Session { id, last: ts });
-		Ok(id)
+		let viewed = name == "pageview";
+		let from = (viewed && !page.is_empty() && page != path).then(|| page.clone());
+		let page = if viewed { path.to_owned() } else { page };
+		lock(shard(visitor)).insert((site, visitor), Session { id, last: ts, page });
+		Ok((id, from))
 	}
 }
 

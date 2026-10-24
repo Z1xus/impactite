@@ -4,9 +4,11 @@ use std::thread;
 use crater::{Db, Dim, Event};
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
+use serde_json::{Value, json};
 
 use crate::app::App;
 use crate::ingest::referrer;
+use crate::vitals;
 
 const SOURCES: &[(&str, &str, u32)] = &[
 	("https://www.google.com/", "", 38),
@@ -221,13 +223,18 @@ fn generate(site: u64, domain: &str, timezone: &str, day: i64) -> Vec<Event> {
 			_ => rng.pick(PAGES, |p| p.1).0,
 		};
 
+		let mut previous = "";
 		for n in 0..pages {
 			let page = if n == 0 {
 				entry
 			} else {
 				rng.pick(PAGES, |p| p.1).0
 			};
-			let mut names = vec![("pageview", page), ("engagement", page)];
+			let mut names = vec![
+				("pageview", page),
+				("engagement", page),
+				(vitals::EVENT, page),
+			];
 			if page == "/pricing" && rng.unit() < 0.18 {
 				names.push(("Signup", page));
 			}
@@ -259,6 +266,13 @@ fn generate(site: u64, domain: &str, timezone: &str, day: i64) -> Vec<Event> {
 				] {
 					event.dims[dim] = value.to_owned();
 				}
+				if name == "pageview" && !previous.is_empty() && previous != page {
+					event.props = vec![("~from".into(), previous.into())];
+				}
+				if name == vitals::EVENT {
+					event.interactive = false;
+					event.props = vitals::props(&measured(&mut rng, page, device));
+				}
 				if name == "engagement" {
 					event.interactive = false;
 					event.engagement_ms = 2_000 + rng.below(90_000) as u32;
@@ -276,8 +290,28 @@ fn generate(site: u64, domain: &str, timezone: &str, day: i64) -> Vec<Event> {
 				events.push(event);
 				time += 4 + rng.below(40) as i64;
 			}
+			previous = page;
 			time += 15 + rng.below(160) as i64;
 		}
 	}
 	events
+}
+
+// page speed that differs by page and device, with a long tail like real visits
+fn measured(rng: &mut Rng, page: &str, device: &str) -> Value {
+	let heavy = match page {
+		"/" => 1.3,
+		"/blog/crater" | "/blog/dithering" => 1.9,
+		"/pricing" => 1.1,
+		_ => 0.8,
+	};
+	let slow = if device == "Mobile" { 1.7 } else { 1.0 } * heavy;
+	let mut tail = || (-(1.0 - rng.unit()).ln() * 0.35).exp();
+	json!({
+		"ttfb": 140.0 * slow * tail(),
+		"fcp": 520.0 * slow * tail(),
+		"lcp": 950.0 * slow * tail(),
+		"inp": 48.0 * slow * tail(),
+		"cls": if page.starts_with("/blog") { 0.05 * tail() } else { 0.01 * tail() },
+	})
 }

@@ -483,7 +483,7 @@ pub(crate) fn goatcounter(
 	let mut failed = None;
 	db.events(site.id, day_number(from)..=day_number(to), |event| {
 		let name = &event.dims[Dim::Name];
-		if name == "engagement" {
+		if name == "engagement" || name.starts_with('~') {
 			return;
 		}
 		let custom = name != "pageview";

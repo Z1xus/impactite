@@ -178,6 +178,39 @@ fn seals_past_days() {
 }
 
 #[test]
+fn internal_events_count_only_when_named() {
+	let dir = TempDir::new("internal").unwrap();
+	let db = Db::open(&dir.0).unwrap();
+	let mut events = day();
+	let mut vitals = event(4, 30, 10_950, "~vitals", "/b", "");
+	vitals.interactive = false;
+	vitals.props.push(("~lcp".into(), "1200".into()));
+	events.push(vitals);
+	for event in events {
+		db.insert(Box::new(event)).unwrap();
+	}
+	db.sync().unwrap();
+
+	let report = query(&db, Vec::new(), Some(Field::Dim(Dim::Name))).unwrap();
+	assert_eq!(core(report.total), metrics(3, 4, 5, 6, 2, 300));
+	assert_eq!(row(&report, "~vitals"), None);
+	assert!(
+		db.prop_keys(SITE, DAY..=DAY)
+			.unwrap()
+			.iter()
+			.all(|key| !key.starts_with('~'))
+	);
+
+	let named = vec![filter(Dim::Name, Op::Is, "~vitals")];
+	let report = query(&db, named, Some(Field::Prop("~lcp".into()))).unwrap();
+	assert_eq!(row(&report, "1200").map(|metrics| metrics.events), Some(1));
+	let others = vec![filter(Dim::Name, Op::IsNot, "pageview")];
+	let report = query(&db, others, Some(Field::Dim(Dim::Name))).unwrap();
+	assert_eq!(row(&report, "~vitals"), None);
+	db.close().unwrap();
+}
+
+#[test]
 fn filters() {
 	let dir = TempDir::new("filters").unwrap();
 	let db = Db::open(&dir.0).unwrap();

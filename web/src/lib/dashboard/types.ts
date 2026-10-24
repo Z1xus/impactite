@@ -26,6 +26,7 @@ export type Context = {
 	goals: string[];
 	propKeys: string[];
 	funnels: Funnel[];
+	vitals: boolean;
 	add: (dim: string, value: string) => void;
 	expand: (dim: string, title: string) => void;
 };

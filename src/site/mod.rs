@@ -130,8 +130,9 @@ async fn update(
 		web.app.set_retention(site.id, days)?;
 	}
 	if let Some(skip) = &body.skip {
-		const KNOWN: [&str; 7] = [
-			"referrer", "agent", "device", "location", "region", "language", "session",
+		const KNOWN: [&str; 10] = [
+			"referrer", "agent", "device", "location", "region", "language", "session", "vitals",
+			"heatmaps", "replays",
 		];
 		let skip: Vec<&str> = KNOWN
 			.into_iter()

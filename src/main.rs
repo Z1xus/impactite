@@ -28,6 +28,7 @@ mod stats;
 mod tracker;
 mod update;
 mod uptime;
+mod vitals;
 mod web;
 
 use std::fs;

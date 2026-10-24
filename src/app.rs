@@ -331,6 +331,7 @@ const MIGRATIONS: &[&str] = &[
 		created_at integer not null
 	);
 	",
+	"update sites set skip = trim(skip || ',heatmaps,replays', ',');",
 ];
 
 pub(crate) const HOME_MONITOR: &str = "
@@ -393,7 +394,7 @@ impl App {
 	) -> rusqlite::Result<Site> {
 		let conn = self.conn();
 		conn.execute(
-			"insert into sites (domain, timezone, team, created_at) values (?1, ?2, ?3, unixepoch())",
+			"insert into sites (domain, timezone, team, skip, created_at) values (?1, ?2, ?3, 'heatmaps,replays', unixepoch())",
 			params![domain, timezone, team],
 		)?;
 		let id = conn.last_insert_rowid();

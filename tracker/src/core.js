@@ -46,7 +46,22 @@ t.send = (name, o = {}) => {
 			...t.extra,
 		}),
 	}).then(
-		(response) => done({ status: response.status }),
+		(response) => {
+			// the first pageview answer names the modules this site turned on
+			if (name == "pageview" && !t.loaded) {
+				t.loaded = 1;
+				w.impactite = t;
+				response.text().then((body) => {
+					for (const module of body.split(" ").slice(1))
+						d.head.append(
+							Object.assign(d.createElement("script"), {
+								src: new URL(module + ".js", s.src),
+							}),
+						);
+				});
+			}
+			done({ status: response.status });
+		},
 		(error) => done({ error }),
 	);
 };

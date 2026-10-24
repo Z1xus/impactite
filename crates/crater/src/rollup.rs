@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
@@ -120,6 +120,8 @@ impl Metrics {
 pub(crate) struct Names {
 	pageview: Option<u32>,
 	engagement: Option<u32>,
+	// names and prop keys starting with `~` belong to impactite, a query only sees them by name
+	internal: HashSet<u32>,
 }
 
 impl Names {
@@ -127,6 +129,7 @@ impl Names {
 		Self {
 			pageview: dict.find("pageview"),
 			engagement: dict.find("engagement"),
+			internal: dict.matching(|s| s.starts_with('~')),
 		}
 	}
 }
@@ -215,6 +218,11 @@ impl<'a> Scan<'a> {
 		self.name(p, row) == self.names.engagement
 	}
 
+	fn is_internal(&self, p: usize, row: usize) -> bool {
+		self.name(p, row)
+			.is_some_and(|name| self.names.internal.contains(&name))
+	}
+
 	fn prop(&self, p: usize, row: usize, key: u32) -> u32 {
 		let part = self.parts[p];
 		let Some(&start) = self.offsets[p].get(row) else {
@@ -259,10 +267,10 @@ impl Counts {
 		}
 	}
 
-	pub(crate) fn rollup_slots(parts: &[&Columns]) -> Vec<Slot> {
+	pub(crate) fn rollup_slots(parts: &[&Columns], names: &Names) -> Vec<Slot> {
 		let mut keys: HashMap<u32, usize> = HashMap::new();
 		for part in parts {
-			for key in part.keys.iter() {
+			for key in part.keys.iter().filter(|key| !names.internal.contains(key)) {
 				*keys.entry(key).or_default() += 1;
 			}
 		}
@@ -317,7 +325,7 @@ impl Counts {
 			visit.visitor = part.visitor.get(row);
 			visit.start = visit.start.min(time);
 			visit.end = visit.end.max(time);
-			if scan.is_engagement(p, row) {
+			if scan.is_engagement(p, row) || scan.is_internal(p, row) {
 				continue;
 			}
 			if visit.first.is_none_or(|(_, _, first)| time < first) {
@@ -345,9 +353,13 @@ impl Counts {
 
 		// a scroll filter can only match engagement events, which carry the depth
 		let scrolling = event_filters.iter().any(|m| m.slot == Slot::Scroll);
+		let named = event_filters
+			.iter()
+			.any(|m| m.selects(Slot::Dim(Dim::Name)));
 		let is_hit = |visits: &[Visit], p: usize, row: usize| {
 			visits[parts[p].session.get(row) as usize].selected
 				&& scan.is_engagement(p, row) == scrolling
+				&& (named || !scan.is_internal(p, row))
 				&& event_filters
 					.iter()
 					.all(|m| m.matches(scan.event_value(m.slot, p, row)))
@@ -635,6 +647,7 @@ pub(crate) fn funnel(
 	let matches = |matchers: &[Matcher], p: usize, row: usize| {
 		let scrolling = matchers.iter().any(|m| m.slot == Slot::Scroll);
 		scan.is_engagement(p, row) == scrolling
+			&& !scan.is_internal(p, row)
 			&& matchers
 				.iter()
 				.all(|m| m.matches(scan.event_value(m.slot, p, row)))
@@ -643,7 +656,7 @@ pub(crate) fn funnel(
 	for session in rows.chunk_by(|a, b| a.0 == b.0) {
 		let first = session
 			.iter()
-			.find(|&&(_, _, p, row)| !scan.is_engagement(p, row));
+			.find(|&&(_, _, p, row)| !scan.is_engagement(p, row) && !scan.is_internal(p, row));
 		let Some(&(_, _, p, row)) = first else {
 			continue;
 		};

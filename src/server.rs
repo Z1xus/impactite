@@ -23,6 +23,7 @@ use crate::site::{
 use crate::stats::{self, Stats};
 use crate::tracker;
 use crate::uptime;
+use crate::vitals;
 use crate::web::Web;
 
 pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
@@ -70,6 +71,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(titles::routes())
 				.merge(notes::routes())
 				.merge(insights::routes())
+				.merge(vitals::routes())
 				.merge(google::routes())
 				.merge(totp::routes())
 				.merge(sso::routes())
