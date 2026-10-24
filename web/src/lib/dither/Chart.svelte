@@ -2,7 +2,7 @@
 	import { untrack } from "svelte";
 	import { theme } from "#lib/theme.svelte.ts";
 	import { css } from "./bayer";
-	import { chart, COLORS, sample, smooth, type Band } from "./chart.ts";
+	import { chart, COLORS, sample, smooth, type Band, type Mark } from "./chart.ts";
 	import { paint } from "./pixels.ts";
 	import Pixels from "./Pixels.svelte";
 
@@ -15,7 +15,9 @@
 		height = 220,
 		cell = 2,
 		axes = true,
-		bands = []
+		bands = [],
+		marks = [],
+		mark
 	}: {
 		values: number[];
 		previous?: number[];
@@ -27,6 +29,9 @@
 		cell?: number;
 		axes?: boolean;
 		bands?: Band[];
+		marks?: Mark[];
+		// clicking a point with a mouse, like adding a note there
+		mark?: { label: string; pick: (at: number) => void };
 	} = $props();
 
 	let canvas: HTMLCanvasElement;
@@ -103,7 +108,7 @@
 			canvas.width = Math.round(width * devicePixelRatio);
 			canvas.height = Math.round(height * devicePixelRatio);
 			ctx.scale(devicePixelRatio, devicePixelRatio);
-			smooth(ctx, width, height, peak, axes, shown, shownPrevious, hover, at, bands);
+			smooth(ctx, width, height, peak, axes, shown, shownPrevious, hover, at, bands, marks);
 			ready = true;
 			return;
 		}
@@ -117,7 +122,7 @@
 		});
 		paint(
 			ctx,
-			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at, bands),
+			chart(columns, rows, peak, axes, shown, shownPrevious, hover, at, bands, marks),
 			columns,
 			palette
 		);
@@ -177,6 +182,7 @@
 		void width;
 		void hover;
 		void bands;
+		void marks;
 		void theme.shown;
 		void theme.style;
 		draw();
@@ -199,6 +205,7 @@
 	const banded = $derived(
 		bands.find((band) => (hover ?? -1) >= band.from && (hover ?? -1) <= band.to)
 	);
+	const marked = $derived(marks.filter((item) => item.at === hover));
 	const tipLeft = $derived(hover === null ? 0 : (hover / Math.max(1, values.length - 1)) * width);
 </script>
 
@@ -230,6 +237,12 @@
 			onpointerdown={move}
 			onpointermove={move}
 			onpointerleave={(event) => event.pointerType === "mouse" && (hover = null)}
+			onpointerup={(event) =>
+				mark &&
+				event.pointerType === "mouse" &&
+				event.button === 0 &&
+				hover !== null &&
+				mark.pick(hover)}
 			role="img"
 			aria-label="chart"
 		>
@@ -272,6 +285,20 @@
 					{#if previous.length}
 						<span class="num text-label text-faint">{format(previous[hover] ?? 0)}</span
 						>
+					{/if}
+					{#each marked as item, i (i)}
+						{#each item.lines as line, j (j)}
+							<span
+								class="max-w-64 truncate text-small {item.tone === 'spike'
+									? 'text-cyan'
+									: j
+										? 'text-dim'
+										: 'text-fg'}">{line}</span
+							>
+						{/each}
+					{/each}
+					{#if mark}
+						<span class="label text-faint pointer-coarse:hidden">{mark.label}</span>
 					{/if}
 				</div>
 			{/if}

@@ -4,7 +4,7 @@ use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::routing::{delete, get, put};
+use axum::routing::{delete, get, post, put};
 use jiff::tz::TimeZone;
 use rusqlite::params;
 use serde_json::{Value, json};
@@ -13,6 +13,7 @@ use super::{Call, Fail, broken, reply};
 use crate::app::{App, Site, token};
 use crate::auth::teams;
 use crate::site::goals::Goal;
+use crate::site::notes;
 use crate::site::{clean_domain, drop_site};
 use crate::web::Web;
 
@@ -26,6 +27,7 @@ pub fn routes() -> Router<Arc<Web>> {
 		.route("/api/v1/sites/shared-links", put(share))
 		.route("/api/v1/sites/custom-props", put(add_prop))
 		.route("/api/v1/sites/custom-props/{property}", delete(remove_prop))
+		.route("/api/v1/sites/notes", post(add_note))
 		.route(
 			"/api/v1/sites/{site_id}",
 			get(show).put(update).delete(destroy),
@@ -171,6 +173,23 @@ async fn goals(State(web): State<Arc<Web>>, call: Call) -> Response {
 			"goals": goals.iter().map(|goal| goal_json(&site.domain, goal)).collect::<Vec<_>>(),
 			"meta": { "after": null, "before": null, "limit": goals.len().max(100) },
 		}))
+	})())
+}
+
+async fn add_note(State(web): State<Arc<Web>>, call: Call) -> Response {
+	reply((|| {
+		let site = call.site(&web, call.param("site_id")?, 1)?;
+		let today = jiff::Timestamp::now()
+			.to_zoned(TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC))
+			.date()
+			.to_string();
+		let (day, text) = notes::checked(call.param("date").unwrap_or(&today), call.param("text")?)
+			.map_err(|message| (StatusCode::BAD_REQUEST, message.to_owned()))?;
+		let id = web
+			.app
+			.add_site_note(site.id, &day, &text)
+			.map_err(broken)?;
+		Ok(json!({ "id": id, "date": day, "text": text }))
 	})())
 }
 

@@ -28,7 +28,8 @@
 	import Grid from "./Grid.svelte";
 	import { createLayout } from "./layout.svelte.ts";
 	import Overview from "./Overview.svelte";
-	import type { Context, Funnel } from "./types.ts";
+	import type { Context, Funnel, Note } from "./types.ts";
+	import Notes from "./Notes.svelte";
 	import Details from "./Details.svelte";
 	import FilterDialog from "./FilterDialog.svelte";
 	import NewEvents from "#lib/settings/NewEvents.svelte";
@@ -124,6 +125,8 @@
 	let funnels = $state.raw<Funnel[]>([]);
 	let titles = $state.raw<Record<string, string>>({});
 	let propNames = $state.raw<string[]>([]);
+	let notes = $state.raw<Note[]>([]);
+	let noting = $state<string | null>(null);
 
 	function navigate(change: (params: URLSearchParams) => void) {
 		const params = new URLSearchParams(page.url.search);
@@ -232,6 +235,9 @@
 		get<{ funnels: Funnel[] }>(`/api/app/sites/${domain}/funnels`)
 			.then((result) => (funnels = result.funnels))
 			.catch(() => (funnels = []));
+		get<{ notes: Note[] }>(`/api/app/sites/${domain}/notes`)
+			.then((result) => (notes = result.notes))
+			.catch(() => (notes = []));
 		untrack(loadGoals);
 	});
 
@@ -269,6 +275,20 @@
 			apply={setFilter}
 			remove={removeFilter}
 		/>
+	{/if}
+</Dialog>
+
+<Dialog
+	title="notes"
+	bind:open={
+		() => noting !== null,
+		(open) => {
+			if (!open) noting = null;
+		}
+	}
+>
+	{#if noting !== null}
+		<Notes {domain} bind:notes day={noting} {editable} />
 	{/if}
 </Dialog>
 
@@ -379,6 +399,14 @@
 										label: "Edit layout",
 										onclick: () => (layout.arranging = true)
 									},
+									...(combined
+										? []
+										: [
+												{
+													label: "Notes",
+													onclick: () => (noting = view.today)
+												}
+											]),
 									...(hasImports
 										? [
 												{
@@ -441,6 +469,8 @@
 			metric={realtime ? "pageviews" : metric}
 			{realtime}
 			incidents={uptime.value?.incidents}
+			notes={combined ? [] : notes}
+			note={editable && !combined ? (day) => (noting = day) : undefined}
 			table={layout.table}
 			found={(has) => (hasImports = has)}
 			pick={(next) => navigate((params) => params.set("metric", next))}

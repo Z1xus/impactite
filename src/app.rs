@@ -322,6 +322,15 @@ const MIGRATIONS: &[&str] = &[
 	alter table alerts add column failure text not null default '';
 	",
 	"alter table status_pages add column look text not null default '{}';",
+	"
+	create table notes (
+		id integer primary key,
+		site integer not null references sites (id) on delete cascade,
+		day text not null,
+		text text not null,
+		created_at integer not null
+	);
+	",
 ];
 
 pub(crate) const HOME_MONITOR: &str = "
@@ -331,8 +340,9 @@ pub(crate) const HOME_MONITOR: &str = "
 	where (?1 = 0 or id = ?1) and team is not null and domain not like '~%' and domain != 'localhost'
 	and not exists (select 1 from monitors where monitors.site = sites.id)";
 
-const SITE_TABLES: [&str; 14] = [
+const SITE_TABLES: [&str; 15] = [
 	"monitors",
+	"notes",
 	"goals",
 	"imports",
 	"salts",

@@ -13,6 +13,7 @@ export const COLORS = [
 const [LINE, DEEP, NIGHT, GRID, FAINT, FG, BAD] = COLORS.map((_, i) => i + 1);
 
 export type Band = { from: number; to: number; label?: string; notes?: string[] };
+export type Mark = { at: number; tone: "note" | "spike"; lines: string[] };
 
 const edge = (index: number, count: number, columns: number) =>
 	Math.round((index / Math.max(1, count - 1)) * (columns - 1));
@@ -34,7 +35,8 @@ export function chart(
 	previous: number[],
 	hover: number | null = null,
 	at = (x: number, width: number) => sample(values, x, width),
-	bands: Band[] = []
+	bands: Band[] = [],
+	marks: Mark[] = []
 ) {
 	const ticks = [peak, peak / 2, 0];
 	const data = new Uint8Array(columns * rows);
@@ -74,6 +76,13 @@ export function chart(
 		for (let x = 0; x < columns; x += 2) put(x, top(sample(previous, x, columns)), FAINT);
 	}
 
+	for (const mark of marks) {
+		const x = edge(mark.at, values.length, columns);
+		if (mark.tone === "note") for (let y = 4; y < rows; y += 3) put(x, y, FAINT);
+		for (let dx = -1; dx <= 1; dx++)
+			for (let dy = 0; dy < 3; dy++) put(x + dx, dy, mark.tone === "note" ? FG : LINE);
+	}
+
 	if (hover !== null && values.length) {
 		const x = Math.round((hover / Math.max(1, values.length - 1)) * (columns - 1));
 		for (let y = 0; y < rows; y += 2) put(x, y, FAINT);
@@ -94,7 +103,8 @@ export function smooth(
 	previous: number[],
 	hover: number | null,
 	at: (x: number, width: number) => number,
-	bands: Band[] = []
+	bands: Band[] = [],
+	marks: Mark[] = []
 ) {
 	const [cyan, grid, faint, fg, panel, bad] = [
 		"--color-cyan",
@@ -150,6 +160,20 @@ export function smooth(
 	if (previous.length) {
 		trace((x) => sample(previous, x, width));
 		ctx.stroke();
+	}
+
+	for (const mark of marks) {
+		const x = Math.round(edge(mark.at, values.length, width)) + 0.5;
+		if (mark.tone === "note") {
+			ctx.beginPath();
+			ctx.moveTo(x, 8);
+			ctx.lineTo(x, height);
+			ctx.stroke();
+		}
+		ctx.beginPath();
+		ctx.arc(x, 4, 3, 0, Math.PI * 2);
+		ctx.fillStyle = mark.tone === "note" ? fg : cyan;
+		ctx.fill();
 	}
 
 	if (hover !== null && values.length) {

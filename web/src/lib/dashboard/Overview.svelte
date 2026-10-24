@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import Chart from "#lib/dither/Chart.svelte";
-	import type { Band } from "#lib/dither/chart.ts";
+	import type { Band, Mark } from "#lib/dither/chart.ts";
 	import { clock } from "#lib/display.svelte.ts";
 	import { METRICS, cached, format, toQueryFilters, type Metric } from "#lib/stats.ts";
 	import Empty from "#lib/ui/Empty.svelte";
@@ -11,13 +11,15 @@
 	import Toggle from "#lib/ui/Toggle.svelte";
 	import { local, missed, span } from "#lib/uptime/format.ts";
 	import type { SiteIncident } from "#lib/uptime/site.svelte.ts";
-	import type { Context } from "./types.ts";
+	import type { Context, Note } from "./types.ts";
 
 	let {
 		ctx,
 		metric,
 		realtime,
 		incidents = [],
+		notes = [],
+		note,
 		table,
 		found,
 		pick,
@@ -28,6 +30,8 @@
 		metric: Metric;
 		realtime: boolean;
 		incidents?: SiteIncident[];
+		notes?: Note[];
+		note?: (day: string) => void;
 		table: boolean;
 		found: (hasImports: boolean) => void;
 		pick: (metric: Metric) => void;
@@ -97,6 +101,30 @@
 				}
 			];
 		});
+	});
+
+	const hourly = $derived(ctx.dates.grain === "time:hour" || ctx.dates.grain === "time:minute");
+	// a note sits on the bucket its day falls in, or the first hour of that day
+	const place = (keys: string[], day: string) =>
+		hourly
+			? keys.findIndex((key) => key.startsWith(day))
+			: day > keys[keys.length - 1] || day < keys[0].slice(0, 10)
+				? -1
+				: keys.findLastIndex((key) => key.slice(0, 10) <= day);
+
+	const marks = $derived.by((): Mark[] => {
+		const keys = lines.map((line) => line.key);
+		if (!keys.length) return [];
+		const placed: Record<number, string[]> = {};
+		for (const item of notes) {
+			const at = place(keys, item.day);
+			if (at >= 0) (placed[at] ??= []).push(item.text);
+		}
+		return Object.entries(placed).map(([at, lines]) => ({
+			at: Number(at),
+			tone: "note",
+			lines
+		}));
 	});
 
 	const key = $derived(
@@ -239,6 +267,11 @@
 					{labels}
 					keys={lines.map((line) => line.key)}
 					{bands}
+					{marks}
+					mark={note && {
+						label: "click to add a note",
+						pick: (at) => note(lines[at].key.slice(0, 10))
+					}}
 					format={(value) => format(metric, value)}
 				/>
 			{/if}

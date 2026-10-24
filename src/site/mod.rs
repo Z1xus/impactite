@@ -2,6 +2,7 @@ pub mod counter;
 pub mod funnels;
 pub mod goals;
 pub mod google;
+pub mod notes;
 pub mod reports;
 pub mod segments;
 pub mod shares;
