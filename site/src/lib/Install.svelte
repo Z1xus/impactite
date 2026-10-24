@@ -3,11 +3,9 @@
 	import Field from "#lib/ui/Field.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
 
-	let { repo }: { repo: string } = $props();
-
 	// everything stays in the browser, secrets are placeholders to fill in later
 	let host = $state("");
-	let run = $state<"binary" | "docker" | "podman" | "compose">("docker");
+	let run = $state<"binary" | "docker" | "podman" | "compose">("binary");
 	let https = $state<"built-in" | "proxy" | "tunnel">("built-in");
 	let mail = $state<"none" | "smtp" | "resend" | "cloudflare">("none");
 
@@ -31,13 +29,15 @@
 
 	const command = $derived.by(() => {
 		if (run === "binary") {
-			const env = mailUrl ? `IMPACTITE_MAIL=${mailUrl} ` : "";
+			const proxy = https === "built-in" ? "" : " --proxy";
 			return [
-				`curl -L ${repo}/releases/latest/download/impactite-x86_64-unknown-linux-musl.tar.gz | tar xz --strip-components=1`,
-				...(https === "built-in"
-					? ["sudo setcap cap_net_bind_service=+ep ./impactite"]
+				`curl -fsSL https://impactite.dev/install | sh -s -- --url ${url}${proxy}`,
+				...(mailUrl
+					? [
+							`echo IMPACTITE_MAIL=${mailUrl} | sudo tee -a /etc/impactite/env`,
+							"sudo systemctl restart impactite"
+						]
 					: []),
-				`${env}./impactite serve --url ${url}${acme}`,
 				...(https === "tunnel"
 					? [
 							`# route the tunnel to http://localhost:8000 in cloudflare`,
@@ -158,10 +158,10 @@
 			label="run as"
 			bind:value={run}
 			options={[
+				{ key: "binary", label: "binary" },
 				{ key: "docker", label: "docker" },
 				{ key: "podman", label: "podman" },
-				{ key: "compose", label: "compose" },
-				{ key: "binary", label: "binary" }
+				{ key: "compose", label: "compose" }
 			]}
 		/>
 		<Toggle

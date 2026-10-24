@@ -10,12 +10,10 @@ The dashboard, the tracker and the storage engine ([crater](crates/crater)) are 
 
 ## Install
 
-Grab the binary from the [releases page](https://github.com/Z1xus/impactite/releases):
+On any Linux server with systemd:
 
 ```sh
-curl -L https://github.com/Z1xus/impactite/releases/latest/download/impactite-x86_64-unknown-linux-musl.tar.gz | tar xz --strip-components=1
-sudo setcap cap_net_bind_service=+ep ./impactite
-./impactite serve --url https://stats.example.com --acme
+curl -fsSL https://impactite.dev/install | sh
 ```
 
 Or use Docker:

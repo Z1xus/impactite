@@ -1,0 +1,127 @@
+#!/bin/sh
+set -eu
+
+REPO=https://github.com/z1xus/impactite
+BIN=/usr/local/bin/impactite
+UNIT=/etc/systemd/system/impactite.service
+CONFIG=/etc/impactite
+DATA=/var/lib/impactite
+
+say() { printf '\033[36m%s\033[0m %s\n' "impactite" "$*"; }
+fail() { printf '\033[31m%s\033[0m %s\n' "impactite" "$*" >&2; exit 1; }
+ask() {
+	[ -r /dev/tty ] || fail "$2"
+	printf '%s ' "$1" >/dev/tty
+	read -r answer </dev/tty
+	printf '%s' "$answer"
+}
+
+action=install url="" proxy="" purge=""
+while [ $# -gt 0 ]; do
+	case $1 in
+	uninstall) action=uninstall ;;
+	--url) url=${2:-}; shift ;;
+	--proxy) proxy=1 ;;
+	--purge) purge=1 ;;
+	*) fail "unknown option $1" ;;
+	esac
+	shift
+done
+
+sudo=""
+[ "$(id -u)" -eq 0 ] || sudo=sudo
+command -v systemctl >/dev/null || fail "needs systemd"
+
+if [ $action = uninstall ]; then
+	$sudo systemctl disable --now impactite 2>/dev/null || true
+	$sudo rm -f "$UNIT" "$BIN"
+	$sudo systemctl daemon-reload
+	if [ -n "$purge" ]; then
+		$sudo rm -rf "$CONFIG" "$DATA"
+		$sudo userdel impactite 2>/dev/null || true
+		say "removed"
+	else
+		say "removed, data kept in $DATA"
+	fi
+	exit
+fi
+
+case $(uname -m) in
+x86_64 | amd64) arch=x86_64 ;;
+aarch64 | arm64) arch=aarch64 ;;
+*) fail "no build for $(uname -m)" ;;
+esac
+
+if [ -z "$url" ] && ! $sudo test -f "$CONFIG/env"; then
+	url=$(ask "address:" "needs --url")
+	[ -n "$url" ] || fail "needs an address"
+	case $(ask "behind your own proxy? [y/N]" "") in
+	y* | Y*) proxy=1 ;;
+	esac
+fi
+if [ -n "$url" ]; then
+	url=https://$(printf '%s' "$url" | sed -e 's#^https\{0,1\}://##' -e 's#/.*$##')
+	$sudo mkdir -p "$CONFIG"
+	if [ -n "$proxy" ]; then
+		printf 'IMPACTITE_URL=%s\nIMPACTITE_LISTEN=127.0.0.1:8000\n' "$url"
+	else
+		printf 'IMPACTITE_URL=%s\nIMPACTITE_ACME=true\n' "$url"
+	fi | $sudo tee "$CONFIG/env" >/dev/null
+	$sudo chmod 600 "$CONFIG/env"
+fi
+url=$($sudo sed -n 's/^IMPACTITE_URL=//p' "$CONFIG/env")
+
+archive=impactite-$arch-unknown-linux-musl.tar.gz
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+say "downloading"
+curl -fsSL -o "$tmp/$archive" "$REPO/releases/latest/download/$archive"
+curl -fsSL -o "$tmp/sum" "$REPO/releases/latest/download/$archive.sha256"
+[ "$(cut -d' ' -f1 "$tmp/sum")" = "$(sha256sum "$tmp/$archive" | cut -d' ' -f1)" ] || fail "checksum mismatch"
+tar xzf "$tmp/$archive" -C "$tmp" --strip-components=1
+$sudo install -m 755 "$tmp/impactite" "$BIN"
+
+id impactite >/dev/null 2>&1 || $sudo useradd --system --home-dir "$DATA" --shell /usr/sbin/nologin impactite
+$sudo tee "$UNIT" >/dev/null <<EOF
+[Unit]
+Description=impactite
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=impactite
+EnvironmentFile=$CONFIG/env
+Environment=IMPACTITE_DATA=$DATA
+ExecStart=$BIN serve
+StateDirectory=impactite
+Restart=always
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+$sudo systemctl daemon-reload
+$sudo systemctl enable impactite >/dev/null 2>&1
+since=$(date "+%Y-%m-%d %H:%M:%S")
+$sudo systemctl restart impactite
+
+for _ in $(seq 30); do
+	log=$($sudo journalctl -u impactite --since "$since" -o cat 2>/dev/null || true)
+	case $log in *listening*) break ;; esac
+	$sudo systemctl is-active -q impactite || break
+	sleep 1
+done
+link=$(printf '%s' "$log" | grep -o 'https\{0,1\}://[^ ]*/setup?token=[0-9a-f]*' | tail -n 1 || true)
+
+$sudo systemctl is-active -q impactite || fail "failed to start, see journalctl -u impactite"
+if [ -n "$link" ]; then
+	say "$link"
+else
+	say "$url"
+fi

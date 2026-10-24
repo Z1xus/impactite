@@ -214,7 +214,7 @@
 		</section>
 
 		<Section id="install" title="One binary. Done.">
-			<Install repo={REPO} />
+			<Install />
 		</Section>
 
 		<footer

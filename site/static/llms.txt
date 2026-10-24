@@ -19,16 +19,16 @@
 
 ## Install
 
+On a Linux server with systemd:
+
 ```sh
-docker run -d -p 443:8000 -p 80:80 -v impactite:/data ghcr.io/z1xus/impactite serve --url https://stats.example.com --acme
+curl -fsSL https://impactite.dev/install | sh -s -- --url https://stats.example.com
 ```
 
-Or the binary:
+Or Docker:
 
 ```sh
-curl -L https://github.com/Z1xus/impactite/releases/latest/download/impactite-x86_64-unknown-linux-musl.tar.gz | tar xz --strip-components=1
-sudo setcap cap_net_bind_service=+ep ./impactite
-./impactite serve --url https://stats.example.com --acme
+docker run -d -p 443:8000 -p 80:80 -v impactite:/data ghcr.io/z1xus/impactite serve --url https://stats.example.com --acme
 ```
 
 On first start it prints a setup link to create the account. Updating is `impactite update` and a restart, or pulling the new image.
