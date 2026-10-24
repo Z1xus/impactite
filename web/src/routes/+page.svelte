@@ -37,7 +37,7 @@
 		new Map(monitors.monitors?.flatMap((item) => (item.site ? [[item.site, item]] : [])))
 	);
 
-	const team = $derived(shown?.team);
+	const team = $derived(shown?.team ?? current);
 	const editable = $derived(["owner", "admin", "editor"].includes(team?.role ?? ""));
 
 	$effect(() => {

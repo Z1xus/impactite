@@ -26,13 +26,7 @@
 	} = $props();
 </script>
 
-<!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
-<a
-	{href}
-	onpointerenter={warm}
-	onfocus={warm}
-	class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 hover:border-edge"
->
+{#snippet card()}
 	<span class="flex h-5 min-w-0 items-center gap-2.5 text-fg">
 		{#if title === undefined}
 			<Skeleton class="h-4 w-32" />
@@ -69,5 +63,22 @@
 		<Skeleton class="h-[39px] w-full" />
 		<Skeleton class="h-[96px] w-full" />
 	{/if}
-</a>
-<!-- eslint-enable svelte/no-navigation-without-resolve -->
+{/snippet}
+
+<!-- an anchor without href breaks link preloading -->
+{#if href}
+	<!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
+	<a
+		{href}
+		onpointerenter={warm}
+		onfocus={warm}
+		class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5 hover:border-edge"
+	>
+		{@render card()}
+	</a>
+	<!-- eslint-enable svelte/no-navigation-without-resolve -->
+{:else}
+	<div class="flex flex-col gap-4 rounded-px border border-line bg-panel p-5">
+		{@render card()}
+	</div>
+{/if}
