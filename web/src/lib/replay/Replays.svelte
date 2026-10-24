@@ -3,6 +3,7 @@
 	import { api } from "#lib/api.ts";
 	import Sections from "#lib/dashboard/Sections.svelte";
 	import SitePicker from "#lib/dashboard/SitePicker.svelte";
+	import Unrecorded from "#lib/dashboard/Unrecorded.svelte";
 	import { icon } from "#lib/icons/resolve.ts";
 	import { findSite } from "#lib/session.svelte.ts";
 	import { saveSite } from "#lib/settings/site.ts";
@@ -78,6 +79,8 @@
 			</Empty>
 		{:else if failed && !replays}
 			<Empty retry={() => tries++} />
+		{:else if replays?.length === 0}
+			<Unrecorded {domain} text="No replays yet." compact />
 		{:else}
 			<div class="py-3">
 				<List
@@ -95,7 +98,6 @@
 							display("visit:country", item.country)
 						].filter(Boolean)
 					})) ?? null}
-					empty="No replays yet."
 					remove={editable ? remove : undefined}
 				/>
 			</div>

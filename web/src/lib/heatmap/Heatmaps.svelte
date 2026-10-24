@@ -7,6 +7,7 @@
 	import Period from "#lib/dashboard/Period.svelte";
 	import Sections from "#lib/dashboard/Sections.svelte";
 	import SitePicker from "#lib/dashboard/SitePicker.svelte";
+	import Unrecorded from "#lib/dashboard/Unrecorded.svelte";
 	import { current, parse } from "#lib/period.ts";
 	import { findSite } from "#lib/session.svelte.ts";
 	import { saveSite } from "#lib/settings/site.ts";
@@ -203,7 +204,7 @@
 			class="relative overflow-hidden rounded-px border border-line bg-panel"
 		>
 			{#if pages?.length === 0}
-				<Empty text="No clicks yet." />
+				<Unrecorded {domain} text="No clicks yet." />
 			{:else if loading && !size}
 				<Skeleton class="h-[60vh] w-full" />
 			{:else if !size || !node}
