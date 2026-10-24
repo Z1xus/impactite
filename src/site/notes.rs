@@ -10,7 +10,6 @@ use serde_json::json;
 
 use crate::app::App;
 use crate::auth::accounts::Viewer;
-use crate::site::shares::Reader;
 use crate::web::{Error, Reply, Web};
 
 pub fn routes() -> Router<Arc<Web>> {
@@ -43,8 +42,14 @@ pub fn checked(day: &str, text: &str) -> Result<(String, String), &'static str> 
 	Ok((day.to_string(), text.to_owned()))
 }
 
-async fn list(State(web): State<Arc<Web>>, reader: Reader, Path(domain): Path<String>) -> Reply {
-	let site = web.readable(&reader, &domain)?;
+async fn list(State(web): State<Arc<Web>>, viewer: Viewer, Path(domain): Path<String>) -> Reply {
+	if web.app.site_role(viewer.user, &domain)?.is_none() {
+		return Err(Error::not_found("Site not found."));
+	}
+	let site = web
+		.app
+		.site(&domain)?
+		.ok_or_else(|| Error::not_found("Site not found."))?;
 	Ok(Json(json!({ "notes": web.app.site_notes(site.id)? })))
 }
 
