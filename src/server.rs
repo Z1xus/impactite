@@ -75,6 +75,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(insights::routes())
 				.merge(vitals::routes())
 				.merge(heatmaps::routes())
+				.merge(export::routes())
 				.merge(replays::routes())
 				.merge(google::routes())
 				.merge(totp::routes())
@@ -84,7 +85,6 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.route("/api/app/signup", post(accounts::signup))
 				.route("/api/app/query", post(stats::dashboard))
 				.route("/api/app/props", post(stats::props))
-				.route("/api/app/export", post(export::export))
 				.route("/api/app/icon/{host}", get(icons::icon))
 				.route("/counter/{*file}", get(counter::counter))
 				.with_state(web.clone()),

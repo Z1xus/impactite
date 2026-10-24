@@ -1,24 +1,29 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Cursor, Write};
-use std::sync::Arc;
+use std::fs;
+use std::io::{BufWriter, Cursor, Read, Seek, Write};
+use std::path::{Path as FilePath, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
 
-use axum::Json;
-use axum::extract::State;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::body::{Body, Bytes};
+use axum::extract::{Path, State};
+use axum::http::header;
 use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Json, Router};
 use crater::{Db, Dim, Field, Filter, Metrics, Query, Report};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ToSpan};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-use crate::app::Site;
+use crate::app::{Site, lock, now, token};
 use crate::auth::accounts::Viewer;
+use crate::mail::Letter;
 use crate::site::goals::Goal;
 use crate::stats::{self, day_number};
 use crate::web::{Error, Reply, Web};
@@ -42,11 +47,46 @@ enum Format {
 	Goatcounter,
 }
 
-pub async fn export(
+const KEEP: i64 = 86_400;
+
+#[derive(Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Progress {
+	Running,
+	Done,
+	Failed,
+}
+
+struct Job {
+	user: i64,
+	site: String,
+	name: String,
+	kind: &'static str,
+	state: Progress,
+	email: bool,
+	at: i64,
+}
+
+static JOBS: LazyLock<Mutex<HashMap<String, Job>>> = LazyLock::new(Mutex::default);
+
+fn file(data: &FilePath, id: &str) -> PathBuf {
+	data.join("exports").join(id)
+}
+
+pub fn routes() -> Router<Arc<Web>> {
+	Router::new()
+		.route("/api/app/export", post(export))
+		.route("/api/app/exports/{id}", get(status))
+		.route("/api/app/exports/{id}/email", post(email))
+		.route("/api/app/exports/{id}/file", get(download))
+}
+
+// big sites take minutes, so the file is built in the background and kept for a day
+async fn export(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Json(body): Json<ExportRequest>,
-) -> Reply<Response> {
+) -> Reply {
 	if web.app.site_role(viewer.user, &body.site_id)?.is_none() {
 		return Err(Error::not_found("This site doesn't exist."));
 	}
@@ -69,38 +109,207 @@ pub async fn export(
 		Format::Plausible => (format!("{stem}.plausible.zip"), "application/zip"),
 		Format::Impactite => (format!("{stem}.impactite.zip"), "application/zip"),
 	};
+	{
+		let jobs = lock(&JOBS);
+		if let Some((id, _)) = jobs.iter().find(|(_, job)| {
+			job.user == viewer.user && job.name == name && job.state == Progress::Running
+		}) {
+			return Ok(Json(json!({ "id": id })));
+		}
+	}
+	let id = token()?;
+	let path = file(&web.data, &id);
+	fs::create_dir_all(path.parent().unwrap_or(&web.data))?;
+	lock(&JOBS).insert(
+		id.clone(),
+		Job {
+			user: viewer.user,
+			site: period.site.domain.clone(),
+			name,
+			kind,
+			state: Progress::Running,
+			email: false,
+			at: now(),
+		},
+	);
 	let db = web.stats.db.clone();
 	let titles = web.app.titles(period.site.id).unwrap_or_default();
 	let format = body.format;
-	let bytes = tokio::task::spawn_blocking(move || match format {
-		Format::Plausible => build(&db, period.site.id, period.from, period.to, filters),
-		Format::Impactite => native(&db, &period.site, &goals, &titles, period.from, period.to),
-		Format::Goatcounter => goatcounter(&db, &period.site, &titles, period.from, period.to),
-	})
-	.await?
-	.map_err(|err| {
-		tracing::error!(%err, "export");
-		Error::new(
-			StatusCode::INTERNAL_SERVER_ERROR,
-			"Couldn't export your data. Try again.",
-		)
-	})?;
-	let mut response = bytes.into_response();
-	let headers = response.headers_mut();
-	headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(kind));
-	if let Ok(value) = HeaderValue::from_str(&format!("attachment; filename=\"{name}\"")) {
-		headers.insert(header::CONTENT_DISPOSITION, value);
-	}
-	Ok(response)
+	let job = id.clone();
+	tokio::spawn(async move {
+		let built = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+			let out = BufWriter::new(fs::File::create(&path)?);
+			let out = match format {
+				Format::Plausible => {
+					build(out, &db, period.site.id, period.from, period.to, filters)?
+				}
+				Format::Impactite => native(
+					out,
+					&db,
+					&period.site,
+					&goals,
+					&titles,
+					period.from,
+					period.to,
+				)?,
+				Format::Goatcounter => {
+					goatcounter(out, &db, &period.site, &titles, period.from, period.to)?
+				}
+			};
+			out.into_inner()?.sync_all()?;
+			Ok(())
+		})
+		.await
+		.map_err(anyhow::Error::from)
+		.and_then(|built| built);
+		if let Err(err) = &built {
+			tracing::error!(%err, "export");
+			let _ = fs::remove_file(file(&web.data, &job));
+		}
+		let (user, site, email) = {
+			let mut jobs = lock(&JOBS);
+			let Some(entry) = jobs.get_mut(&job) else {
+				return;
+			};
+			entry.state = if built.is_ok() {
+				Progress::Done
+			} else {
+				Progress::Failed
+			};
+			(entry.user, entry.site.clone(), entry.email)
+		};
+		if email && let Err(err) = tell(&web, user, &site, &job, built.is_ok()).await {
+			tracing::warn!(%err, "export mail");
+		}
+	});
+	Ok(Json(json!({ "id": id })))
 }
 
-fn build(
+async fn tell(web: &Web, user: i64, site: &str, id: &str, done: bool) -> anyhow::Result<()> {
+	let base = web.url.trim_end_matches('/');
+	let link = format!("{base}/{site}/settings/data?export={id}");
+	let (title, line, button) = if done {
+		(
+			"Your export is ready",
+			format!("Your export of {site} is ready to download. It's available for 24 hours."),
+			Some(("Download export", link.as_str())),
+		)
+	} else {
+		(
+			"Your export didn't finish",
+			format!(
+				"Something went wrong while exporting {site}. Try again from your site settings."
+			),
+			None,
+		)
+	};
+	let lines = [line];
+	let letter = Letter {
+		base,
+		title,
+		lines: &lines,
+		table: None,
+		button,
+	};
+	let to = web.app.user_email(user)?;
+	web.mail
+		.send(&to, title, &letter.text(), &letter.html())
+		.await
+}
+
+fn mine(user: i64, id: &str) -> Reply<(Progress, String, &'static str)> {
+	lock(&JOBS)
+		.get(id)
+		.filter(|job| job.user == user)
+		.map(|job| (job.state, job.name.clone(), job.kind))
+		.ok_or_else(|| Error::not_found("This export expired. Start a new one."))
+}
+
+async fn status(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Reply {
+	let (state, name, _) = mine(viewer.user, &id)?;
+	Ok(Json(
+		json!({ "state": state, "name": name, "mail": web.mail.ready() }),
+	))
+}
+
+async fn email(State(web): State<Arc<Web>>, viewer: Viewer, Path(id): Path<String>) -> Reply {
+	if !web.mail.ready() {
+		return Err(Error::bad("Email isn't set up on this server."));
+	}
+	mine(viewer.user, &id)?;
+	let mut jobs = lock(&JOBS);
+	let job = jobs
+		.get_mut(&id)
+		.ok_or_else(|| Error::not_found("This export expired. Start a new one."))?;
+	job.email = job.state == Progress::Running;
+	Ok(Json(json!({ "state": job.state })))
+}
+
+async fn download(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(id): Path<String>,
+) -> Reply<Response> {
+	let (state, name, kind) = mine(viewer.user, &id)?;
+	if state != Progress::Done {
+		return Err(Error::not_found("This export isn't ready yet."));
+	}
+	let mut source = fs::File::open(file(&web.data, &id))?;
+	let size = source.metadata()?.len();
+	let (send, receive) = tokio::sync::mpsc::channel::<std::io::Result<Bytes>>(4);
+	tokio::task::spawn_blocking(move || {
+		let mut buf = vec![0; 256 << 10];
+		loop {
+			let piece = match source.read(&mut buf) {
+				Ok(0) => return,
+				Ok(n) => Ok(Bytes::copy_from_slice(&buf[..n])),
+				Err(err) => Err(err),
+			};
+			if send.blocking_send(piece).is_err() {
+				return;
+			}
+		}
+	});
+	let body = futures_util::stream::unfold(receive, |mut receive| async move {
+		receive.recv().await.map(|piece| (piece, receive))
+	});
+	Ok((
+		[
+			(header::CONTENT_TYPE, kind.to_owned()),
+			(header::CONTENT_LENGTH, size.to_string()),
+			(
+				header::CONTENT_DISPOSITION,
+				format!("attachment; filename=\"{name}\""),
+			),
+		],
+		Body::from_stream(body),
+	)
+		.into_response())
+}
+
+pub fn prune(data: &FilePath) {
+	let cutoff = now() - KEEP;
+	let mut jobs = lock(&JOBS);
+	jobs.retain(|_, job| job.state == Progress::Running || job.at > cutoff);
+	let Ok(entries) = fs::read_dir(data.join("exports")) else {
+		return;
+	};
+	for entry in entries.flatten() {
+		let name = entry.file_name();
+		if !jobs.contains_key(&*name.to_string_lossy()) {
+			let _ = fs::remove_file(entry.path());
+		}
+	}
+}
+
+fn build<W: Write + Seek>(
+	out: W,
 	db: &Db,
 	site: u64,
 	from: Date,
 	to: Date,
 	filters: Vec<Filter>,
-) -> anyhow::Result<Vec<u8>> {
+) -> anyhow::Result<W> {
 	let query = |breakdown: Option<Field>| -> anyhow::Result<Report> {
 		Ok(db.query(&Query {
 			site,
@@ -119,7 +328,7 @@ fn build(
 			.unwrap_or_default()
 	};
 	let stamp = format!("{}_{}", from.strftime("%Y%m%d"), to.strftime("%Y%m%d"));
-	let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+	let mut zip = ZipWriter::new(out);
 	let mut add = |table: &str, header: &[&str], rows: Vec<Vec<String>>| -> anyhow::Result<()> {
 		zip.start_file(
 			format!("imported_{table}_{stamp}.csv"),
@@ -366,7 +575,7 @@ fn build(
 			.collect();
 		add(table, &columns, rows)?;
 	}
-	Ok(zip.finish()?.into_inner())
+	Ok(zip.finish()?)
 }
 
 // a spreadsheet runs a cell that starts like a formula
@@ -388,18 +597,28 @@ fn utc(local: i64, tz: &TimeZone) -> anyhow::Result<Timestamp> {
 pub(crate) fn day_archive(web: &Web, site: &Site, day: Date) -> anyhow::Result<Vec<u8>> {
 	let goals = web.app.goals(site.id)?;
 	let titles = web.app.titles(site.id)?;
-	native(&web.stats.db, site, &goals, &titles, day, day)
+	Ok(native(
+		Cursor::new(Vec::new()),
+		&web.stats.db,
+		site,
+		&goals,
+		&titles,
+		day,
+		day,
+	)?
+	.into_inner())
 }
 
-fn native(
+fn native<W: Write + Seek>(
+	out: W,
 	db: &Db,
 	site: &Site,
 	goals: &[Goal],
 	titles: &HashMap<String, String>,
 	from: Date,
 	to: Date,
-) -> anyhow::Result<Vec<u8>> {
-	let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+) -> anyhow::Result<W> {
+	let mut zip = ZipWriter::new(out);
 	zip.start_file("site.json", SimpleFileOptions::default())?;
 	serde_json::to_writer_pretty(
 		&mut zip,
@@ -454,18 +673,19 @@ fn native(
 	if let Some(err) = failed {
 		return Err(err.into());
 	}
-	Ok(zip.finish()?.into_inner())
+	Ok(zip.finish()?)
 }
 
-pub(crate) fn goatcounter(
+pub(crate) fn goatcounter<W: Write>(
+	out: W,
 	db: &Db,
 	site: &Site,
 	titles: &HashMap<String, String>,
 	from: Date,
 	to: Date,
-) -> anyhow::Result<Vec<u8>> {
+) -> anyhow::Result<W> {
 	let tz = TimeZone::get(&site.timezone).unwrap_or(TimeZone::UTC);
-	let mut csv = csv::Writer::from_writer(GzEncoder::new(Vec::new(), Compression::default()));
+	let mut csv = csv::Writer::from_writer(GzEncoder::new(out, Compression::default()));
 	csv.write_record([
 		"2Path",
 		"Title",

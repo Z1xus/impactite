@@ -665,6 +665,7 @@ fn default_team(app: &App) -> anyhow::Result<Option<i64>> {
 
 fn prune(app: &App, db: &Db, uptime: &uptime::Uptime, data: &Path) {
 	uptime.log.prune(app::now());
+	export::prune(data);
 	if let Err(err) = replays::prune(app, data) {
 		tracing::warn!(%err, "prune replays");
 	}

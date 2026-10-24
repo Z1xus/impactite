@@ -678,7 +678,7 @@ async fn download(State(web): State<Arc<Web>>, Path(_id): Path<u64>, call: Call)
 	let titles = web.app.titles(site.id).unwrap_or_default();
 	let name = format!("{}.goatcounter.csv.gz", site.domain);
 	match tokio::task::spawn_blocking(move || {
-		export::goatcounter(&db, &site, &titles, all.from, all.to)
+		export::goatcounter(Vec::new(), &db, &site, &titles, all.from, all.to)
 	})
 	.await
 	{

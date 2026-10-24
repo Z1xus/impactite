@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { page } from "$app/state";
 	import { api } from "#lib/api.ts";
 	import { collection } from "#lib/collection.svelte.ts";
-	import { archive } from "#lib/download.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Form from "#lib/ui/Form.svelte";
@@ -25,6 +25,7 @@
 		error: string | null;
 	};
 	type Source = "impactite" | "plausible" | "goatcounter" | "umami";
+	type Export = { state: "running" | "done" | "failed"; name: string; mail: boolean };
 
 	const imports = collection<{ id: number; source: string; first: string; last: string }>(
 		() => `${sitePath(domain)}/imports`,
@@ -35,6 +36,8 @@
 	let file = $state<File | null>(null);
 	let analytics = $state.raw<Analytics | null>(null);
 	let property = $state("");
+	let exporting = $state<{ id: string; mail: boolean; email: boolean } | null>(null);
+	let ready = $state<{ id: string; fetched: boolean } | null>(null);
 
 	const accept = $derived(
 		source === "goatcounter" ? ".csv,.gz" : source === "umami" ? ".csv" : ".zip"
@@ -51,6 +54,49 @@
 		const timer = setInterval(loadAnalytics, 4000);
 		return () => clearInterval(timer);
 	});
+
+	$effect(() => {
+		const id = page.url.searchParams.get("export");
+		if (id) untrack(() => follow(id, false).catch(() => {}));
+		return () => (exporting = null);
+	});
+
+	const fetchFile = (id: string) =>
+		Object.assign(document.createElement("a"), { href: `/api/app/exports/${id}/file` }).click();
+
+	// an export runs on the server, so this checks back until the file is ready
+	async function follow(id: string, fetch: boolean) {
+		ready = null;
+		let job = await api<Export>(`/api/app/exports/${id}`);
+		exporting = { id, mail: job.mail, email: false };
+		while (job.state === "running") {
+			await new Promise((wait) => setTimeout(wait, 1500));
+			if (exporting?.id !== id) return;
+			job = await api<Export>(`/api/app/exports/${id}`);
+		}
+		exporting = null;
+		if (job.state === "failed") throw new Error("Your export didn't finish. Try again.");
+		ready = { id, fetched: fetch };
+		if (fetch) fetchFile(id);
+	}
+
+	async function startExport() {
+		const { id } = await api<{ id: string }>("/api/app/export", {
+			site_id: domain,
+			date_range: "all",
+			format
+		});
+		await follow(id, true);
+	}
+
+	async function emailWhenReady() {
+		if (!exporting) return;
+		const { state } = await api<{ state: Export["state"] }>(
+			`/api/app/exports/${exporting.id}/email`,
+			{}
+		);
+		if (state === "running") exporting.email = true;
+	}
 
 	async function loadAnalytics() {
 		const was = analytics?.importing;
@@ -92,7 +138,7 @@
 		<Note
 			>Download every event you've collected. Imported data isn't included in the export.</Note
 		>
-		<Form action="Download" submit={() => archive(domain, format)} inline>
+		<Form action="Export" submit={startExport} inline>
 			<Select
 				label="export format"
 				value={format}
@@ -105,6 +151,30 @@
 				]}
 			/>
 		</Form>
+		{#if exporting}
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				{#if exporting.email}
+					<Note
+						>Preparing your export. We'll email you when it's ready, so you can leave
+						this page.</Note
+					>
+				{:else}
+					<Note>Preparing your export. This can take a few minutes for big sites.</Note>
+					{#if exporting.mail}
+						<Button variant="quiet" onclick={emailWhenReady}
+							>Email me when it's ready</Button
+						>
+					{/if}
+				{/if}
+			</div>
+		{:else if ready}
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<Note>Your export is ready. It's available for 24 hours.</Note>
+				<Button variant="quiet" onclick={() => ready && fetchFile(ready.id)}
+					>{ready.fetched ? "Download again" : "Download"}</Button
+				>
+			</div>
+		{/if}
 	</div>
 	<span class="border-t border-line pt-4 text-body text-fg">Import data</span>
 	<List
