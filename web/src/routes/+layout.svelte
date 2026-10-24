@@ -10,6 +10,7 @@
 	import { toast } from "#lib/toast.svelte.ts";
 	import Failed from "#lib/ui/Failed.svelte";
 	import Gate from "#lib/ui/Gate.svelte";
+	import Progress from "#lib/ui/Progress.svelte";
 	import type { LayoutProps } from "./$types";
 
 	let { children }: LayoutProps = $props();
@@ -86,6 +87,8 @@
 	<title>impactite</title>
 	<link rel="preload" href={font} as="font" type="font/woff2" crossorigin="anonymous" />
 </svelte:head>
+
+<Progress />
 
 {#if shown}
 	<svelte:boundary>
