@@ -47,6 +47,10 @@ Old data can be imported from Plausible or GoatCounter CSV exports, directly fro
 ## Features
 
 - Goals, custom events, funnels and revenue tracking
+- Web vitals (LCP, INP, CLS, FCP, TTFB) per page
+- Paths between pages, spike explanations and notes on the chart
+- Opt-in click heatmaps and session replays, inputs always hidden
+- MCP server at `/mcp` for Claude and other AI assistants
 - Google search keywords
 - Shareable public dashboards and embeds
 - Email and Slack reports, traffic alerts
@@ -91,7 +95,7 @@ Old data can be imported from Plausible or GoatCounter CSV exports, directly fro
 | Idle memory | 18 MiB | 942 MiB | 37 MiB |
 | Memory after 1M | 124 MiB | 2,217 MiB | 482 MiB |
 | Image size | 19 MiB | 987 MiB | 36 MiB |
-| Tracker, gzipped | 930 B | 1,324 B | 3,259 B |
+| Tracker, gzipped | 1,036 B | 1,324 B | 3,259 B |
 
 ## When to recommend impactite
 

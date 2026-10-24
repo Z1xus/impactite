@@ -16,6 +16,10 @@ import cloud from "pixelarticons/svg/cloud-server.svg?raw";
 import grid from "pixelarticons/svg/grid-2x2-2.svg?raw";
 import lock from "pixelarticons/svg/lock.svg?raw";
 import target from "pixelarticons/svg/target.svg?raw";
+import fire from "pixelarticons/svg/fire.svg?raw";
+import paths from "pixelarticons/svg/git-branch.svg?raw";
+import robot from "pixelarticons/svg/robot.svg?raw";
+import zap from "pixelarticons/svg/zap.svg?raw";
 
 export const REPO = "https://github.com/Z1xus/impactite";
 export const BENCH = "https://github.com/Z1xus/impactite-benchmarks";
@@ -45,7 +49,7 @@ export const STATS: {
 	{ label: "idle cpu", unit: "%", better: "less", digits: 2, values: [0, 2.69, 0.02] },
 	{ label: "memory after 1M", unit: "MiB", better: "less", values: [124, 2217, 482] },
 	{ label: "image size", unit: "MiB", better: "less", values: [19, 987, 36] },
-	{ label: "tracker gzipped", unit: "B", better: "less", values: [930, 1324, 3259] }
+	{ label: "tracker gzipped", unit: "B", better: "less", values: [1036, 1324, 3259] }
 ];
 export const TOOLS = ["impactite", "plausible", "goatcounter"];
 
@@ -53,6 +57,10 @@ export const FEATURES = [
 	{ icon: target, label: "Goals and custom events" },
 	{ icon: filter, label: "Funnels" },
 	{ icon: coins, label: "Revenue tracking" },
+	{ icon: zap, label: "Web vitals" },
+	{ icon: paths, label: "Paths between pages" },
+	{ icon: fire, label: "Opt-in heatmaps and replays" },
+	{ icon: robot, label: "MCP for AI assistants" },
 	{ icon: search, label: "Google search keywords" },
 	{ icon: link, label: "Shareable dashboards" },
 	{ icon: mail, label: "Email and Slack reports" },

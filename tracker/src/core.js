@@ -48,8 +48,7 @@ t.send = (name, o = {}) => {
 	}).then(
 		(response) => {
 			// the first pageview answer names the modules this site turned on
-			if (name == "pageview" && !t.loaded) {
-				t.loaded = 1;
+			if (name == "pageview" && !w.impactite) {
 				w.impactite = t;
 				response.text().then((body) => {
 					for (const module of body.split(" ").slice(1))

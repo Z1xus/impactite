@@ -51,7 +51,7 @@ Each tool got 1M pageviews, one at a time, on the same machine (Ryzen 5 7600X). 
 | Idle memory | 18 MiB | 942 MiB | 37 MiB |
 | Memory after 1M | 124 MiB | 2,217 MiB | 482 MiB |
 | Image size | 19 MiB | 987 MiB | 36 MiB |
-| Tracker, gzipped | 930 B | 1,324 B | 3,259 B |
+| Tracker, gzipped | 1,036 B | 1,324 B | 3,259 B |
 
 ## Why it's faster
 
