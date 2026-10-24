@@ -106,14 +106,20 @@ fn use_tool(web: &Web, key: &str, user: i64, name: &str, args: Value) -> Result<
 		return Err(format!("This key can't read {domain}."));
 	}
 	match name {
-		"list_sites" => Ok(json!(
-			web.app
-				.user_sites(user)
-				.map_err(|err| err.to_string())?
-				.iter()
-				.map(|site| json!({ "domain": site.domain, "timezone": site.timezone }))
-				.collect::<Vec<_>>()
-		)),
+		"list_sites" => {
+			// a server key reads every site
+			let sites = match web.app.key_owner(key) {
+				Ok(Some(None)) => web.app.sites(),
+				_ => web.app.user_sites(user),
+			}
+			.map_err(|err| err.to_string())?;
+			Ok(json!(
+				sites
+					.iter()
+					.map(|site| json!({ "domain": site.domain, "timezone": site.timezone }))
+					.collect::<Vec<_>>()
+			))
+		}
 		"query" => run(&web.stats, args),
 		"explain_change" => insights::explain(&web.stats, args),
 		"page_speed" if args["metric"].is_string() => vitals::slowest(&web.stats, args),
