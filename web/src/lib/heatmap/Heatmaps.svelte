@@ -3,7 +3,7 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { api, get } from "#lib/api.ts";
-	import { density, paint } from "#lib/dither/heat.ts";
+	import { density, paint, shade } from "#lib/dither/heat.ts";
 	import Period from "#lib/dashboard/Period.svelte";
 	import Sections from "#lib/dashboard/Sections.svelte";
 	import SitePicker from "#lib/dashboard/SitePicker.svelte";
@@ -15,6 +15,7 @@
 	import { theme } from "#lib/theme.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Empty from "#lib/ui/Empty.svelte";
+	import Rows from "#lib/ui/Rows.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Skeleton from "#lib/ui/Skeleton.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
@@ -23,6 +24,7 @@
 	let { domain, timezone }: { domain: string; timezone: string } = $props();
 
 	type Screen = "desktop" | "tablet" | "mobile";
+	type Layer = "clicks" | "scrolling";
 	type Size = { width: number; height: number; updated_at: number };
 
 	const view = $derived(parse(page.url.searchParams, timezone));
@@ -34,12 +36,18 @@
 			(item) => item === page.url.searchParams.get("screen")
 		) ?? "desktop"
 	);
+	const layer = $derived<Layer>(
+		page.url.searchParams.get("layer") === "scrolling" ? "scrolling" : "clicks"
+	);
 
 	let pages = $state.raw<{ key: string; label: string }[] | null>(null);
 	let clicks = $state.raw<number[][]>([]);
+	let elements = $state.raw<[string, number][]>([]);
+	let reach = $state.raw<number[]>([]);
 	let size = $state.raw<Size | null>(null);
 	let node = $state.raw<unknown>(null);
-	let scrolled = $state<number | null>(null);
+	let snapshot = $state.raw<Document | null>(null);
+	let hovered = $state<string | null>(null);
 	let loading = $state(true);
 	let failed = $state(false);
 	let tries = $state(0);
@@ -49,6 +57,54 @@
 	const chosen = $derived(page.url.searchParams.get("page") ?? pages?.[0]?.key ?? "");
 	const scale = $derived(size ? Math.min(1, box / size.width) : 1);
 	const total = $derived(clicks.reduce((sum, click) => sum + click[2], 0));
+
+	const find = (path: string) => {
+		try {
+			return snapshot?.querySelector(path) ?? null;
+		} catch {
+			return null;
+		}
+	};
+	const KINDS: Record<string, string> = {
+		a: "Link",
+		button: "Button",
+		input: "Field",
+		select: "Menu",
+		textarea: "Text box",
+		label: "Label",
+		summary: "Toggle",
+		img: "Image"
+	};
+	// recordings mask text as stars, those fall back to the kind of element and its place
+	const name = (element: Element | null, path: string) => {
+		const text = (
+			element?.getAttribute("aria-label") ||
+			element?.querySelector("img")?.alt ||
+			element?.getAttribute("title") ||
+			element?.textContent ||
+			""
+		)
+			.replace(/\s+/g, " ")
+			.trim();
+		if (/[^*\s]/.test(text)) return text.slice(0, 80);
+		const tag = element?.localName ?? path.split(">").at(-1)?.split(":")[0] ?? "";
+		const kind = KINDS[tag] ?? "Element";
+		if (!element || !snapshot) return kind;
+		return `${kind} ${[...snapshot.querySelectorAll(tag)].indexOf(element) + 1}`;
+	};
+	const rows = $derived(
+		elements.map(([path, count]) => ({
+			key: path,
+			label: name(find(path), path),
+			value: count,
+			extra: total ? `${Math.round((count / total) * 100)}%` : undefined
+		}))
+	);
+	const outline = $derived.by(() => {
+		const rect = hovered ? find(hovered)?.getBoundingClientRect() : null;
+		return rect?.width ? rect : null;
+	});
+	let marker = $state<HTMLDivElement>();
 
 	function go(to: Record<string, string | null>) {
 		const kept = [...page.url.searchParams].filter(([key]) => !(key in to));
@@ -97,30 +153,29 @@
 		loading = true;
 		failed = false;
 		untrack(() => {
-			Promise.all([
-				api<{ clicks: number[][]; snapshot: Size | null }>("/api/app/heatmap", {
-					site_id: domain,
-					date_range,
-					page: target,
-					class: screen
-				}),
-				cached(domain, {
-					metrics: ["scroll_depth"],
-					date_range,
-					filters: [["is", "event:page", [target]]]
-				})
-			])
-				.then(async ([result, scroll]) => {
-					const snapshot = result.snapshot
+			api<{
+				clicks: number[][];
+				elements: [string, number][];
+				reach: number[];
+				snapshot: Size | null;
+			}>("/api/app/heatmap", {
+				site_id: domain,
+				date_range,
+				page: target,
+				class: screen
+			})
+				.then(async (result) => {
+					const stored = result.snapshot
 						? await get<{ node: unknown }>(
 								`/api/app/sites/${domain}/snapshot?page=${encodeURIComponent(target)}&class=${screen}`
 							)
 						: null;
 					if (stale) return;
 					clicks = result.clicks;
+					elements = result.elements;
+					reach = result.reach;
 					size = result.snapshot;
-					node = snapshot?.node ?? null;
-					scrolled = (scroll.results[0]?.metrics[0] as number | null) ?? null;
+					node = stored?.node ?? null;
 					loading = false;
 				})
 				.catch(() => {
@@ -140,7 +195,8 @@
 		const heat = density(clicks, size.width, size.height);
 		canvas.width = heat.columns;
 		canvas.height = heat.rows;
-		paint(ctx, heat, theme.style === "plain");
+		if (layer === "clicks") paint(ctx, heat, theme.style === "plain");
+		else if (reach.length) shade(ctx, reach, size.width, size.height, theme.style === "plain");
 	});
 </script>
 
@@ -187,6 +243,15 @@
 				/>
 			{/if}
 			<Toggle
+				bind:value={
+					() => layer, (next: Layer) => go({ layer: next === "clicks" ? null : next })
+				}
+				options={[
+					{ key: "clicks", label: "clicks" },
+					{ key: "scrolling", label: "scrolling" }
+				]}
+			/>
+			<Toggle
 				bind:value={() => screen, (next: Screen) => go({ screen: next })}
 				options={[
 					{ key: "desktop", label: "desktop" },
@@ -199,53 +264,86 @@
 			{/if}
 		</div>
 
-		<section
-			bind:clientWidth={box}
-			class="relative overflow-hidden rounded-px border border-line bg-panel"
-		>
-			{#if pages?.length === 0}
-				<Unrecorded {domain} text="No clicks yet." />
-			{:else if loading && !size}
-				<Skeleton class="h-[60vh] w-full" />
-			{:else if !size || !node}
-				<Empty
-					text="No snapshot of this page yet. One is taken the next time someone visits it."
-				/>
-			{:else}
-				<div
-					class="relative mx-auto"
-					style:width="{size.width * scale}px"
-					style:height="{size.height * scale}px"
-				>
-					{#key node}
-						<Frame
-							{node}
-							href="https://{domain}{chosen}"
-							width={size.width}
-							height={size.height}
-							{scale}
-						/>
-					{/key}
-					<canvas
-						bind:this={canvas}
-						class="absolute inset-0 h-full w-full {theme.style === 'plain'
-							? ''
-							: 'pixelated'}"
-						aria-label="{compact(total)} clicks"
-					></canvas>
-					{#if scrolled}
-						<div
-							class="absolute inset-x-0 border-t border-dashed border-fg/60"
-							style:top="{(scrolled / 100) * size.height * scale}px"
-						>
-							<span
-								class="absolute top-1 right-2 rounded-px bg-ink/80 px-1.5 py-1 label text-fg"
-								>{Math.round(scrolled)}% scrolled</span
-							>
-						</div>
-					{/if}
-				</div>
+		<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+			<section
+				bind:clientWidth={box}
+				class="relative overflow-hidden rounded-px border border-line bg-panel"
+			>
+				{#if pages?.length === 0}
+					<Unrecorded {domain} text="No clicks yet." />
+				{:else if loading && !size}
+					<Skeleton class="h-[60vh] w-full" />
+				{:else if !size || !node}
+					<Empty
+						text="No snapshot of this page yet. One is taken the next time someone visits it."
+					/>
+				{:else}
+					<div
+						class="relative mx-auto"
+						style:width="{size.width * scale}px"
+						style:height="{size.height * scale}px"
+					>
+						{#key node}
+							<Frame
+								{node}
+								href="https://{domain}{chosen}"
+								width={size.width}
+								height={size.height}
+								{scale}
+								ready={(page) => (snapshot = page)}
+							/>
+						{/key}
+						<canvas
+							bind:this={canvas}
+							class="absolute inset-0 h-full w-full {theme.style === 'plain'
+								? ''
+								: 'pixelated'}"
+							aria-label="{compact(total)} clicks"
+						></canvas>
+						{#if layer === "scrolling"}
+							{#each reach.slice(0, 9) as share, i (i)}
+								{#if share !== reach[i - 1]}
+									<div
+										class="absolute inset-x-0 border-t border-dashed border-fg/40"
+										style:top="{(i + 1) * 10}%"
+									>
+										<span
+											class="absolute top-1 right-2 rounded-px bg-ink/80 px-1.5 py-1 label text-fg"
+											>{share}% got here</span
+										>
+									</div>
+								{/if}
+							{/each}
+						{/if}
+						{#if outline}
+							<div
+								bind:this={marker}
+								class="pointer-events-none absolute rounded-px outline-2 outline-offset-2 outline-cyan"
+								style:left="{outline.left * scale}px"
+								style:top="{outline.top * scale}px"
+								style:width="{outline.width * scale}px"
+								style:height="{outline.height * scale}px"
+							></div>
+						{/if}
+					</div>
+				{/if}
+			</section>
+			{#if rows.length && size && node}
+				<section class="rounded-px border border-line bg-panel py-2 lg:sticky lg:top-4">
+					<Rows
+						{rows}
+						limit={20}
+						columns={["share", "clicks"]}
+						hover={(key) => (hovered = key)}
+						pick={(key) => {
+							hovered = key;
+							requestAnimationFrame(() =>
+								marker?.scrollIntoView({ block: "center", behavior: "smooth" })
+							);
+						}}
+					/>
+				</section>
 			{/if}
-		</section>
+		</div>
 	{/if}
 </div>

@@ -52,3 +52,31 @@ export function paint(
 		}
 	ctx.putImageData(image, 0, 0);
 }
+
+// the part of the page fewer visitors saw sinks into dithered ink
+export function shade(
+	ctx: CanvasRenderingContext2D,
+	reach: number[],
+	width: number,
+	height: number,
+	plain: boolean
+) {
+	const columns = Math.ceil(width / CELL);
+	const rows = Math.ceil(height / CELL);
+	const [r, g, b] = rgb("--color-ink");
+	const image = ctx.createImageData(columns, rows);
+	for (let y = 0; y < rows; y++) {
+		const at = (y / rows) * 10;
+		const tenth = Math.min(9, Math.floor(at));
+		const before = tenth ? reach[tenth - 1] : 100;
+		const missed = 1 - (before + (reach[tenth] - before) * (at - tenth)) / 100;
+		for (let x = 0; x < columns; x++) {
+			if (!plain && threshold(x, y) > missed * 0.7) continue;
+			image.data.set(
+				[r, g, b, plain ? Math.round(missed * 200) : 220],
+				(y * columns + x) * 4
+			);
+		}
+	}
+	ctx.putImageData(image, 0, 0);
+}

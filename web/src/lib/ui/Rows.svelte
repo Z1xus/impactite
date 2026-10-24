@@ -12,6 +12,7 @@
 		format,
 		columns,
 		pick,
+		hover,
 		filter = false
 	}: {
 		rows:
@@ -31,6 +32,7 @@
 		format?: (value: number) => string;
 		columns?: string[];
 		pick?: (key: string) => void;
+		hover?: (key: string | null) => void;
 		filter?: boolean;
 	} = $props();
 
@@ -68,6 +70,10 @@
 					aria-label={row.label}
 					title={filter && pick ? `Show only ${row.label}` : undefined}
 					onclick={() => pick?.(row.key)}
+					onpointerenter={() => hover?.(row.key)}
+					onpointerleave={() => hover?.(null)}
+					onfocus={() => hover?.(row.key)}
+					onblur={() => hover?.(null)}
 					inert={!pick}
 				></button>
 				{#if row.icon || row.fallback}

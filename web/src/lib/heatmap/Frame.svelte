@@ -7,8 +7,16 @@
 		href,
 		width,
 		height,
-		scale
-	}: { node: unknown; href: string; width: number; height: number; scale: number } = $props();
+		scale,
+		ready
+	}: {
+		node: unknown;
+		href: string;
+		width: number;
+		height: number;
+		scale: number;
+		ready: (page: Document) => void;
+	} = $props();
 
 	let root: HTMLDivElement;
 
@@ -21,6 +29,9 @@
 			] as ConstructorParameters<typeof Replayer>[0],
 			{ root, mouseTail: false, showWarning: false, triggerFocus: false }
 		);
+		replayer.on("fullsnapshot-rebuilded", () => {
+			if (replayer.iframe.contentDocument) ready(replayer.iframe.contentDocument);
+		});
 		replayer.pause(1);
 		return () => replayer.destroy();
 	});

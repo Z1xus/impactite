@@ -4,6 +4,19 @@ const width = innerWidth;
 const screen = width >= 1024 ? "desktop" : width >= 768 ? "tablet" : "mobile";
 let clicks = 0;
 
+// a path the dashboard can find again in the snapshot
+const path = (node) => {
+	const parts = [];
+	for (; node && node != document.body; node = node.parentElement) {
+		if (/^[a-z][\w-]*$/i.test(node.id)) return ["#" + node.id, ...parts].join(">");
+		let n = 1;
+		for (let sibling = node; (sibling = sibling.previousElementSibling); )
+			n += sibling.localName == node.localName;
+		parts.unshift(`${node.localName}:nth-of-type(${n})`);
+	}
+	return ["body", ...parts].join(">");
+};
+
 addEventListener(
 	"click",
 	(event) => {
@@ -13,6 +26,7 @@ addEventListener(
 				x: Math.round(event.clientX - document.documentElement.clientWidth / 2),
 				y: Math.round(event.pageY),
 				w: innerWidth,
+				s: path(event.target.closest("a,button,input,select,textarea,label,summary,[role=button]") ?? event.target),
 			},
 			interactive: false,
 		});

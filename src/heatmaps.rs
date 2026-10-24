@@ -10,6 +10,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use crater::{Dim, Field, Filter, Op};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use rusqlite::{OptionalExtension, params};
@@ -20,7 +21,7 @@ use crate::app::{App, now};
 use crate::auth::accounts::Viewer;
 use crate::ingest::{ua, unpack};
 use crate::limit::Limit;
-use crate::stats::run;
+use crate::stats::{day_number, period, run};
 use crate::web::{Error, Reply, Web, blocking};
 
 pub const EVENT: &str = "~click";
@@ -59,10 +60,19 @@ pub fn props(raw: &Value) -> Vec<(String, String)> {
 	};
 	let x = ((x / 4.0).round() * 4.0).clamp(-3000.0, 3000.0);
 	let y = ((y / 8.0).round() * 8.0).clamp(0.0, 50_000.0);
-	vec![
+	let mut props = vec![
 		("~xy".into(), format!("{x}:{y}")),
 		("~w".into(), class(width).into()),
-	]
+	];
+	if let Some(path) = raw["s"].as_str().filter(|path| {
+		path.len() <= 500
+			&& path
+				.bytes()
+				.all(|byte| byte.is_ascii_alphanumeric() || b"#>:()-_".contains(&byte))
+	}) {
+		props.push(("~el".into(), path.into()));
+	}
+	props
 }
 
 fn dir(data: &FilePath, site: u64) -> PathBuf {
@@ -221,19 +231,22 @@ async fn clicks(State(web): State<Arc<Web>>, viewer: Viewer, Json(ask): Json<Ask
 		json!(["is", "event:page", [ask.page]]),
 		json!(["is", "event:props:~w", [ask.class]]),
 	]);
-	let reply = run(
-		&web.stats,
-		json!({
-			"site_id": ask.site_id,
-			"metrics": ["events"],
-			"date_range": ask.date_range,
-			"dimensions": ["event:props:~xy"],
-			"filters": filters,
-			"include": { "imports": false },
-		}),
-	)
-	.map_err(Error::bad)?;
-	let clicks: Vec<Value> = reply["results"]
+	let count = |dimension: &str, limit: usize| {
+		run(
+			&web.stats,
+			json!({
+				"site_id": ask.site_id,
+				"metrics": ["events"],
+				"date_range": ask.date_range,
+				"dimensions": [dimension],
+				"filters": filters,
+				"include": { "imports": false },
+				"pagination": { "limit": limit },
+			}),
+		)
+		.map_err(Error::bad)
+	};
+	let clicks: Vec<Value> = count("event:props:~xy", 10_000)?["results"]
 		.as_array()
 		.into_iter()
 		.flatten()
@@ -246,12 +259,57 @@ async fn clicks(State(web): State<Arc<Web>>, viewer: Viewer, Json(ask): Json<Ask
 			]))
 		})
 		.collect();
-	let site = web
+	let elements: Vec<Value> = count("event:props:~el", 50)?["results"]
+		.as_array()
+		.into_iter()
+		.flatten()
+		.map(|row| json!([row["dimensions"][0], row["metrics"][0]]))
+		.collect();
+	let period = period(&web.stats, &ask.site_id, &ask.date_range, false).map_err(Error::bad)?;
+	// share of views that saw each tenth of the page, scroll is only kept per page
+	let scrolled = |depth: u32| {
+		web.stats
+			.db
+			.query(&crater::Query {
+				site: period.site.id,
+				days: day_number(period.from)..=day_number(period.to),
+				filters: vec![
+					Filter {
+						field: Field::Dim(Dim::Page),
+						op: Op::Is,
+						values: vec![ask.page.clone()],
+					},
+					Filter {
+						field: Field::Scroll,
+						op: Op::Is,
+						values: vec![depth.to_string()],
+					},
+				],
+				breakdown: None,
+				limit: 0,
+				daily: false,
+				imports: false,
+				since: None,
+			})
+			.map(|report| report.total.scrolled)
+	};
+	let views = scrolled(0)?;
+	let reach = if views == 0 {
+		Vec::new()
+	} else {
+		(1..=10)
+			.map(|tenth| Ok(scrolled(tenth * 10)? * 100 / views))
+			.collect::<std::io::Result<Vec<u64>>>()?
+	};
+	let snapshot = web
 		.app
-		.site(&ask.site_id)?
-		.ok_or_else(|| Error::not_found("This site doesn't exist."))?;
-	let snapshot = web.app.snapshot_size(site.id, &ask.page, &ask.class)?;
-	Ok(Json(json!({ "clicks": clicks, "snapshot": snapshot })))
+		.snapshot_size(period.site.id, &ask.page, &ask.class)?;
+	Ok(Json(json!({
+		"clicks": clicks,
+		"elements": elements,
+		"reach": reach,
+		"snapshot": snapshot,
+	})))
 }
 
 #[derive(Deserialize)]
