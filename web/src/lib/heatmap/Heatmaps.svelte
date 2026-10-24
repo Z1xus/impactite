@@ -285,6 +285,7 @@
 					>
 						{#key node}
 							<Frame
+								{domain}
 								{node}
 								href="https://{domain}{chosen}"
 								width={size.width}

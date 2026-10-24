@@ -1,9 +1,14 @@
 import { record } from "@rrweb/record";
 
-const hide = (text, element) =>
-	element?.closest("[data-impactite-unmask]") ? text : text.replace(/\S/g, "*");
+// embeds keep their text in shadow roots, so the search climbs out through each host
+const shown = (element) => {
+	for (; element; element = element.parentElement ?? element.getRootNode().host)
+		if (element.hasAttribute("data-impactite-unmask")) return true;
+	return false;
+};
+const hide = (text, element) => (shown(element) ? text : text.replace(/\S/g, "*"));
 const hideTyped = (text, element) =>
-	element?.closest("[data-impactite-unmask]") && !element.matches("[type=password], [data-rr-is-password]")
+	shown(element) && !element.matches("[type=password], [data-rr-is-password]")
 		? text
 		: "*".repeat(text.length);
 
@@ -17,7 +22,11 @@ try {
 	state = JSON.parse(sessionStorage[KEY]);
 } catch {}
 if (!state || Date.now() - state.at > 18e5)
-	state = { id: crypto.randomUUID().replaceAll("-", ""), at: Date.now() };
+	state = {
+		// randomUUID needs https, this works on plain http pages too
+		id: Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join(""),
+		at: Date.now(),
+	};
 
 let events = [];
 const flush = () => {
@@ -44,7 +53,7 @@ record({
 	maskTextFn: hide,
 	maskInputFn: hideTyped,
 	blockSelector: "[data-impactite-block]",
-	sampling: { mousemove: 50, scroll: 150, input: "last" },
+	sampling: { mousemove: 50, scroll: 50, input: "last" },
 	slimDOMOptions: "all",
 });
 setInterval(flush, 5e3);

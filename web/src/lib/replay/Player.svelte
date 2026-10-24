@@ -8,12 +8,13 @@
 	import Icon from "#lib/ui/Icon.svelte";
 	import Select from "#lib/ui/Select.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
+	import { localize } from "./assets.ts";
 	import { elapsed } from "./format.ts";
 	import Timeline from "./Timeline.svelte";
 
 	type Event = { type: number; timestamp: number; data?: { source?: number; type?: number } };
 
-	let { events }: { events: Event[] } = $props();
+	let { domain, events }: { domain: string; events: Event[] } = $props();
 
 	const SPEEDS = [1, 2, 4, 8];
 
@@ -46,6 +47,7 @@
 	});
 
 	$effect(() => {
+		localize(domain, events);
 		const next = new Replayer(events as ConstructorParameters<typeof Replayer>[0], {
 			root,
 			skipInactive: true,

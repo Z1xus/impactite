@@ -19,11 +19,13 @@ use futures_util::StreamExt;
 use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use url::Url;
 
 use crate::app::{App, lock, now};
 use crate::auth::accounts::Viewer;
 use crate::ingest::{ua, unpack};
 use crate::limit::Limit;
+use crate::outbound;
 use crate::web::{Error, Reply, Web, blocking};
 
 const KEEP_DAYS: i64 = 30;
@@ -56,6 +58,7 @@ pub fn tracker() -> Router<Arc<Web>> {
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new()
 		.route("/api/app/sites/{domain}/replays", get(list))
+		.route("/api/app/sites/{domain}/asset", get(asset))
 		.route(
 			"/api/app/sites/{domain}/replays/{key}",
 			get(show).delete(remove),
@@ -170,8 +173,7 @@ async fn record(
 		return StatusCode::INTERNAL_SERVER_ERROR;
 	};
 	let agent = ua::parse(agent);
-	let entry =
-		url::Url::parse(&chunk.u).map_or_else(|_| String::new(), |url| url.path().to_owned());
+	let entry = Url::parse(&chunk.u).map_or_else(|_| String::new(), |url| url.path().to_owned());
 	let country = visitor
 		.country
 		.unwrap_or_else(|| web.ingest.country(visitor.ip));
@@ -213,6 +215,105 @@ fn member(web: &Web, user: i64, domain: &str) -> Reply<u64> {
 		.site(domain)?
 		.ok_or_else(|| Error::not_found("This site doesn't exist."))?
 		.id)
+}
+
+#[derive(Deserialize)]
+struct Asset {
+	u: String,
+}
+
+const ASSET_BYTES: usize = 16 << 20;
+
+// recorded pages load images, fonts and styles through here, the dashboard only allows its own origin
+async fn asset(
+	State(web): State<Arc<Web>>,
+	viewer: Viewer,
+	Path(domain): Path<String>,
+	Query(ask): Query<Asset>,
+) -> Reply<Response> {
+	member(&web, viewer.user, &domain)?;
+	let unreachable = || Error::new(StatusCode::BAD_GATEWAY, "This file couldn't be loaded.");
+	let url = Url::parse(&ask.u)
+		.ok()
+		.filter(|url| matches!(url.scheme(), "http" | "https") && outbound::allowed(url))
+		.ok_or_else(unreachable)?;
+	let mut reply = web
+		.hooks
+		.get(url.clone())
+		.send()
+		.await
+		.ok()
+		.filter(|reply| reply.status().is_success())
+		.ok_or_else(unreachable)?;
+	let kind = reply
+		.headers()
+		.get(header::CONTENT_TYPE)
+		.and_then(|value| value.to_str().ok())
+		.unwrap_or_default()
+		.to_ascii_lowercase();
+	let mut body = Vec::new();
+	while let Some(chunk) = reply.chunk().await.map_err(|_| unreachable())? {
+		body.extend_from_slice(&chunk);
+		if body.len() > ASSET_BYTES {
+			return Err(unreachable());
+		}
+	}
+	let css = kind.starts_with("text/css");
+	if css {
+		body = styles(&String::from_utf8_lossy(&body), &url, &domain).into_bytes();
+	}
+	// anything that could run as a page here is served as plain bytes
+	let kind = if css
+		|| [
+			"image/",
+			"font/",
+			"video/",
+			"audio/",
+			"application/font",
+			"application/x-font",
+		]
+		.iter()
+		.any(|prefix| kind.starts_with(prefix))
+	{
+		kind
+	} else {
+		"application/octet-stream".to_owned()
+	};
+	Ok((
+		[
+			(header::CONTENT_TYPE, kind),
+			(header::CACHE_CONTROL, "private, max-age=86400".to_owned()),
+			(header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
+			(
+				header::CONTENT_SECURITY_POLICY,
+				"default-src 'none'; style-src 'unsafe-inline'; sandbox".to_owned(),
+			),
+		],
+		body,
+	)
+		.into_response())
+}
+
+// a proxied stylesheet points its fonts and images back through the proxy
+fn styles(text: &str, base: &Url, domain: &str) -> String {
+	let mut out = String::with_capacity(text.len());
+	let mut rest = text;
+	while let Some(at) = rest.find("url(") {
+		out.push_str(&rest[..at + 4]);
+		rest = &rest[at + 4..];
+		let Some(end) = rest.find(')') else { break };
+		let raw = rest[..end].trim().trim_matches(['"', '\'']);
+		match base.join(raw) {
+			Ok(url) if !raw.starts_with("data:") => out.push_str(&format!(
+				"\"/api/app/sites/{domain}/asset?u={}\"",
+				url::form_urlencoded::byte_serialize(url.as_str().as_bytes()).collect::<String>()
+			)),
+			_ => out.push_str(&rest[..end]),
+		}
+		rest = &rest[end..];
+	}
+	out.push_str(rest);
+	out
 }
 
 #[derive(Deserialize)]

@@ -91,7 +91,7 @@
 					<Empty text={failed} />
 				</section>
 			{:else if found}
-				<Player events={found.events} />
+				<Player {domain} events={found.events} />
 			{:else}
 				<Skeleton class="h-[60vh] w-full" />
 			{/if}

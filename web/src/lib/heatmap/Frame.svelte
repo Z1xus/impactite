@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { Replayer } from "@rrweb/replay";
 	import "@rrweb/replay/dist/style.css";
+	import { localize } from "#lib/replay/assets.ts";
 
 	let {
+		domain,
 		node,
 		href,
 		width,
@@ -10,6 +12,7 @@
 		scale,
 		ready
 	}: {
+		domain: string;
 		node: unknown;
 		href: string;
 		width: number;
@@ -22,6 +25,7 @@
 
 	// a stored page rebuilt in a sandboxed frame, never running its scripts
 	$effect(() => {
+		localize(domain, node);
 		const replayer = new Replayer(
 			[
 				{ type: 4, data: { href, width, height }, timestamp: 0 },

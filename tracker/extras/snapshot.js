@@ -1,9 +1,14 @@
 import { snapshot } from "rrweb-snapshot";
 
-const hide = (text, element) =>
-	element?.closest("[data-impactite-unmask]") ? text : text.replace(/\S/g, "*");
+// embeds keep their text in shadow roots, so the search climbs out through each host
+const shown = (element) => {
+	for (; element; element = element.parentElement ?? element.getRootNode().host)
+		if (element.hasAttribute("data-impactite-unmask")) return true;
+	return false;
+};
+const hide = (text, element) => (shown(element) ? text : text.replace(/\S/g, "*"));
 const hideTyped = (text, element) =>
-	element?.closest("[data-impactite-unmask]") && !element.matches("[type=password], [data-rr-is-password]")
+	shown(element) && !element.matches("[type=password], [data-rr-is-password]")
 		? text
 		: "*".repeat(text.length);
 
