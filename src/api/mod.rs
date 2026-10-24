@@ -13,6 +13,7 @@ use crate::stats::{error, unauthorized};
 use crate::web::Web;
 
 mod goatcounter;
+mod mcp;
 mod monitors;
 mod sites;
 mod stats;
@@ -24,6 +25,7 @@ pub fn routes() -> Router<Arc<Web>> {
 		.merge(sites::routes())
 		.merge(monitors::routes())
 		.merge(goatcounter::routes())
+		.merge(mcp::routes())
 }
 
 // the key's user, with params merged from the query and a json, form or multipart body

@@ -33,16 +33,21 @@ fn yes() -> bool {
 	true
 }
 
-async fn insights(State(web): State<Arc<Web>>, reader: Reader, Json(ask): Json<Ask>) -> Reply {
-	if !reader.reads(&web, &ask.site_id) {
+async fn insights(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Value>) -> Reply {
+	if !reader.reads(&web, raw["site_id"].as_str().unwrap_or_default()) {
 		return Err(Error::not_found("Site not found."));
 	}
-	let spikes = spikes(&web.stats, &ask).map_err(Error::bad)?;
+	Ok(Json(explain(&web.stats, raw).map_err(Error::bad)?))
+}
+
+// spikes in the range and what changed most against the previous one
+pub fn explain(stats: &Stats, raw: Value) -> Result<Value, String> {
+	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let change = match &ask.previous {
-		Some(previous) => change(&web.stats, &ask, previous).map_err(Error::bad)?,
+		Some(previous) => change(stats, &ask, previous)?,
 		None => Value::Null,
 	};
-	Ok(Json(json!({ "change": change, "spikes": spikes })))
+	Ok(json!({ "change": change, "spikes": spikes(stats, &ask)? }))
 }
 
 fn visitors(

@@ -193,31 +193,41 @@ where
 	})
 }
 
-async fn overview(State(web): State<Arc<Web>>, reader: Reader, Json(ask): Json<Ask>) -> Reply {
-	if !reader.reads(&web, &ask.site_id) {
+async fn overview(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Value>) -> Reply {
+	if !reader.reads(&web, raw["site_id"].as_str().unwrap_or_default()) {
 		return Err(Error::not_found("Site not found."));
 	}
-	let vitals = parallel(VITALS.iter().map(|vital| {
-		let ask = &ask;
-		let stats = &web.stats;
-		move || Ok(summary(vital, &histogram(stats, ask, vital, None)?))
-	}))
-	.map_err(Error::bad)?;
-	Ok(Json(json!({ "vitals": vitals })))
+	Ok(Json(measure(&web.stats, raw).map_err(Error::bad)?))
 }
 
-async fn pages(State(web): State<Arc<Web>>, reader: Reader, Json(ask): Json<Ask>) -> Reply {
-	if !reader.reads(&web, &ask.site_id) {
+async fn pages(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Value>) -> Reply {
+	if !reader.reads(&web, raw["site_id"].as_str().unwrap_or_default()) {
 		return Err(Error::not_found("Site not found."));
 	}
+	Ok(Json(slowest(&web.stats, raw).map_err(Error::bad)?))
+}
+
+// the 75th percentile of every vital and how many visits were good, needed work or poor
+pub fn measure(stats: &Stats, raw: Value) -> Result<Value, String> {
+	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
+	let vitals = parallel(VITALS.iter().map(|vital| {
+		let ask = &ask;
+		move || Ok(summary(vital, &histogram(stats, ask, vital, None)?))
+	}))?;
+	Ok(json!({ "vitals": vitals }))
+}
+
+// the busiest pages, slowest first, for one vital
+pub fn slowest(stats: &Stats, raw: Value) -> Result<Value, String> {
+	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let vital = VITALS
 		.iter()
 		.find(|vital| Some(vital.key) == ask.metric.as_deref())
-		.ok_or_else(|| Error::bad("Pick lcp, inp, cls, fcp or ttfb."))?;
+		.ok_or("Pick lcp, inp, cls, fcp or ttfb.")?;
 	let mut filters = ask.filters.clone();
 	filters.push(json!(["is", "event:name", [EVENT]]));
 	let top = run(
-		&web.stats,
+		stats,
 		json!({
 			"site_id": ask.site_id,
 			"metrics": ["events"],
@@ -227,8 +237,7 @@ async fn pages(State(web): State<Arc<Web>>, reader: Reader, Json(ask): Json<Ask>
 			"include": { "imports": false },
 			"pagination": { "limit": 9 },
 		}),
-	)
-	.map_err(Error::bad)?;
+	)?;
 	let mut pages = parallel(
 		top["results"]
 			.as_array()
@@ -237,18 +246,16 @@ async fn pages(State(web): State<Arc<Web>>, reader: Reader, Json(ask): Json<Ask>
 			.filter_map(|row| row["dimensions"][0].as_str())
 			.map(|page| {
 				let ask = &ask;
-				let stats = &web.stats;
 				move || {
 					let mut line = summary(vital, &histogram(stats, ask, vital, Some(page))?);
 					line["page"] = json!(page);
 					Ok(line)
 				}
 			}),
-	)
-	.map_err(Error::bad)?;
+	)?;
 	pages.sort_by(|a, b| {
 		let p75 = |line: &Value| line["p75"].as_f64().unwrap_or_default();
 		p75(b).total_cmp(&p75(a))
 	});
-	Ok(Json(json!({ "pages": pages })))
+	Ok(json!({ "pages": pages }))
 }

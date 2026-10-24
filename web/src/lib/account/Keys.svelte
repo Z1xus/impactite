@@ -47,6 +47,10 @@
 	{#if fresh}
 		<Code code={fresh} />
 		<Message>Copy this key now. You won't see it again.</Message>
+		<span class="label">mcp</span>
+		<Code
+			code={`claude mcp add --transport http impactite ${location.origin}/mcp --header "Authorization: Bearer ${fresh}"`}
+		/>
 	{/if}
 	<Form action="Add key" done="Added." submit={add} inline>
 		<Field label="key name" placeholder="grafana" bind:value={name} required />
