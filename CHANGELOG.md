@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.2
+- New: Retake heatmap snapshots
+- Improved: Replays show fonts, images and video
+- Improved: Smoother scrolling in replays
+- Improved: Heatmaps open on the home page
+- Fix: Replays work on http pages
+- Fix: Text inside embeds shows in recordings
+- Fix: Full-screen sections in heatmaps have the right height
+
 ## 0.4.1
 - New: Clicked elements in heatmaps
 - New: Scroll map in heatmaps
