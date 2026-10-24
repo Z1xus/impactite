@@ -65,11 +65,9 @@
 	async function retake() {
 		await api(
 			`/api/app/sites/${domain}/snapshot?page=${encodeURIComponent(chosen)}&class=${screen}`,
-			undefined,
-			"DELETE"
+			{}
 		);
-		size = null;
-		node = null;
+		if (size) size = { ...size, updated_at: 0 };
 	}
 	const scale = $derived(size ? Math.min(1, box / size.width) : 1);
 	const total = $derived(clicks.reduce((sum, click) => sum + click[2], 0));
@@ -183,7 +181,7 @@
 				.then(async (result) => {
 					const stored = result.snapshot
 						? await get<{ node: unknown; view?: number }>(
-								`/api/app/sites/${domain}/snapshot?page=${encodeURIComponent(target)}&class=${screen}`
+								`/api/app/sites/${domain}/snapshot?page=${encodeURIComponent(target)}&class=${screen}&at=${result.snapshot.updated_at}`
 							)
 						: null;
 					if (stale) return;
@@ -279,7 +277,11 @@
 			/>
 			{#if size && !loading}
 				<span class="label sm:ml-auto">{compact(total)} clicks</span>
-				{#if editable}
+				{#if size.updated_at === 0}
+					<span class="text-small text-dim"
+						>A new snapshot is taken the next time someone visits this page.</span
+					>
+				{:else if editable}
 					<Button variant="quiet" onclick={retake}>Retake snapshot</Button>
 				{/if}
 			{/if}

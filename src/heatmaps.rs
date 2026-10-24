@@ -38,7 +38,7 @@ pub fn tracker() -> Router<Arc<Web>> {
 pub fn routes() -> Router<Arc<Web>> {
 	Router::new().route("/api/app/heatmap", post(clicks)).route(
 		"/api/app/sites/{domain}/snapshot",
-		get(snapshot).delete(retake),
+		get(snapshot).post(retake),
 	)
 }
 
@@ -320,7 +320,7 @@ struct Which {
 	class: String,
 }
 
-// the page changed, so the next visit takes a fresh snapshot
+// the page changed, so the next visit replaces the snapshot, which stays until then
 async fn retake(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
@@ -329,15 +329,9 @@ async fn retake(
 ) -> Reply<StatusCode> {
 	let site = web.editable(viewer.user, &domain)?;
 	web.app.conn().execute(
-		"delete from snapshots where site = ?1 and page = ?2 and class = ?3",
+		"update snapshots set updated_at = 0 where site = ?1 and page = ?2 and class = ?3",
 		params![site.id as i64, which.page, which.class],
 	)?;
-	let path = file(&web, site.id, &which.page, &which.class);
-	blocking(move || match fs::remove_file(path) {
-		Err(err) if err.kind() != ErrorKind::NotFound => Err(err),
-		_ => Ok(()),
-	})
-	.await?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
