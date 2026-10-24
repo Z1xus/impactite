@@ -38,6 +38,7 @@
 	import { warm } from "./warm.ts";
 	import Banner from "#lib/ui/Banner.svelte";
 	import Button from "#lib/ui/Button.svelte";
+	import Credit from "#lib/ui/Credit.svelte";
 	import Dialog from "#lib/ui/Dialog.svelte";
 	import Menu from "#lib/ui/Menu.svelte";
 	import Empty from "#lib/ui/Empty.svelte";
@@ -447,6 +448,9 @@
 			setGrain={(grain) => go({ interval: grain })}
 		/>
 		<Grid {ctx} {layout} />
+		{#if readonly}
+			<Credit label="Dashboard" />
+		{/if}
 	{:else}
 		<Loading bare />
 	{/if}

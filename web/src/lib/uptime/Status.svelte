@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Credit from "#lib/ui/Credit.svelte";
 	import Empty from "#lib/ui/Empty.svelte";
 	import Section from "#lib/ui/Section.svelte";
 	import State from "#lib/ui/State.svelte";
@@ -136,8 +137,6 @@
 	</Section>
 
 	{#if status.look.brand}
-		<a href="https://impactite.dev" class="self-center meta hover:text-fg"
-			>Status by impactite</a
-		>
+		<Credit label="Status" />
 	{/if}
 </div>
