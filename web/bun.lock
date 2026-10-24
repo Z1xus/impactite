@@ -10,6 +10,7 @@
       "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@fontsource/ibm-plex-sans": "^5.3.0",
+        "@rrweb/record": "2.2.0",
         "@rrweb/replay": "2.2.0",
         "@sveltejs/adapter-static": "^4.0.0",
         "@sveltejs/kit": "^3.0.1",
@@ -119,6 +120,8 @@
     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.14", "", { "os": "win32", "cpu": "x64" }, "sha512-9mE94bf2GZUaR/fUSXCMpBoWkctu421Mi0ORpm4zqfbkjKep7RxzPFa5etcGs5h+2KApoWBOA/hAJa/7saGgEQ=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+
+    "@rrweb/record": ["@rrweb/record@2.2.0", "", { "dependencies": { "@rrweb/types": "^2.2.0", "@rrweb/utils": "^2.2.0", "rrweb": "^2.2.0" } }, "sha512-hJYM4yaS3aFAGPuK1X80kgWod4g3FxG3fymfXLjDkBQvcDrGKTluLENnXYVklbt97eXOJ117uwV9y+xFFYmTIQ=="],
 
     "@rrweb/replay": ["@rrweb/replay@2.2.0", "", { "dependencies": { "@rrweb/types": "^2.2.0", "rrweb": "^2.2.0" } }, "sha512-dKug7wlnM2nlIhhHKUjHaz4+1b0duMe6wgo+97eU6CjV0R7yoKvW6NDKlSQQdWx99VMOZMvHTbMbwDQl5CRM1w=="],
 

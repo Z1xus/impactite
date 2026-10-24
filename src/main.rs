@@ -22,6 +22,7 @@ mod names;
 mod net;
 mod notify;
 mod outbound;
+mod replays;
 mod s3;
 mod server;
 mod site;
@@ -401,7 +402,7 @@ async fn serve(app: Arc<App>, mail: Arc<Mail>, data: &Path, args: Serve) -> anyh
 				ingest.sweep();
 				site::reports::tick(&web).await;
 				if minutes.is_multiple_of(60) {
-					prune(&app, &db, &uptime);
+					prune(&app, &db, &uptime, &web.data);
 				}
 				minutes += 1;
 			}
@@ -662,8 +663,11 @@ fn default_team(app: &App) -> anyhow::Result<Option<i64>> {
 	})
 }
 
-fn prune(app: &App, db: &Db, uptime: &uptime::Uptime) {
+fn prune(app: &App, db: &Db, uptime: &uptime::Uptime, data: &Path) {
 	uptime.log.prune(app::now());
+	if let Err(err) = replays::prune(app, data) {
+		tracing::warn!(%err, "prune replays");
+	}
 	if let Err(err) = app.purge_expired() {
 		tracing::warn!(%err, "purge expired");
 	}

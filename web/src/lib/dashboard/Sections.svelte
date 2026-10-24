@@ -22,6 +22,11 @@
 			label: "Heatmaps",
 			href: `${resolve("/[site]/heatmaps", { site: domain })}${route === "/[site]" ? search : ""}`,
 			current: route.endsWith("heatmaps")
+		},
+		{
+			label: "Replays",
+			href: resolve("/[site]/replays", { site: domain }),
+			current: route.includes("replays")
 		}
 	]}
 />

@@ -1,6 +1,6 @@
 use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{ErrorKind, Write};
+use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
 
 use axum::body::Bytes;
@@ -59,12 +59,21 @@ pub fn props(raw: &Value) -> Vec<(String, String)> {
 	]
 }
 
+fn dir(data: &FilePath, site: u64) -> PathBuf {
+	data.join("heatmaps").join(site.to_string())
+}
+
 fn file(web: &Web, site: u64, page: &str, class: &str) -> PathBuf {
 	let name = blake3::hash(format!("{page}\0{class}").as_bytes()).to_hex();
-	web.data
-		.join("heatmaps")
-		.join(site.to_string())
-		.join(format!("{}.json.gz", &name[..32]))
+	dir(&web.data, site).join(format!("{}.json.gz", &name[..32]))
+}
+
+// the snapshots of a deleted site
+pub fn clear(data: &FilePath, site: u64) -> std::io::Result<()> {
+	match fs::remove_dir_all(dir(data, site)) {
+		Err(err) if err.kind() != ErrorKind::NotFound => Err(err),
+		_ => Ok(()),
+	}
 }
 
 #[derive(Deserialize)]

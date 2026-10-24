@@ -35,6 +35,7 @@ use crate::import;
 use crate::site::shares::Reader;
 use crate::stats::day_number;
 use crate::web::{Error, Reply, Web, blocking};
+use crate::{heatmaps, replays};
 
 const UPLOAD: usize = 1 << 30;
 
@@ -179,6 +180,8 @@ async fn reset(
 	)?;
 	let db = web.stats.db.clone();
 	blocking(move || db.reset_site(site.id)).await?;
+	let (app, data) = (web.app.clone(), web.data.clone());
+	blocking(move || replays::clear(&app, &data, site.id)).await?;
 	web.app.clear_imports(site.id)?;
 	Ok(StatusCode::NO_CONTENT)
 }
@@ -288,12 +291,10 @@ async fn destroy(
 pub async fn drop_site(web: &Web, site: Site) -> Reply<()> {
 	let db = web.stats.db.clone();
 	blocking(move || db.drop_site(site.id)).await?;
-	let snapshots = web.data.join("heatmaps").join(site.id.to_string());
-	blocking(move || match fs::remove_dir_all(snapshots) {
-		Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
-		_ => Ok(()),
-	})
-	.await?;
+	let (app, data) = (web.app.clone(), web.data.clone());
+	blocking(move || replays::clear(&app, &data, site.id)).await?;
+	let data = web.data.clone();
+	blocking(move || heatmaps::clear(&data, site.id)).await?;
 	web.ingest.forget(&site.domain);
 	web.app.delete_site(site.id)?;
 	web.uptime.sync();

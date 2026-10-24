@@ -47,11 +47,15 @@ pub struct Tracked {
 impl Tracked {
 	// tracker modules the pageview answer asks for
 	pub fn modules(&self) -> Vec<&'static str> {
-		[("vitals", "vitals"), ("heatmaps", "heatmap")]
-			.into_iter()
-			.filter(|(collected, _)| self.wants(collected))
-			.map(|(_, module)| module)
-			.collect()
+		[
+			("vitals", "vitals"),
+			("heatmaps", "heatmap"),
+			("replays", "replay"),
+		]
+		.into_iter()
+		.filter(|(collected, _)| self.wants(collected))
+		.map(|(_, module)| module)
+		.collect()
 	}
 
 	pub fn wants(&self, collected: &str) -> bool {
@@ -351,6 +355,10 @@ impl Ingest {
 		if self.app.set_title(site, path, &title).is_ok() {
 			titles.insert(key, title);
 		}
+	}
+
+	pub fn country(&self, ip: IpAddr) -> String {
+		self.geo.locate(ip).country
 	}
 
 	pub fn current_visitors(&self, site: u64) -> usize {

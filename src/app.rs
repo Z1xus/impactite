@@ -343,6 +343,24 @@ const MIGRATIONS: &[&str] = &[
 		primary key (site, page, class)
 	);
 	",
+	"
+	create table replays (
+		site integer not null references sites (id) on delete cascade,
+		key text not null,
+		started_at integer not null,
+		ended_at integer not null,
+		pages integer not null,
+		clicks integer not null,
+		entry text not null,
+		country text not null,
+		device text not null,
+		browser text not null,
+		os text not null,
+		bytes integer not null,
+		primary key (site, key)
+	);
+	create index replays_by_time on replays (site, started_at);
+	",
 ];
 
 pub(crate) const HOME_MONITOR: &str = "
@@ -352,10 +370,11 @@ pub(crate) const HOME_MONITOR: &str = "
 	where (?1 = 0 or id = ?1) and team is not null and domain not like '~%' and domain != 'localhost'
 	and not exists (select 1 from monitors where monitors.site = sites.id)";
 
-const SITE_TABLES: [&str; 16] = [
+const SITE_TABLES: [&str; 17] = [
 	"monitors",
 	"notes",
 	"snapshots",
+	"replays",
 	"goals",
 	"imports",
 	"salts",

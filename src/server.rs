@@ -17,6 +17,7 @@ use crate::heatmaps;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::insights;
+use crate::replays;
 use crate::site;
 use crate::site::{
 	counter, funnels, goals, google, notes, reports, segments, shares, shields, titles,
@@ -74,6 +75,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(insights::routes())
 				.merge(vitals::routes())
 				.merge(heatmaps::routes())
+				.merge(replays::routes())
 				.merge(google::routes())
 				.merge(totp::routes())
 				.merge(sso::routes())
@@ -89,7 +91,11 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 		)
 		.merge(scripts);
 	let beacons = uptime::push::routes()
-		.merge(heatmaps::tracker().layer(DefaultBodyLimit::max(8 << 20)))
+		.merge(
+			heatmaps::tracker()
+				.merge(replays::tracker())
+				.layer(DefaultBodyLimit::max(8 << 20)),
+		)
 		.with_state(web.clone())
 		.layer(map_response(cors));
 	let batch = Router::new()

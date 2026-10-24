@@ -28,7 +28,7 @@ const MODULES: [&str; 10] = [
 ];
 
 // loaded by the tracker when the pageview answer names them
-const EXTRAS: [&str; 3] = ["vitals", "heatmap", "snapshot"];
+const EXTRAS: [&str; 4] = ["vitals", "heatmap", "snapshot", "replay"];
 
 type Built = Arc<(Vec<u8>, Vec<u8>)>;
 

@@ -17,7 +17,10 @@
 		{ key: "session", label: "sessions" },
 		{ key: "vitals", label: "page speed" }
 	];
-	const RECORDED = [{ key: "heatmaps", label: "heatmaps" }];
+	const RECORDED = [
+		{ key: "heatmaps", label: "heatmaps" },
+		{ key: "replays", label: "replays" }
+	];
 	const keys = (group: { key: string }[]) => group.map((item) => item.key);
 
 	const collect = (group: { key: string }[], collected: string[]) =>
@@ -47,7 +50,7 @@
 		}
 		options={RECORDED}
 	/>
-	{#if !site.skip.includes("heatmaps")}
+	{#if keys(RECORDED).some((key) => !site.skip.includes(key))}
 		<Note>Inputs are always hidden. Add data-impactite-mask to hide more.</Note>
 	{/if}
 </Section>

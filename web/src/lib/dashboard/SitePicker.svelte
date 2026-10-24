@@ -8,8 +8,10 @@
 	import Select from "#lib/ui/Select.svelte";
 	import { warm } from "./warm.ts";
 
-	let { domain, section = "overview" }: { domain: string; section?: "overview" | "heatmaps" } =
-		$props();
+	let {
+		domain,
+		section = "overview"
+	}: { domain: string; section?: "overview" | "heatmaps" | "replays" } = $props();
 
 	const combined = $derived(domain.startsWith("team:"));
 	const team = $derived(currentTeam());
@@ -28,6 +30,7 @@
 	function open(key: string) {
 		if (key === "all") return goto(resolve("/all"));
 		if (section === "heatmaps") return goto(resolve("/[site]/heatmaps", { site: key }));
+		if (section === "replays") return goto(resolve("/[site]/replays", { site: key }));
 		return goto(resolve("/[site]", { site: key }));
 	}
 </script>
