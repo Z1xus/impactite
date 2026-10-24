@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0
+- New: Notes on the visitor chart
+- New: Traffic spikes explained
+- New: Web vitals
+- New: Paths between pages
+- New: Opt-in heatmaps and session replays
+- New: MCP server for AI assistants
+- New: One-line install script
+- New: Notice when a site still loads the Plausible script
+- Improved: Instant page and tab switches
+- Improved: Loading animations and a progress bar
+- Improved: Plainer wording everywhere
+- Improved: Clearer goal, filter and settings controls
+- Security: Limits on recording uploads
+- Security: Page text hidden in recordings by default
+- Security: Chart notes visible to members only
+- Fix: Resetting stats clears heatmap snapshots
+- Fix: MCP lists every site for server keys
+
 ## 0.3.0
 - New: Uptime monitors
 - New: Incidents on the visitor chart
