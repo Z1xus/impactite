@@ -7,7 +7,7 @@
 
 	type Part = string | { from: string; to: string };
 
-	let { parts, delay = 0 }: { parts: Part[]; delay?: number } = $props();
+	let { parts, delay = 0, done }: { parts: Part[]; delay?: number; done?: () => void } = $props();
 
 	const final = $derived(
 		parts.map((part) => (typeof part === "string" ? part : part.to)).join("")
@@ -41,6 +41,7 @@
 		}
 		active = -1;
 		stage = "done";
+		done?.();
 	}
 
 	async function write() {

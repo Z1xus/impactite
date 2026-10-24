@@ -62,10 +62,16 @@
 	}
 }
 
-@keyframes rise {
+@utility extrude {
+	text-shadow:
+		0.0625em 0.0625em 0 var(--color-cyan-deep),
+		0.125em 0.125em 0 var(--color-cyan-night),
+		0.1875em 0.1875em 0 var(--color-cyan-night);
+}
+
+@keyframes extrude {
 	from {
-		opacity: 0;
-		transform: translateY(12px);
+		text-shadow: none;
 	}
 }
 
@@ -77,7 +83,9 @@
 	}
 	[data-appear].shown {
 		opacity: 1;
-		animation: rise 700ms cubic-bezier(0.2, 0, 0, 1) var(--delay, 0ms) both;
+	}
+	:is(.shown .extrude, .extrude.shown) {
+		animation: extrude 360ms steps(3) calc(var(--delay, 0ms) + 360ms) both;
 	}
 	[data-chart] {
 		clip-path: inset(0);

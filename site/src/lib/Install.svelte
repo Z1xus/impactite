@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import Code from "#lib/ui/Code.svelte";
 	import Field from "#lib/ui/Field.svelte";
 	import Toggle from "#lib/ui/Toggle.svelte";
+
+	let { change }: { change?: () => void } = $props();
 
 	// everything stays in the browser, secrets are placeholders to fill in later
 	let host = $state("");
@@ -149,6 +152,11 @@
 	const snippet = $derived(
 		`<script defer data-domain="example.com" src="${url}/js/script.js">${end}`
 	);
+
+	$effect(() => {
+		void command;
+		untrack(() => change?.());
+	});
 </script>
 
 <div class="flex flex-col gap-6">

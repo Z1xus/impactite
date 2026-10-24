@@ -20,6 +20,7 @@ import fire from "pixelarticons/svg/fire.svg?raw";
 import paths from "pixelarticons/svg/git-branch.svg?raw";
 import robot from "pixelarticons/svg/robot.svg?raw";
 import zap from "pixelarticons/svg/zap.svg?raw";
+import type { Mark } from "#lib/dither/chart.ts";
 
 export const REPO = "https://github.com/Z1xus/impactite";
 export const BENCH = "https://github.com/Z1xus/impactite-benchmarks";
@@ -81,11 +82,24 @@ export const FEATURES = [
 ];
 
 // 28 days of the demo site, with the day it hit the front page
+const [FRONT, BOOST] = [18, 4.3];
 const days = Array.from({ length: 28 }, (_, i) => {
 	const weekly = [0.82, 1, 1.04, 1.02, 0.97, 0.7, 0.62][i % 7];
-	const spike = i === 18 ? 4.3 : i === 19 ? 1.9 : 1;
+	const spike = i === FRONT ? BOOST : i === FRONT + 1 ? 1.9 : 1;
 	return Math.round((210 + i * 6) * weekly * spike);
 });
+
+export const MARKS: Mark[] = [
+	{ at: 9, tone: "note", lines: ["Launch post"] },
+	{
+		at: FRONT,
+		tone: "spike",
+		lines: [
+			`+${(days[FRONT] - Math.round(days[FRONT] / BOOST)).toLocaleString("en-US")} visitors`,
+			"Hacker News"
+		]
+	}
+];
 export const LABELS = days.map((_, i) =>
 	new Date(Date.UTC(2026, 8, 18 + i)).toLocaleDateString("en-US", {
 		month: "short",

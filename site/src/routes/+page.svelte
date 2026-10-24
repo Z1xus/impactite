@@ -9,6 +9,7 @@
 	import Rows from "#lib/ui/Rows.svelte";
 	import Kpis from "#lib/ui/Kpis.svelte";
 	import Panel from "#lib/ui/Panel.svelte";
+	import { Tween } from "svelte/motion";
 	import { ICONIC, LETTERED, icon } from "#lib/icons/resolve.ts";
 	import { METRICS, format } from "#lib/stats.ts";
 	import {
@@ -17,6 +18,7 @@
 		FEATURES,
 		GOATCOUNTER,
 		LABELS,
+		MARKS,
 		PANELS,
 		PLAUSIBLE,
 		PREVIOUS,
@@ -31,6 +33,10 @@
 	import Race from "../lib/Race.svelte";
 	import Scale from "../lib/Scale.svelte";
 	import Section from "../lib/Section.svelte";
+	import Sprite from "../lib/Sprite.svelte";
+	import Surface from "../lib/Surface.svelte";
+	import Ticker from "../lib/Ticker.svelte";
+	import { CRATE, CRATER, RACK } from "../lib/shapes.ts";
 	import { appear } from "../lib/appear.ts";
 	import { impact } from "../lib/impact.ts";
 
@@ -40,6 +46,10 @@
 	const stat = (label: string) => STATS.find((item) => item.label === label)?.values[0] ?? 0;
 
 	let landed = $state(true);
+	let pageviews = $state(50);
+	let moved = $state(false);
+	const heat = new Tween(0.2, { duration: 1400 });
+	const flare = () => heat.set(1, { duration: 0 }).then(() => heat.set(0.2));
 	let metric = $state(0);
 	let tabs = $state({ left: "visit:source", right: "event:page" });
 	const local = (spec: ReturnType<typeof icon>) =>
@@ -62,44 +72,49 @@
 	<link rel="prefetch" href={DEMO} />
 </svelte:head>
 
-<div id="top" class="mx-auto flex max-w-6xl flex-col gutter pb-8" {@attach appear}>
-	<header class="relative z-30 flex h-16 items-center justify-between">
-		<a href="#top" class="flex h-control items-center gap-2 font-mono text-body">
-			<Logo />
-			<span class="max-[23rem]:hidden">impactite</span>
-		</a>
-		<nav class="flex items-center gap-4 sm:gap-6">
-			<a href="#speed" class="hidden h-control items-center label hover:text-fg sm:flex"
-				>speed</a
-			>
-			<a href="#compatible" class="hidden h-control items-center label hover:text-fg sm:flex"
-				>compatible</a
-			>
-			<a href={DEMO} class="flex h-control items-center label hover:text-fg">demo</a>
-			<a href="#install" class="flex h-control items-center label hover:text-fg">install</a>
-			<a
-				href={REPO}
-				class="flex h-control items-center gap-1.5 label hover:text-fg"
-				aria-label="source on github{data.stars === null ? '' : `, ${data.stars} stars`}"
-			>
-				<Icon svg={github} size={12} />
-				{#if data.stars !== null}
-					<Icon svg={star} size={12} />
-					<span class="num">{compact(data.stars)}</span>
-				{/if}
+<div id="top" class="flex flex-col" {@attach appear}>
+	<div class="mx-auto w-full max-w-6xl gutter pb-section">
+		<header class="relative z-30 flex h-16 items-center justify-between">
+			<a href="#top" class="flex h-control items-center gap-2 font-mono text-body">
+				<Logo />
+				<span class="max-[23rem]:hidden">impactite</span>
 			</a>
-		</nav>
-	</header>
+			<nav class="flex items-center gap-4 sm:gap-6">
+				<a href="#speed" class="hidden h-control items-center label hover:text-fg sm:flex"
+					>speed</a
+				>
+				<a
+					href="#compatible"
+					class="hidden h-control items-center label hover:text-fg sm:flex">compatible</a
+				>
+				<a href={DEMO} class="flex h-control items-center label hover:text-fg">demo</a>
+				<a href="#install" class="flex h-control items-center label hover:text-fg"
+					>install</a
+				>
+				<a
+					href={REPO}
+					class="flex h-control items-center gap-1.5 label hover:text-fg"
+					aria-label="source on github{data.stars === null
+						? ''
+						: `, ${data.stars} stars`}"
+				>
+					<Icon svg={github} size={12} />
+					{#if data.stars !== null}
+						<Icon svg={star} size={12} />
+						<span class="num">{compact(data.stars)}</span>
+					{/if}
+				</a>
+			</nav>
+		</header>
 
-	<main class="flex flex-col gap-section pt-8 md:pt-12">
 		<div
-			class="relative flex flex-col gap-section"
+			class="relative flex flex-col gap-section pt-8 md:pt-12"
 			data-landed="false"
 			use:impact={(value) => (landed = value)}
 		>
 			<section class="grid items-center gap-8 md:grid-cols-[1fr_auto] md:gap-12">
 				<div class="shown relative z-30 flex flex-col gap-6" data-appear>
-					<h1 class="font-mono text-big tracking-tight md:text-display">
+					<h1 class="font-mono text-big tracking-tight extrude md:text-display">
 						Analytics<br />that land.
 					</h1>
 					<p class="max-w-md text-title text-dim">
@@ -134,6 +149,7 @@
 							labels={LABELS}
 							format={(value) => format(METRICS[metric].key, value)}
 							height={200}
+							marks={landed ? MARKS : []}
 						/>
 					</div>
 				</section>
@@ -150,73 +166,110 @@
 				</div>
 			</div>
 		</div>
+	</div>
 
-		<section id="speed" class="flex flex-col gap-14">
-			<h2 class="font-mono text-heading tracking-tight" data-appear>Benchmarks</h2>
-			<div class="grid gap-x-12 gap-y-10 md:grid-cols-2">
-				{#each STATS as item, i (item.label)}
-					<div class="flex flex-col gap-4" data-appear style:--delay="{(i % 3) * 80}ms">
-						<span class="label">{item.label}</span>
-						<Race
-							unit={item.unit}
-							digits={item.digits ?? 0}
-							better={item.better}
-							rows={TOOLS.map((label, k) => ({
-								label,
-								value: item.values[k],
-								ours: k === 0
-							}))}
-						/>
-					</div>
-				{/each}
-			</div>
-			<p class="text-body text-dim" data-appear>
-				1M pageviews each on one machine. Plausible CE 3.2.1, GoatCounter 2.7.0, Ryzen 5
-				7600X.
-				<a href={BENCH} class="-m-3 p-3 text-cyan hover:text-fg">Source</a>
-			</p>
-		</section>
+	<Ticker />
 
-		<Section
-			id="scale"
-			title="Do you really need Kubernetes?"
-			note="Set your monthly pageviews to see the load on one server."
-		>
-			<Scale cpu={stat("cpu for 1M pageviews")} rate={stat("pageviews per second")} />
-		</Section>
-
-		<Section
-			id="compatible"
-			title="Migrating from Plausible or GoatCounter?"
-			note="Just change the host in your script. Your old snippets, custom events and API calls keep working."
-		>
-			<div class="flex flex-col gap-4">
-				<span class="label">plausible</span>
-				<Edit parts={PLAUSIBLE} delay={300} />
-				<span class="label">goatcounter</span>
-				<Edit parts={GOATCOUNTER} delay={1900} />
-			</div>
-		</Section>
-
-		<section
-			class="grid gap-px overflow-hidden rounded-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4"
-		>
-			{#each FEATURES as feature, i (feature.label)}
-				<div
-					class="flex items-center gap-3 bg-panel px-4 py-5"
-					data-appear
-					style:--delay="{i * 40}ms"
-				>
-					<Icon svg={feature.icon} size={16} class="text-dim" />
-					<span class="text-body">{feature.label}</span>
+	<main>
+		<Surface>
+			<section id="speed" class="flex flex-col gap-14">
+				<h2 class="font-mono text-heading tracking-tight extrude" data-appear>
+					Benchmarks
+				</h2>
+				<div class="grid gap-x-12 gap-y-10 md:grid-cols-2">
+					{#each STATS as item, i (item.label)}
+						<div
+							class="flex flex-col gap-4"
+							data-appear
+							style:--delay="{(i % 3) * 80}ms"
+						>
+							<span class="label">{item.label}</span>
+							<Race
+								unit={item.unit}
+								digits={item.digits ?? 0}
+								better={item.better}
+								rows={TOOLS.map((label, k) => ({
+									label,
+									value: item.values[k],
+									ours: k === 0
+								}))}
+							/>
+						</div>
+					{/each}
 				</div>
-			{/each}
-		</section>
+				<p class="text-body text-dim" data-appear>
+					1M pageviews each on one machine. Plausible CE 3.2.1, GoatCounter 2.7.0, Ryzen 5
+					7600X.
+					<a href={BENCH} class="-m-3 p-3 text-cyan hover:text-fg">Source</a>
+				</p>
+			</section>
+		</Surface>
 
-		<Section id="install" title="One binary. Done.">
-			<Install />
-		</Section>
+		<Surface raised>
+			<Section
+				id="scale"
+				title="Do you really need Kubernetes?"
+				note="Set your monthly pageviews to see the load on one server."
+			>
+				{#snippet art()}<Sprite shape={RACK} level={pageviews / 100} size={288} />{/snippet}
+				<Scale
+					cpu={stat("cpu for 1M pageviews")}
+					rate={stat("pageviews per second")}
+					bind:position={pageviews}
+				/>
+			</Section>
+		</Surface>
 
+		<Surface>
+			<Section
+				id="compatible"
+				flip
+				title="Migrating from Plausible or GoatCounter?"
+				note="Just change the host in your script. Your old snippets, custom events and API calls keep working."
+			>
+				{#snippet art()}<Sprite shape={CRATE} level={moved ? 1 : 0} size={288} />{/snippet}
+				<div class="flex flex-col gap-4">
+					<span class="label">plausible</span>
+					<Edit parts={PLAUSIBLE} delay={300} />
+					<span class="label">goatcounter</span>
+					<Edit parts={GOATCOUNTER} delay={1900} done={() => (moved = true)} />
+				</div>
+			</Section>
+		</Surface>
+
+		<Surface raised>
+			<section id="features" class="flex flex-col gap-14">
+				<h2 class="font-mono text-heading tracking-tight extrude" data-appear>
+					Everything included.
+				</h2>
+				<div
+					class="grid gap-px overflow-hidden rounded-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4"
+				>
+					{#each FEATURES as feature, i (feature.label)}
+						<div
+							class="flex items-center gap-3 bg-panel px-4 py-5"
+							data-appear
+							style:--delay="{i * 40}ms"
+						>
+							<Icon svg={feature.icon} size={16} class="text-dim" />
+							<span class="text-body">{feature.label}</span>
+						</div>
+					{/each}
+				</div>
+			</section>
+		</Surface>
+
+		<Surface>
+			<Section id="install" title="One binary. Done.">
+				{#snippet art()}
+					<Sprite shape={CRATER} level={heat.current} size={288} poke={flare} />
+				{/snippet}
+				<Install change={flare} />
+			</Section>
+		</Surface>
+	</main>
+
+	<div class="mx-auto w-full max-w-6xl gutter pb-8">
 		<footer
 			class="flex flex-col gap-4 border-t border-line py-8 sm:flex-row sm:items-center sm:justify-between"
 			data-appear
@@ -234,5 +287,5 @@
 				>
 			</span>
 		</footer>
-	</main>
+	</div>
 </div>

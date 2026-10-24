@@ -1,8 +1,10 @@
 <script lang="ts">
 	// from the benchmark: cpu seconds for a million pageviews, and pageviews a second on one machine
-	let { cpu, rate }: { cpu: number; rate: number } = $props();
-
-	let position = $state(50);
+	let {
+		cpu,
+		rate,
+		position = $bindable(50)
+	}: { cpu: number; rate: number; position?: number } = $props();
 
 	const monthly = $derived(Math.round(10 ** (4 + (position / 100) * 6)));
 	const daily = $derived((monthly / 30) * (cpu / 1e6));
