@@ -30,17 +30,15 @@
 
 {#if !missing || letter}
 	<span
-		class="relative grid h-5 w-5 shrink-0 place-items-center rounded-[3px] bg-raised"
+		class="relative grid h-5 w-5 shrink-0 place-items-center rounded-[3px] {missing
+			? 'border border-edge bg-raised'
+			: ''}"
 		aria-hidden="true"
 	>
-		<span
-			class="absolute inset-0 rounded-[3px] border {color ? 'opacity-55' : 'border-edge'}"
-			style:border-color={color}
-		></span>
 		{#if missing}
 			<span class="font-mono text-label leading-none text-dim">{letter}</span>
 		{:else if spec?.kind === "brand"}
-			<svg width="12" height="12" viewBox="0 0 24 24" fill={color}>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill={color}>
 				<path d={spec.path} />
 			</svg>
 		{:else if spec?.kind === "image"}
@@ -54,11 +52,11 @@
 				alt=""
 				loading={eager ? "eager" : "lazy"}
 				onload={() => (loaded = true)}
-				class={spec.flag ? "h-[9px] w-3 rounded-[1px] object-cover" : "h-3 w-3"}
+				class={spec.flag ? "h-3 w-4 rounded-[1px] object-cover" : "h-4 w-4"}
 				onerror={() => (broken = true)}
 			/>
 		{:else if spec?.kind === "pixel"}
-			<Icon svg={spec.svg} size={12} class="text-dim" />
+			<Icon svg={spec.svg} size={16} class="text-dim" />
 		{/if}
 	</span>
 {:else}
