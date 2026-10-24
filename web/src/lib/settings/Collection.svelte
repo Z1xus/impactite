@@ -52,8 +52,9 @@
 	/>
 	{#if keys(RECORDED).some((key) => !site.skip.includes(key))}
 		<Note>
-			Recordings hide all page text and anything visitors type. To show some text, add
-			<code class="font-code text-fg">data-impactite-unmask</code> to it.
+			Recordings hide all page text and anything visitors type. To show part of a page, add
+			<code class="font-code text-fg">data-impactite-unmask</code> to it. Passwords always stay
+			hidden.
 		</Note>
 	{/if}
 </Section>

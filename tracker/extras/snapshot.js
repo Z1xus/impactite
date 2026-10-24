@@ -2,6 +2,10 @@ import { snapshot } from "rrweb-snapshot";
 
 const hide = (text, element) =>
 	element?.closest("[data-impactite-unmask]") ? text : text.replace(/\S/g, "*");
+const hideTyped = (text, element) =>
+	element?.closest("[data-impactite-unmask]") && !element.matches("[type=password], [data-rr-is-password]")
+		? text
+		: "*".repeat(text.length);
 
 const t = window.impactite;
 const src = document.currentScript.src;
@@ -15,6 +19,7 @@ const body = JSON.stringify({
 		maskAllInputs: true,
 		maskTextSelector: "*",
 		maskTextFn: hide,
+		maskInputFn: hideTyped,
 		blockSelector: "[data-impactite-block]",
 		inlineStylesheet: true,
 	}),

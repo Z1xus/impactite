@@ -2,6 +2,10 @@ import { record } from "@rrweb/record";
 
 const hide = (text, element) =>
 	element?.closest("[data-impactite-unmask]") ? text : text.replace(/\S/g, "*");
+const hideTyped = (text, element) =>
+	element?.closest("[data-impactite-unmask]") && !element.matches("[type=password], [data-rr-is-password]")
+		? text
+		: "*".repeat(text.length);
 
 const t = window.impactite;
 const src = document.currentScript.src;
@@ -38,6 +42,7 @@ record({
 	maskAllInputs: true,
 	maskTextSelector: "*",
 	maskTextFn: hide,
+	maskInputFn: hideTyped,
 	blockSelector: "[data-impactite-block]",
 	sampling: { mousemove: 50, scroll: 150, input: "last" },
 	slimDOMOptions: "all",
