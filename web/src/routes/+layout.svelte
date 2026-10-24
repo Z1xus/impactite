@@ -29,7 +29,7 @@
 			!document.startViewTransition ||
 			matchMedia("(prefers-reduced-motion: reduce)").matches ||
 			navigation.from?.url.pathname === navigation.to?.url.pathname ||
-			// a scrolled page would fade into one at the top
+			// a scrolled page would swap into one at the top
 			(scrollY > 0 && navigation.type !== "popstate")
 		)
 			return;

@@ -210,9 +210,7 @@
 				<Empty text="No snapshot of this page yet." />
 			{:else}
 				<div
-					class="relative mx-auto transition-opacity duration-150 {loading
-						? 'opacity-60'
-						: ''}"
+					class="relative mx-auto"
 					style:width="{size.width * scale}px"
 					style:height="{size.height * scale}px"
 				>

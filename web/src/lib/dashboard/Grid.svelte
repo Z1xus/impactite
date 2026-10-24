@@ -134,9 +134,7 @@
 			role="listitem"
 			data-panel={panel.id}
 			animate:flip={{ duration: 200 }}
-			class="min-w-0 transition-opacity duration-150 {['goals', 'vitals'].includes(
-				panel.id
-			) && !hidden
+			class="min-w-0 {['goals', 'vitals'].includes(panel.id) && !hidden
 				? 'md:col-span-2'
 				: ''} {dragging === panel.id ? 'opacity-40' : ''} {layout.arranging
 				? 'select-none'

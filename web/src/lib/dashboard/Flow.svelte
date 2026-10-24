@@ -27,7 +27,6 @@
 	let top = $state("");
 	let before = $state.raw<Ranked | null>(null);
 	let after = $state.raw<Ranked | null>(null);
-	let loading = $state(false);
 	let failed = $state(false);
 	let tries = $state(0);
 
@@ -74,7 +73,6 @@
 
 	function load() {
 		let stale = false;
-		loading = true;
 		failed = false;
 		const page = focus;
 		const viewed = ["is", "event:name", ["pageview"]];
@@ -95,12 +93,8 @@
 			: ask("pageviews", ["event:page"], [viewed]).then((result) => {
 					if (!stale) top = result.results[0]?.dimensions[0] ?? "";
 				});
-		work.then(() => {
-			if (!stale) loading = false;
-		}).catch(() => {
-			if (stale) return;
-			failed = true;
-			loading = false;
+		work.catch(() => {
+			if (!stale) failed = true;
 		});
 		return () => (stale = true);
 	}
@@ -126,7 +120,6 @@
 		<div class="grid grid-cols-2 gap-2">
 			<Rows
 				rows={before}
-				{loading}
 				{limit}
 				format={(value) => format("pageviews", value)}
 				columns={["from"]}
@@ -134,7 +127,6 @@
 			/>
 			<Rows
 				rows={after}
-				{loading}
 				{limit}
 				format={(value) => format("pageviews", value)}
 				columns={["next"]}

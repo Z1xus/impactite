@@ -34,7 +34,6 @@
 	let chosenProp = $state("");
 	let chosenFunnel = $state(0);
 	let ranked = $state.raw<Ranked>(null);
-	let loading = $state(false);
 	let failed = $state(false);
 	let tries = $state(0);
 	// search console terms replace referrers under the google source when connected
@@ -168,14 +167,12 @@
 		let stale = false;
 		const at = dim;
 		const where = toQueryFilters(ctx.filters);
-		loading = true;
 		failed = false;
 		const done = (rows: Ranked, searched = false) => {
 			if (stale) return;
 			ranked = rows;
 			terms = searched;
 			shown = at;
-			loading = false;
 		};
 		const request =
 			tab === "funnels"
@@ -188,7 +185,6 @@
 		request.catch(() => {
 			if (stale) return;
 			failed = true;
-			loading = false;
 		});
 		return () => (stale = true);
 	}
@@ -283,6 +279,6 @@
 			/>
 		</div>
 	{:else}
-		<Rows {rows} {loading} format={(value) => format("visitors", value)} {columns} {pick} />
+		<Rows {rows} format={(value) => format("visitors", value)} {columns} {pick} />
 	{/if}
 </Panel>

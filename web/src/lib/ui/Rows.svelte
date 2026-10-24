@@ -7,7 +7,6 @@
 
 	let {
 		rows,
-		loading = false,
 		limit = 8,
 		format,
 		columns,
@@ -26,7 +25,6 @@
 					tone?: "warn" | "bad";
 			  }[]
 			| null;
-		loading?: boolean;
 		limit?: number;
 		format?: (value: number) => string;
 		columns?: string[];
@@ -36,7 +34,7 @@
 	const max = $derived(Math.max(1, ...(rows ?? []).map((row) => row.value)));
 </script>
 
-<ul class="flex flex-col transition-opacity duration-150 {loading ? 'opacity-60 delay-300' : ''}">
+<ul class="flex flex-col">
 	{#if columns && rows?.length}
 		<li class="flex h-6 items-start justify-end gap-4 px-4 label text-faint">
 			{#each columns as column, i (column)}

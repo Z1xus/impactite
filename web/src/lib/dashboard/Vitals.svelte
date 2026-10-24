@@ -36,7 +36,6 @@
 	let metric = $state("lcp");
 	let measured = $state.raw<Measured[] | null>(null);
 	let pages = $state.raw<Ranked>(null);
-	let loading = $state(false);
 	let failed = $state(false);
 	let tries = $state(0);
 
@@ -58,7 +57,6 @@
 
 	function load() {
 		let stale = false;
-		loading = true;
 		failed = false;
 		const request =
 			tab === "vitals"
@@ -80,15 +78,9 @@
 										: undefined
 						}));
 					});
-		request
-			.then(() => {
-				if (!stale) loading = false;
-			})
-			.catch(() => {
-				if (stale) return;
-				failed = true;
-				loading = false;
-			});
+		request.catch(() => {
+			if (!stale) failed = true;
+		});
 		return () => (stale = true);
 	}
 
@@ -132,7 +124,6 @@
 	{:else if tab === "pages"}
 		<Rows
 			rows={pages}
-			{loading}
 			format={(value) => speed(metric, value)}
 			columns={["p75"]}
 			pick={(page) => ctx.add("event:page", page)}
@@ -150,11 +141,7 @@
 	{:else if !shown.length}
 		<Empty text="No page speed yet." compact />
 	{:else}
-		<div
-			class="grid grid-cols-2 transition-opacity duration-150 sm:grid-cols-3 lg:grid-cols-5 {loading
-				? 'opacity-60 delay-300'
-				: ''}"
-		>
+		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
 			{#each shown as item (item.key)}
 				{#if item.value?.p75 !== undefined && item.value.rating && item.value.shares}
 					<Vital

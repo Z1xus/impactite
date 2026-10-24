@@ -19,7 +19,7 @@
 
 {#if zone}
 	<label
-		class="flex cursor-pointer flex-col items-center gap-3 rounded-px border border-dashed px-6 py-10 text-center transition-colors duration-100 focus-within:border-cyan {over
+		class="flex cursor-pointer flex-col items-center gap-3 rounded-px border border-dashed px-6 py-10 text-center focus-within:border-cyan {over
 			? 'border-cyan bg-raised'
 			: 'border-control hover:border-dim'}"
 		ondragover={(event) => {
@@ -41,7 +41,7 @@
 	</label>
 {:else}
 	<label
-		class="flex h-control min-w-0 cursor-pointer items-center gap-2.5 rounded-px border border-control bg-panel px-3 transition-colors duration-100 focus-within:border-cyan hover:border-dim"
+		class="flex h-control min-w-0 cursor-pointer items-center gap-2.5 rounded-px border border-control bg-panel px-3 focus-within:border-cyan hover:border-dim"
 	>
 		<Icon svg={icon} size={12} class="shrink-0 text-dim" />
 		{#if file}

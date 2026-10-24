@@ -7,16 +7,8 @@
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- callers pass resolved paths -->
-<a
-	{href}
-	{title}
-	class="group flex h-control min-w-0 items-center gap-3 transition-colors duration-100 hover:text-cyan"
->
-	<Icon
-		svg={back}
-		size={16}
-		class="text-dim transition-colors duration-100 group-hover:text-cyan"
-	/>
+<a {href} {title} class="group flex h-control min-w-0 items-center gap-3 hover:text-cyan">
+	<Icon svg={back} size={16} class="text-dim group-hover:text-cyan" />
 	{@render children()}
 </a>
 <!-- eslint-enable svelte/no-navigation-without-resolve -->

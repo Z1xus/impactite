@@ -298,9 +298,7 @@
 				<div class="mb-2 flex items-center gap-2">
 					{@render controls()}
 					{#if insight?.change?.drivers.length}
-						<div
-							class="ml-auto flex min-w-0 animate-[pop_100ms_ease-out] items-center gap-1 motion-reduce:animate-none max-sm:hidden"
-						>
+						<div class="ml-auto flex min-w-0 items-center gap-1 max-sm:hidden">
 							<span class="mr-1 label">driven by</span>
 							{#each insight.change.drivers as item (item.dimension)}
 								<Driver

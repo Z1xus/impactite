@@ -13,7 +13,7 @@
 	{#each toasts as item (item.id)}
 		<div
 			animate:flip={{ duration: 150 }}
-			transition:fly={{ y: 8, duration: 150 }}
+			transition:fly={{ y: 8, duration: 150, opacity: 1 }}
 			role={item.bad ? "alert" : "status"}
 			class="flex min-h-control items-center gap-3 rounded-px border bg-raised pl-3 text-body {item.bad
 				? 'border-bad/50 text-bad'

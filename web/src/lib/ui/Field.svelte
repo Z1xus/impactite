@@ -42,7 +42,7 @@
 	const look = $derived(
 		`rounded-px border bg-panel text-fg ${
 			size === "sm" ? "h-compact px-2.5 text-small" : "px-3 text-body"
-		} transition-colors duration-100 outline-none placeholder:text-faint ${
+		} outline-none placeholder:text-faint ${
 			invalid ? "border-bad" : "border-control hover:border-dim focus:border-cyan"
 		}`
 	);
@@ -59,7 +59,7 @@
 			class="{look} resize-y py-2.5 font-code text-small leading-5"></textarea>
 	{:else if prefix}
 		<span
-			class="flex h-control items-center rounded-px border border-control bg-panel transition-colors duration-100 focus-within:border-cyan hover:border-dim"
+			class="flex h-control items-center rounded-px border border-control bg-panel focus-within:border-cyan hover:border-dim"
 		>
 			<span class="truncate pl-3 text-body text-faint">{prefix}</span>
 			<input

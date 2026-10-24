@@ -349,7 +349,7 @@
 		{#if empty === false && uptime.value?.monitor}
 			<a
 				href={resolve("/uptime/[id]", { id: String(uptime.value.monitor.id) })}
-				class="flex h-control animate-[pop_100ms_ease-out] items-center rounded-px px-1 hover:bg-raised motion-reduce:animate-none"
+				class="flex h-control items-center rounded-px px-1 hover:bg-raised"
 				title="uptime"
 			>
 				<State state={uptime.value.monitor.state} since={uptime.value.monitor.since} />

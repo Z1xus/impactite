@@ -23,7 +23,7 @@
 
 <button
 	type="button"
-	class="inline-flex h-7 items-center gap-1.5 rounded-px border pr-2.5 pl-1 text-small transition-[color,border-color,opacity] duration-100 {on
+	class="inline-flex h-7 items-center gap-1.5 rounded-px border pr-2.5 pl-1 text-small {on
 		? 'border-cyan text-fg'
 		: 'border-line text-dim hover:border-edge hover:text-fg'} {dim && !on ? 'opacity-40' : ''}"
 	aria-pressed={on}
