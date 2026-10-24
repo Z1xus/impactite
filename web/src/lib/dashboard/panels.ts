@@ -18,6 +18,7 @@ export const PANELS: PanelSpec[] = [
 			{ key: "event:page", label: "pages" },
 			{ key: "visit:entry_page", label: "entry" },
 			{ key: "visit:exit_page", label: "exit" },
+			{ key: "flow", label: "flow" },
 			{ key: "event:hostname", label: "hostnames" }
 		]
 	},

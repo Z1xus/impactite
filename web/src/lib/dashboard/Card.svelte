@@ -8,6 +8,7 @@
 	import Panel from "#lib/ui/Panel.svelte";
 	import Rows from "#lib/ui/Rows.svelte";
 	import Select from "#lib/ui/Select.svelte";
+	import Flow from "./Flow.svelte";
 	import { PAGES, UTM, drilled } from "./panels.ts";
 	import type { Context, PanelSpec } from "./types.ts";
 
@@ -163,6 +164,7 @@
 	}
 
 	function load() {
+		if (tab === "flow") return;
 		let stale = false;
 		const at = dim;
 		const where = toQueryFilters(ctx.filters);
@@ -252,16 +254,18 @@
 	{move}
 	{tabs}
 	warm={(key) => {
-		if (key !== "funnels")
+		if (key !== "funnels" && key !== "flow")
 			request(dimOf(key), key, toQueryFilters(ctx.filters)).catch(() => {});
 	}}
 	bind:tab={() => tab, (next) => (chosen = next)}
-	expand={tab === "funnels"
+	expand={tab === "funnels" || tab === "flow"
 		? undefined
 		: () => ctx.expand(dim, panel.tabs.find((item) => item.key === tab)?.label ?? "")}
 	actions={["props", "utm", "funnels"].includes(tab) ? picker : undefined}
 >
-	{#if failed}
+	{#if tab === "flow"}
+		<Flow {ctx} />
+	{:else if failed}
 		<Empty retry={() => tries++} />
 	{:else if tab === "map"}
 		<div class="flex h-full items-center px-2 py-1">
