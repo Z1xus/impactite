@@ -289,10 +289,10 @@
 					{#each marked as item, i (i)}
 						{#each item.lines as line, j (j)}
 							<span
-								class="max-w-64 truncate text-small {item.tone === 'spike'
-									? 'text-cyan'
-									: j
-										? 'text-dim'
+								class="max-w-64 truncate text-small {j
+									? 'text-dim'
+									: item.tone === 'spike'
+										? 'text-cyan'
 										: 'text-fg'}">{line}</span
 							>
 						{/each}

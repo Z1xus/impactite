@@ -14,6 +14,7 @@ mod guard;
 mod icons;
 mod import;
 mod ingest;
+mod insights;
 mod limit;
 mod mail;
 mod names;

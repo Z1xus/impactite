@@ -63,7 +63,10 @@ fn readable(method: &Method, path: &str) -> bool {
 					.iter()
 					.any(|suffix| path.ends_with(suffix))
 		}
-		Method::POST => matches!(path, "/api/app/query" | "/api/app/props"),
+		Method::POST => matches!(
+			path,
+			"/api/app/query" | "/api/app/props" | "/api/app/insights"
+		),
 		_ => false,
 	}
 }

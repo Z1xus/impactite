@@ -15,6 +15,7 @@ use crate::export;
 use crate::guard::guard;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
+use crate::insights;
 use crate::site;
 use crate::site::{
 	counter, funnels, goals, google, notes, reports, segments, shares, shields, titles,
@@ -68,6 +69,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(reports::routes())
 				.merge(titles::routes())
 				.merge(notes::routes())
+				.merge(insights::routes())
 				.merge(google::routes())
 				.merge(totp::routes())
 				.merge(sso::routes())

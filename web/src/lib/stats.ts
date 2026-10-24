@@ -62,6 +62,15 @@ export function query(site: string, body: Record<string, unknown>, imports = tru
 	return api<Result>("/api/app/query", { site_id: site, include: { imports }, ...body });
 }
 
+export type Driver = { dimension: string; value: string; delta: number };
+export type Insights = {
+	change: { percent: number; drivers: Driver[] } | null;
+	spikes: { day: string; excess: number; drivers: Driver[] }[];
+};
+
+export const insights = (site: string, body: Record<string, unknown>) =>
+	api<Insights>("/api/app/insights", { site_id: site, ...body });
+
 export const propKeys = (site: string, range: Range) =>
 	get<string[]>("/api/app/props", {
 		site_id: site,

@@ -3,7 +3,20 @@
 	import Chart from "#lib/dither/Chart.svelte";
 	import type { Band, Mark } from "#lib/dither/chart.ts";
 	import { clock } from "#lib/display.svelte.ts";
-	import { METRICS, cached, format, toQueryFilters, type Metric } from "#lib/stats.ts";
+	import { icon } from "#lib/icons/resolve.ts";
+	import {
+		METRICS,
+		cached,
+		compact,
+		display,
+		format,
+		insights,
+		toQueryFilters,
+		type Insights,
+		type Metric
+	} from "#lib/stats.ts";
+	import Driver from "#lib/ui/Driver.svelte";
+	import file from "pixelarticons/svg/file.svg?raw";
 	import Empty from "#lib/ui/Empty.svelte";
 	import Kpis from "#lib/ui/Kpis.svelte";
 	import Select from "#lib/ui/Select.svelte";
@@ -48,6 +61,7 @@
 	let series = $state.raw<number[]>([]);
 	let previousSeries = $state.raw<number[]>([]);
 	let lines = $state.raw<Line[]>([]);
+	let insight = $state.raw<Insights | null>(null);
 	let failed = $state(false);
 	let tries = $state(0);
 	let sort = $state<[string, "asc" | "desc"]>(["", "asc"]);
@@ -120,11 +134,22 @@
 			const at = place(keys, item.day);
 			if (at >= 0) (placed[at] ??= []).push(item.text);
 		}
-		return Object.entries(placed).map(([at, lines]) => ({
-			at: Number(at),
-			tone: "note",
-			lines
-		}));
+		const spikes = (insight?.spikes ?? []).flatMap((spike): Mark[] => {
+			const at = place(keys, spike.day);
+			const lines = [
+				`+${compact(spike.excess)} visitors`,
+				...spike.drivers.map((item) => display(item.dimension, item.value))
+			];
+			return at < 0 ? [] : [{ at, tone: "spike", lines }];
+		});
+		return [
+			...Object.entries(placed).map(([at, lines]): Mark => ({
+				at: Number(at),
+				tone: "note",
+				lines
+			})),
+			...spikes
+		];
 	});
 
 	const key = $derived(
@@ -156,6 +181,18 @@
 		const { previous, grain } = dates;
 		let stale = false;
 		failed = false;
+		insight = null;
+		if (metric === "visitors" && !realtime && !ctx.combined)
+			insights(ctx.domain, {
+				date_range: dates.current,
+				previous,
+				filters: where,
+				imports
+			})
+				.then((result) => {
+					if (!stale) insight = result;
+				})
+				.catch(() => {});
 		Promise.all([
 			ask({ metrics: KEYS, date_range: dates.current, filters: where }),
 			previous && ask({ metrics: KEYS, date_range: previous, filters: where }),
@@ -260,6 +297,23 @@
 			{:else}
 				<div class="mb-2 flex items-center gap-2">
 					{@render controls()}
+					{#if insight?.change?.drivers.length}
+						<div
+							class="ml-auto flex min-w-0 animate-[pop_100ms_ease-out] items-center gap-1 motion-reduce:animate-none max-sm:hidden"
+						>
+							<span class="mr-1 label">driven by</span>
+							{#each insight.change.drivers as item (item.dimension)}
+								<Driver
+									label={display(item.dimension, item.value)}
+									delta="{item.delta > 0 ? '+' : ''}{compact(item.delta)}"
+									icon={item.dimension === "visit:source"
+										? icon(item.dimension, item.value)
+										: { kind: "pixel", svg: file }}
+									pick={() => ctx.add(item.dimension, item.value)}
+								/>
+							{/each}
+						</div>
+					{/if}
 				</div>
 				<Chart
 					values={series}
