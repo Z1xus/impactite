@@ -11,6 +11,7 @@ mod demo;
 mod export;
 mod geo;
 mod guard;
+mod heatmaps;
 mod icons;
 mod import;
 mod ingest;

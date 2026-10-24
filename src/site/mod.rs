@@ -288,6 +288,12 @@ async fn destroy(
 pub async fn drop_site(web: &Web, site: Site) -> Reply<()> {
 	let db = web.stats.db.clone();
 	blocking(move || db.drop_site(site.id)).await?;
+	let snapshots = web.data.join("heatmaps").join(site.id.to_string());
+	blocking(move || match fs::remove_dir_all(snapshots) {
+		Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
+		_ => Ok(()),
+	})
+	.await?;
 	web.ingest.forget(&site.domain);
 	web.app.delete_site(site.id)?;
 	web.uptime.sync();

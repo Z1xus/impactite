@@ -13,6 +13,7 @@ use crate::auth::{accounts, admin, keys, passkeys, prefs, profile, sso, teams, t
 use crate::batch;
 use crate::export;
 use crate::guard::guard;
+use crate::heatmaps;
 use crate::icons;
 use crate::ingest::{Ingest, goatcounter, plausible};
 use crate::insights;
@@ -72,6 +73,7 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.merge(notes::routes())
 				.merge(insights::routes())
 				.merge(vitals::routes())
+				.merge(heatmaps::routes())
 				.merge(google::routes())
 				.merge(totp::routes())
 				.merge(sso::routes())
@@ -86,14 +88,15 @@ pub fn router(ingest: Arc<Ingest>, stats: Arc<Stats>, web: Arc<Web>) -> Router {
 				.with_state(web.clone()),
 		)
 		.merge(scripts);
-	let pings = uptime::push::routes()
+	let beacons = uptime::push::routes()
+		.merge(heatmaps::tracker().layer(DefaultBodyLimit::max(8 << 20)))
 		.with_state(web.clone())
 		.layer(map_response(cors));
 	let batch = Router::new()
 		.route("/api/app/batch", post(batch::batch))
 		.with_state(app.clone());
 	app.merge(batch)
-		.merge(pings)
+		.merge(beacons)
 		.merge(
 			Router::new()
 				.fallback(assets::serve)

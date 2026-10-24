@@ -40,7 +40,14 @@ type Waiting = {
 	fail: (err: unknown) => void;
 };
 
-const READS = new Set(["/api/app/query", "/api/app/props", "/api/app/insights"]);
+const READS = new Set([
+	"/api/app/query",
+	"/api/app/props",
+	"/api/app/insights",
+	"/api/app/vitals",
+	"/api/app/vitals/pages",
+	"/api/app/heatmap"
+]);
 let waiting: Waiting[] = [];
 
 async function send(

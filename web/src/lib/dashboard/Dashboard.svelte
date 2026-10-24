@@ -8,9 +8,7 @@
 	import { ICONIC, icon } from "#lib/icons/resolve.ts";
 	import more from "pixelarticons/svg/more-vertical.svg?raw";
 	import funnel from "pixelarticons/svg/filter.svg?raw";
-	import sliders from "pixelarticons/svg/sliders.svg?raw";
-	import { display } from "#lib/display.svelte.ts";
-	import { currentTeam, findSite, session, teamTimezone } from "#lib/session.svelte.ts";
+	import { currentTeam, findSite } from "#lib/session.svelte.ts";
 	import {
 		METRICS,
 		cached,
@@ -31,6 +29,8 @@
 	import type { Context, Funnel, Note } from "./types.ts";
 	import Notes from "./Notes.svelte";
 	import Details from "./Details.svelte";
+	import Sections from "./Sections.svelte";
+	import SitePicker from "./SitePicker.svelte";
 	import FilterDialog from "./FilterDialog.svelte";
 	import NewEvents from "#lib/settings/NewEvents.svelte";
 	import Period from "./Period.svelte";
@@ -49,7 +49,6 @@
 	import Live from "#lib/ui/Live.svelte";
 	import State from "#lib/ui/State.svelte";
 	import { siteUptime } from "#lib/uptime/site.svelte.ts";
-	import Select from "#lib/ui/Select.svelte";
 
 	let {
 		domain,
@@ -63,16 +62,6 @@
 		!readonly && ["owner", "admin", "editor"].includes(findSite(domain)?.role ?? "")
 	);
 	const team = $derived(currentTeam());
-	const sites = $derived([
-		...((team?.sites.length ?? 0) > 1 && display.all === "show"
-			? [{ key: "all", label: "All sites" }]
-			: []),
-		...(session.me?.teams.flatMap((item) => item.sites) ?? []).map((site) => ({
-			key: site.domain,
-			label: site.domain,
-			glyph: icon("event:hostname", site.domain)
-		}))
-	]);
 
 	const metric = $derived(
 		METRICS.find((item) => item.key === page.url.searchParams.get("metric"))?.key ?? "visitors"
@@ -341,27 +330,10 @@
 				{domain}
 			</Title>
 		{:else}
-			<Select
-				value={combined ? "all" : domain}
-				options={sites}
-				data
-				plain
-				title
-				footer={editable
-					? {
-							label: "Site settings",
-							href: resolve("/[site]/settings/[[section]]", { site: domain }),
-							icon: sliders
-						}
-					: undefined}
-				warm={(key) => {
-					const site = findSite(key);
-					if (team && key === "all") warm(`team:${team.id}`, teamTimezone(team));
-					else if (site) warm(key, site.timezone);
-				}}
-				pick={(key) =>
-					goto(key === "all" ? resolve("/all") : resolve("/[site]", { site: key }))}
-			/>
+			<SitePicker {domain} />
+			{#if !combined}
+				<Sections {domain} />
+			{/if}
 		{/if}
 		{#if empty === false}<Live site={domain} />{/if}
 		{#if empty === false && uptime.value?.monitor}

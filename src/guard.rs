@@ -9,7 +9,7 @@ use crate::web::{Web, fail};
 
 // the event endpoints take posts from any site, everything else answers its own pages only
 fn open_to_sites(web: &Web, path: &str) -> bool {
-	matches!(path, "/api/event" | "/count")
+	matches!(path, "/api/event" | "/count" | "/api/snapshot")
 		|| path.starts_with("/ping/")
 		|| path.starts_with("/api/push/")
 		|| web

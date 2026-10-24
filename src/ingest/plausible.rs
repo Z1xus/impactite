@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{Client, Hit, Ingest};
-use crate::{net, stats, vitals};
+use crate::{heatmaps, net, stats, vitals};
 
 #[derive(Deserialize)]
 struct Payload {
@@ -70,6 +70,8 @@ pub async fn event(
 	let raw = payload.p.or(payload.m);
 	let props = if name == vitals::EVENT {
 		vitals::props(raw.as_ref().unwrap_or(&Value::Null))
+	} else if name == heatmaps::EVENT {
+		heatmaps::props(raw.as_ref().unwrap_or(&Value::Null))
 	} else {
 		match props(raw) {
 			Ok(props) => props,

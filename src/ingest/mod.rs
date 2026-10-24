@@ -4,16 +4,19 @@ pub(crate) mod referrer;
 pub(crate) mod ua;
 
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use axum::http::{HeaderMap, header};
 use crater::{Db, Dim, Event};
+use flate2::read::GzDecoder;
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
 
 use crate::app::{App, Site, lock};
 use crate::geo::Geo;
+use crate::heatmaps;
 use crate::net::Proxies;
 use crate::site::shields::Shields;
 use crate::vitals;
@@ -44,16 +47,21 @@ pub struct Tracked {
 impl Tracked {
 	// tracker modules the pageview answer asks for
 	pub fn modules(&self) -> Vec<&'static str> {
-		[("vitals", "vitals")]
+		[("vitals", "vitals"), ("heatmaps", "heatmap")]
 			.into_iter()
-			.filter(|(collected, _)| !self.skip.contains(*collected))
+			.filter(|(collected, _)| self.wants(collected))
 			.map(|(_, module)| module)
 			.collect()
 	}
 
+	pub fn wants(&self, collected: &str) -> bool {
+		!self.skip.contains(collected)
+	}
+
 	fn collects(&self, name: &str) -> bool {
 		match name {
-			vitals::EVENT => !self.skip.contains("vitals"),
+			vitals::EVENT => self.wants("vitals"),
+			heatmaps::EVENT => self.wants("heatmaps"),
 			_ => !name.starts_with('~'),
 		}
 	}
@@ -428,6 +436,19 @@ impl Ingest {
 		lock(shard(visitor)).insert((site, visitor), Session { id, last: ts, page });
 		Ok((id, from))
 	}
+}
+
+// tracker uploads may come gzipped, either way they stay under `cap` bytes
+pub fn unpack(body: &[u8], cap: u64) -> Option<Vec<u8>> {
+	if !body.starts_with(&[0x1f, 0x8b]) {
+		return (body.len() as u64 <= cap).then(|| body.to_vec());
+	}
+	let mut raw = Vec::new();
+	GzDecoder::new(body)
+		.take(cap + 1)
+		.read_to_end(&mut raw)
+		.ok()?;
+	(raw.len() as u64 <= cap).then_some(raw)
 }
 
 // the first language of accept-language, like "en" from "en-GB,en;q=0.9"

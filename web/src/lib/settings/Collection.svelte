@@ -17,6 +17,16 @@
 		{ key: "session", label: "sessions" },
 		{ key: "vitals", label: "page speed" }
 	];
+	const RECORDED = [{ key: "heatmaps", label: "heatmaps" }];
+	const keys = (group: { key: string }[]) => group.map((item) => item.key);
+
+	const collect = (group: { key: string }[], collected: string[]) =>
+		saveSite(domain, {
+			skip: [
+				...site.skip.filter((key) => !keys(group).includes(key)),
+				...keys(group).filter((key) => !collected.includes(key))
+			]
+		});
 </script>
 
 <Section id="collection" label="collection">
@@ -25,17 +35,19 @@
 	{/if}
 	<Checks
 		bind:value={
-			() => COLLECTED.map((item) => item.key).filter((key) => !site.skip.includes(key)),
-			(collected) =>
-				saveSite(domain, {
-					skip: [
-						...site.skip.filter((key) => !COLLECTED.some((item) => item.key === key)),
-						...COLLECTED.map((item) => item.key).filter(
-							(key) => !collected.includes(key)
-						)
-					]
-				})
+			() => keys(COLLECTED).filter((key) => !site.skip.includes(key)),
+			(collected) => collect(COLLECTED, collected)
 		}
 		options={COLLECTED}
 	/>
+	<Checks
+		bind:value={
+			() => keys(RECORDED).filter((key) => !site.skip.includes(key)),
+			(recorded) => collect(RECORDED, recorded)
+		}
+		options={RECORDED}
+	/>
+	{#if !site.skip.includes("heatmaps")}
+		<Note>Inputs are always hidden. Add data-impactite-mask to hide more.</Note>
+	{/if}
 </Section>

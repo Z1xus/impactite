@@ -70,6 +70,7 @@ fn readable(method: &Method, path: &str) -> bool {
 				| "/api/app/insights"
 				| "/api/app/vitals"
 				| "/api/app/vitals/pages"
+				| "/api/app/heatmap"
 		),
 		_ => false,
 	}

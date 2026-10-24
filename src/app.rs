@@ -332,6 +332,17 @@ const MIGRATIONS: &[&str] = &[
 	);
 	",
 	"update sites set skip = trim(skip || ',heatmaps,replays', ',');",
+	"
+	create table snapshots (
+		site integer not null references sites (id) on delete cascade,
+		page text not null,
+		class text not null,
+		width integer not null,
+		height integer not null,
+		updated_at integer not null,
+		primary key (site, page, class)
+	);
+	",
 ];
 
 pub(crate) const HOME_MONITOR: &str = "
@@ -341,9 +352,10 @@ pub(crate) const HOME_MONITOR: &str = "
 	where (?1 = 0 or id = ?1) and team is not null and domain not like '~%' and domain != 'localhost'
 	and not exists (select 1 from monitors where monitors.site = sites.id)";
 
-const SITE_TABLES: [&str; 15] = [
+const SITE_TABLES: [&str; 16] = [
 	"monitors",
 	"notes",
+	"snapshots",
 	"goals",
 	"imports",
 	"salts",
