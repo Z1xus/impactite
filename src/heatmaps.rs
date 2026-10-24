@@ -1,10 +1,11 @@
 use std::fs;
 use std::io::{ErrorKind, Write};
+use std::net::SocketAddr;
 use std::path::{Path as FilePath, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use axum::body::Bytes;
-use axum::extract::{Path, Query, State};
+use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -18,11 +19,16 @@ use serde_json::{Value, json};
 use crate::app::{App, now};
 use crate::auth::accounts::Viewer;
 use crate::ingest::{ua, unpack};
+use crate::limit::Limit;
 use crate::stats::run;
 use crate::web::{Error, Reply, Web, blocking};
 
 pub const EVENT: &str = "~click";
 const STALE: i64 = 7 * 86_400;
+// per kind of screen
+const PAGES: i64 = 3000;
+
+static CLIENTS: LazyLock<Limit> = LazyLock::new(|| Limit::new(10, 10));
 
 pub fn tracker() -> Router<Arc<Web>> {
 	Router::new().route("/api/snapshot", get(wanted).post(upload))
@@ -68,8 +74,10 @@ fn file(web: &Web, site: u64, page: &str, class: &str) -> PathBuf {
 	dir(&web.data, site).join(format!("{}.json.gz", &name[..32]))
 }
 
-// the snapshots of a deleted site
-pub fn clear(data: &FilePath, site: u64) -> std::io::Result<()> {
+pub fn clear(app: &App, data: &FilePath, site: u64) -> std::io::Result<()> {
+	app.conn()
+		.execute("delete from snapshots where site = ?1", [site as i64])
+		.map_err(std::io::Error::other)?;
 	match fs::remove_dir_all(dir(data, site)) {
 		Err(err) if err.kind() != ErrorKind::NotFound => Err(err),
 		_ => Ok(()),
@@ -112,12 +120,22 @@ struct Snapshot {
 	node: Value,
 }
 
-async fn upload(State(web): State<Arc<Web>>, headers: HeaderMap, body: Bytes) -> StatusCode {
+async fn upload(
+	State(web): State<Arc<Web>>,
+	ConnectInfo(peer): ConnectInfo<SocketAddr>,
+	headers: HeaderMap,
+	body: Bytes,
+) -> StatusCode {
+	let client = web.ingest.proxies.visitor(peer, &headers).ip.to_string();
+	if !CLIENTS.open(&client) {
+		return StatusCode::TOO_MANY_REQUESTS;
+	}
+	CLIENTS.strike(&client);
 	let agent = headers
 		.get(header::USER_AGENT)
 		.and_then(|value| value.to_str().ok())
 		.unwrap_or_default();
-	let Some(snapshot) = unpack(&body, 32 << 20)
+	let Some(snapshot) = unpack(&body, 16 << 20)
 		.filter(|_| !ua::is_bot(agent))
 		.and_then(|raw| serde_json::from_slice::<Snapshot>(&raw).ok())
 	else {
@@ -126,6 +144,9 @@ async fn upload(State(web): State<Arc<Web>>, headers: HeaderMap, body: Bytes) ->
 	let Some(site) = needs(&web, &snapshot.d, &snapshot.p, &snapshot.w) else {
 		return StatusCode::NO_CONTENT;
 	};
+	if !worth(&web, site, &snapshot) {
+		return StatusCode::NO_CONTENT;
+	}
 	let path = file(&web, site, &snapshot.p, &snapshot.w);
 	let stored =
 		json!({ "width": snapshot.width, "height": snapshot.height, "node": snapshot.node });
@@ -151,6 +172,34 @@ async fn upload(State(web): State<Arc<Web>>, headers: HeaderMap, body: Bytes) ->
 		Ok(()) => StatusCode::NO_CONTENT,
 		Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
 	}
+}
+
+// only pages with views this week, so made up paths are never stored
+fn worth(web: &Web, site: u64, snapshot: &Snapshot) -> bool {
+	if matches!(
+		web.app.snapshot_age(site, &snapshot.p, &snapshot.w),
+		Ok(Some(_))
+	) {
+		return true;
+	}
+	if web
+		.app
+		.snapshot_count(site)
+		.is_ok_and(|count| count >= PAGES * 3)
+	{
+		return false;
+	}
+	run(
+		&web.stats,
+		json!({
+			"site_id": snapshot.d,
+			"metrics": ["pageviews"],
+			"date_range": "7d",
+			"filters": [["is", "event:page", [snapshot.p]]],
+			"include": { "imports": false },
+		}),
+	)
+	.is_ok_and(|reply| reply["results"][0]["metrics"][0].as_f64().unwrap_or(0.0) > 0.0)
 }
 
 #[derive(Deserialize)]
@@ -249,6 +298,14 @@ impl App {
 				|row| row.get(0),
 			)
 			.optional()
+	}
+
+	fn snapshot_count(&self, site: u64) -> rusqlite::Result<i64> {
+		self.conn().query_row(
+			"select count(*) from snapshots where site = ?1",
+			[site as i64],
+			|row| row.get(0),
+		)
 	}
 
 	fn snapshot_size(&self, site: u64, page: &str, class: &str) -> rusqlite::Result<Value> {

@@ -1,28 +1,53 @@
+use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::SocketAddr;
 use std::path::{Path as FilePath, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex};
 
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use flate2::Compression;
 use flate2::read::MultiGzDecoder;
 use flate2::write::GzEncoder;
+use futures_util::StreamExt;
 use rusqlite::{OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::app::{App, now};
+use crate::app::{App, lock, now};
 use crate::auth::accounts::Viewer;
 use crate::ingest::{ua, unpack};
+use crate::limit::Limit;
 use crate::web::{Error, Reply, Web, blocking};
 
 const KEEP_DAYS: i64 = 30;
-const MAX_BYTES: i64 = 20 << 20;
+const MAX_BYTES: i64 = 5 << 20;
+// so uploads from anyone can't fill the disk
+const DAILY_BYTES: i64 = 256 << 20;
+
+// room for an office of tabs behind one address, each sends every 5 s
+static CLIENTS: LazyLock<Limit> = LazyLock::new(|| Limit::new(240, 1));
+static SPENT: LazyLock<Mutex<HashMap<u64, (i64, i64)>>> = LazyLock::new(Mutex::default);
+
+fn spend(site: u64, bytes: i64) -> bool {
+	let day = now() / 86_400;
+	let mut spent = lock(&SPENT);
+	let (at, total) = spent.entry(site).or_insert((day, 0));
+	if *at != day {
+		(*at, *total) = (day, 0);
+	}
+	if *total >= DAILY_BYTES {
+		return false;
+	}
+	*total += bytes;
+	true
+}
 
 pub fn tracker() -> Router<Arc<Web>> {
 	Router::new().route("/api/replay", post(record))
@@ -89,6 +114,12 @@ async fn record(
 		.get(header::USER_AGENT)
 		.and_then(|value| value.to_str().ok())
 		.unwrap_or_default();
+	let visitor = web.ingest.proxies.visitor(peer, &headers);
+	let client = visitor.ip.to_string();
+	if !CLIENTS.open(&client) {
+		return StatusCode::TOO_MANY_REQUESTS;
+	}
+	CLIENTS.strike(&client);
 	let Some(chunk) = unpack(&body, 16 << 20)
 		.filter(|_| !ua::is_bot(agent))
 		.and_then(|raw| serde_json::from_slice::<Chunk>(&raw).ok())
@@ -116,6 +147,9 @@ async fn record(
 		Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
 		_ => {}
 	}
+	if !spend(site, body.len() as i64) {
+		return StatusCode::NO_CONTENT;
+	}
 
 	let path = dir(&web.data, site).join(format!("{key}.gz"));
 	let line = Value::Array(chunk.e).to_string();
@@ -139,7 +173,6 @@ async fn record(
 	let agent = ua::parse(agent);
 	let entry =
 		url::Url::parse(&chunk.u).map_or_else(|_| String::new(), |url| url.path().to_owned());
-	let visitor = web.ingest.proxies.visitor(peer, &headers);
 	let country = visitor
 		.country
 		.unwrap_or_else(|| web.ingest.country(visitor.ip));
@@ -200,11 +233,12 @@ async fn list(
 	})))
 }
 
+// streamed, so a long recording never sits whole in memory
 async fn show(
 	State(web): State<Arc<Web>>,
 	viewer: Viewer,
 	Path((domain, key)): Path<(String, String)>,
-) -> Reply {
+) -> Reply<Response> {
 	let site = member(&web, viewer.user, &domain)?;
 	let replay = web
 		.app
@@ -212,17 +246,50 @@ async fn show(
 		.ok_or_else(|| Error::not_found("This replay is gone."))?;
 	let path =
 		dir(&web.data, site).join(format!("{}.gz", replay["key"].as_str().unwrap_or_default()));
-	let events = blocking(move || {
-		let mut events = Vec::new();
-		for line in BufReader::new(MultiGzDecoder::new(fs::File::open(path)?)).lines() {
-			if let Ok(Value::Array(chunk)) = serde_json::from_str(&line?) {
-				events.extend(chunk);
+	let (send, receive) = tokio::sync::mpsc::channel::<Bytes>(4);
+	tokio::task::spawn_blocking(move || {
+		let Ok(file) = fs::File::open(path) else {
+			return;
+		};
+		let mut first = true;
+		for line in BufReader::new(MultiGzDecoder::new(file)).lines() {
+			let Ok(line) = line else { break };
+			// one line per uploaded chunk, each a json array
+			let Some(events) = line
+				.strip_prefix('[')
+				.and_then(|rest| rest.strip_suffix(']'))
+			else {
+				continue;
+			};
+			if events.is_empty() {
+				continue;
+			}
+			let piece = if first {
+				events.to_owned()
+			} else {
+				format!(",{events}")
+			};
+			first = false;
+			if send.blocking_send(Bytes::from(piece)).is_err() {
+				return;
 			}
 		}
-		Ok(events)
-	})
-	.await?;
-	Ok(Json(json!({ "replay": replay, "events": events })))
+	});
+	let head = Bytes::from(format!(r#"{{"replay":{replay},"events":["#));
+	let events = futures_util::stream::unfold(receive, |mut receive| async move {
+		receive.recv().await.map(|piece| (piece, receive))
+	});
+	let body = futures_util::stream::once(async move { head })
+		.chain(events)
+		.chain(futures_util::stream::once(async {
+			Bytes::from_static(b"]}")
+		}))
+		.map(Ok::<_, Infallible>);
+	Ok((
+		[(header::CONTENT_TYPE, "application/json")],
+		Body::from_stream(body),
+	)
+		.into_response())
 }
 
 async fn remove(

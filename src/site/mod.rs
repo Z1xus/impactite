@@ -181,7 +181,11 @@ async fn reset(
 	let db = web.stats.db.clone();
 	blocking(move || db.reset_site(site.id)).await?;
 	let (app, data) = (web.app.clone(), web.data.clone());
-	blocking(move || replays::clear(&app, &data, site.id)).await?;
+	blocking(move || {
+		replays::clear(&app, &data, site.id)?;
+		heatmaps::clear(&app, &data, site.id)
+	})
+	.await?;
 	web.app.clear_imports(site.id)?;
 	Ok(StatusCode::NO_CONTENT)
 }
@@ -292,9 +296,11 @@ pub async fn drop_site(web: &Web, site: Site) -> Reply<()> {
 	let db = web.stats.db.clone();
 	blocking(move || db.drop_site(site.id)).await?;
 	let (app, data) = (web.app.clone(), web.data.clone());
-	blocking(move || replays::clear(&app, &data, site.id)).await?;
-	let data = web.data.clone();
-	blocking(move || heatmaps::clear(&data, site.id)).await?;
+	blocking(move || {
+		replays::clear(&app, &data, site.id)?;
+		heatmaps::clear(&app, &data, site.id)
+	})
+	.await?;
 	web.ingest.forget(&site.domain);
 	web.app.delete_site(site.id)?;
 	web.uptime.sync();
