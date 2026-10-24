@@ -48,7 +48,7 @@
 	}
 </script>
 
-<Section id="two-factor" label="two factor">
+<Section id="two-factor" label="two-factor">
 	{#snippet actions()}
 		{#if !session.me?.totp && !pending}
 			<Button variant="quiet" onclick={start}>Set up</Button>

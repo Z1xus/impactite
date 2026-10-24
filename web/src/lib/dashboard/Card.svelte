@@ -279,6 +279,6 @@
 			/>
 		</div>
 	{:else}
-		<Rows {rows} format={(value) => format("visitors", value)} {columns} {pick} />
+		<Rows {rows} format={(value) => format("visitors", value)} {columns} {pick} filter />
 	{/if}
 </Panel>

@@ -71,7 +71,7 @@
 	const account = $derived([
 		{ label: "Account", href: resolve("/settings/[[section]]", {}) },
 		...(session.me?.admin
-			? [{ label: "Instance", href: resolve("/admin/[[section]]", {}) }]
+			? [{ label: "Server", href: resolve("/admin/[[section]]", {}) }]
 			: []),
 		"divider" as const,
 		{ label: "Sign out", onclick: (): void => void signOut() }

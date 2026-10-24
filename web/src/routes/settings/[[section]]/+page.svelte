@@ -29,7 +29,7 @@
 			{ id: "profile", label: "profile", icon: user, group: "account" },
 			{ id: "display", label: "display", icon: monitor, group: "account" },
 			{ id: "password", label: "password", icon: lock, group: "sign in" },
-			{ id: "two-factor", label: "two factor", icon: phone, group: "sign in" },
+			{ id: "two-factor", label: "two-factor", icon: phone, group: "sign in" },
 			{ id: "passkeys", label: "passkeys", icon: key, group: "sign in" },
 			{ id: "sessions", label: "sessions", icon: laptop, group: "sign in" },
 			{ id: "keys", label: "API keys", icon: code, group: "developers" },

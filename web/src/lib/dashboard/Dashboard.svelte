@@ -400,6 +400,16 @@
 												}
 											]
 										: []),
+									...(editable
+										? [
+												{
+													label: "Site settings",
+													href: resolve("/[site]/settings/[[section]]", {
+														site: domain
+													})
+												}
+											]
+										: []),
 									"divider",
 									{
 										label: "Download CSV",
@@ -430,7 +440,7 @@
 				? `Your site sends ${unlisted[0].name} events, but there's no goal for them yet.`
 				: `Your site sends ${unlisted.length} kinds of events that have no goal yet.`}
 		>
-			<Button variant="quiet" onclick={() => (reviewing = true)}>Review</Button>
+			<Button variant="quiet" onclick={() => (reviewing = true)}>Set up goals</Button>
 		</Banner>
 	{/if}
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import external from "pixelarticons/svg/external-link.svg?raw";
+	import funnel from "pixelarticons/svg/filter.svg?raw";
 	import type { Spec } from "#lib/icons/resolve.ts";
 	import Glyph from "./Glyph.svelte";
 	import Icon from "./Icon.svelte";
@@ -10,7 +11,8 @@
 		limit = 8,
 		format,
 		columns,
-		pick
+		pick,
+		filter = false
 	}: {
 		rows:
 			| {
@@ -29,6 +31,7 @@
 		format?: (value: number) => string;
 		columns?: string[];
 		pick?: (key: string) => void;
+		filter?: boolean;
 	} = $props();
 
 	const max = $derived(Math.max(1, ...(rows ?? []).map((row) => row.value)));
@@ -63,6 +66,7 @@
 					type="button"
 					class="absolute inset-0 rounded-px enabled:hover:bg-raised"
 					aria-label={row.label}
+					title={filter && pick ? `Show only ${row.label}` : undefined}
 					onclick={() => pick?.(row.key)}
 					inert={!pick}
 				></button>
@@ -100,6 +104,13 @@
 						{/if}
 					</span>
 					<span class="relative flex items-center gap-4 pr-2">
+						{#if filter && pick}
+							<Icon
+								svg={funnel}
+								size={12}
+								class="text-dim opacity-0 group-hover:opacity-100"
+							/>
+						{/if}
 						{#if row.extra}
 							<span class="w-14 text-right font-mono text-label text-dim"
 								>{row.extra}</span

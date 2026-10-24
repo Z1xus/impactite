@@ -23,7 +23,7 @@
 			label={item.label}
 			value={totals?.[i] ?? null}
 			change={totals && previous ? delta(item.key, totals[i], previous[i]) : null}
-			unit={item.key === "bounce_rate" ? "pp" : "%"}
+			unit={item.key === "bounce_rate" ? " pts" : "%"}
 			before={previous ? format(item.key, previous[i]) : undefined}
 			format={(value) => format(item.key, value)}
 			active={active === i}

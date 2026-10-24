@@ -42,7 +42,7 @@
 			retry={admin.failed ? load : undefined}
 		>
 			{#snippet title()}
-				<Title>Instance</Title>
+				<Title>Server</Title>
 			{/snippet}
 
 			{#if admin.info}

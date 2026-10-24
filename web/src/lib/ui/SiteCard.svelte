@@ -40,11 +40,7 @@
 						? monitor.state
 						: `${monitor.state}, ${percent(monitor.uptime_30d)} in 30 days`}
 				>
-					<State
-						state={monitor.state}
-						since={monitor.since}
-						dot={!["down", "slow"].includes(monitor.state)}
-					/>
+					<State state={monitor.state} since={monitor.since} />
 				</span>
 			{/if}
 		{/if}

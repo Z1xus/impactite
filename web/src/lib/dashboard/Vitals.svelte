@@ -127,6 +127,7 @@
 			format={(value) => speed(metric, value)}
 			columns={["p75"]}
 			pick={(page) => ctx.add("event:page", page)}
+			filter
 		/>
 	{:else if measured === null}
 		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">

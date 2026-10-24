@@ -29,6 +29,6 @@
 				shares[2]
 			)} poor"
 		/>
-		<span class="num text-label text-dim">{percent(shares[0])}</span>
+		<span class="num text-label text-dim">{percent(shares[0])} good</span>
 	</div>
 </div>

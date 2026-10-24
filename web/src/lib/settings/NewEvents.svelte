@@ -1,12 +1,9 @@
 <script lang="ts">
-	import eyeOff from "pixelarticons/svg/eye-off.svg?raw";
-	import plus from "pixelarticons/svg/plus.svg?raw";
 	import { api, get } from "#lib/api.ts";
 	import { number } from "#lib/display.svelte.ts";
 	import { attempt, toast } from "#lib/toast.svelte.ts";
 	import Button from "#lib/ui/Button.svelte";
 	import Field from "#lib/ui/Field.svelte";
-	import Icon from "#lib/ui/Icon.svelte";
 	import List from "#lib/ui/List.svelte";
 
 	type Event = { name: string; count: number; revenue: boolean };
@@ -90,6 +87,7 @@
 				{@const event = events.find((event) => event.name === key)}
 				{#if event}
 					{#if event.revenue}
+						<span class="label">currency</span>
 						<div class="mr-1 w-14">
 							<Field
 								size="sm"
@@ -104,22 +102,17 @@
 						</div>
 					{/if}
 					<Button
-						variant="tool"
-						aria-label="Add {event.name}"
-						title="Add goal"
-						onclick={() => add(event)}
+						size="sm"
+						variant="quiet"
+						aria-label="Add {event.name} as a goal"
+						onclick={() => add(event)}>Add goal</Button
 					>
-						<Icon svg={plus} size={12} />
-					</Button>
 					<Button
-						variant="tool"
-						class="-mr-2"
+						size="sm"
+						variant="plain"
 						aria-label="Ignore {event.name}"
-						title="Ignore"
-						onclick={() => ignore(event.name)}
+						onclick={() => ignore(event.name)}>Ignore</Button
 					>
-						<Icon svg={eyeOff} size={12} />
-					</Button>
 				{/if}
 			{/snippet}
 		</List>
