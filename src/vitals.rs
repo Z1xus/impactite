@@ -85,7 +85,6 @@ impl Vital {
 	}
 }
 
-// what the tracker measured, as props with a bounded set of values
 pub fn props(raw: &Value) -> Vec<(String, String)> {
 	VITALS
 		.iter()
@@ -207,7 +206,6 @@ async fn pages(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<Valu
 	Ok(Json(slowest(&web.stats, raw).map_err(Error::bad)?))
 }
 
-// the 75th percentile of every vital and how many visits were good, needed work or poor
 pub fn measure(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let vitals = parallel(VITALS.iter().map(|vital| {
@@ -217,7 +215,6 @@ pub fn measure(stats: &Stats, raw: Value) -> Result<Value, String> {
 	Ok(json!({ "vitals": vitals }))
 }
 
-// the busiest pages, slowest first, for one vital
 pub fn slowest(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let vital = VITALS

@@ -63,7 +63,6 @@ impl Canvas {
 		text.chars().count() * 7 * scale
 	}
 
-	// a stepped line with a dithered fill under it, in cells of `cell` pixels
 	pub fn area(&mut self, [x, y, width, height]: [usize; 4], values: &[u64], cell: usize) {
 		let max = values.iter().copied().max().unwrap_or(0).max(1) as f64;
 		let (cols, rows) = (width / cell, height / cell);

@@ -5,7 +5,6 @@ export const asking = $state<{ question: Question | null; answer: (yes: boolean)
 	answer: () => {}
 });
 
-// asks before something that can't be undone, true when the person goes ahead
 export function ask(question: Question): Promise<boolean> {
 	asking.answer(false);
 	const opener = document.activeElement as HTMLElement | null;

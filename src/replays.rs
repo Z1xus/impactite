@@ -74,7 +74,6 @@ struct Chunk {
 	u: String,
 }
 
-// what one chunk adds to the recording it belongs to
 struct Seen {
 	start: i64,
 	end: i64,
@@ -315,7 +314,6 @@ fn gone(result: std::io::Result<()>) -> std::io::Result<()> {
 	}
 }
 
-// every recording of the site, when it is deleted or its stats are reset
 pub fn clear(app: &App, data: &FilePath, site: u64) -> std::io::Result<()> {
 	app.conn()
 		.execute("delete from replays where site = ?1", [site as i64])
@@ -323,7 +321,6 @@ pub fn clear(app: &App, data: &FilePath, site: u64) -> std::io::Result<()> {
 	gone(fs::remove_dir_all(dir(data, site)))
 }
 
-// recordings are kept for a month
 pub fn prune(app: &App, data: &FilePath) -> std::io::Result<()> {
 	let cutoff = (now() - KEEP_DAYS * 86_400) * 1000;
 	let old: Vec<(i64, String)> = {

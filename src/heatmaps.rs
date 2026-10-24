@@ -91,7 +91,6 @@ struct Wanted {
 	w: String,
 }
 
-// a page gets a fresh snapshot once a week, for each kind of screen
 fn needs(web: &Web, domain: &str, page: &str, class: &str) -> Option<u64> {
 	let site = web.ingest.site(domain)?;
 	if !site.wants("heatmaps") || !["desktop", "tablet", "mobile"].contains(&class) {

@@ -40,7 +40,6 @@ async fn insights(State(web): State<Arc<Web>>, reader: Reader, Json(raw): Json<V
 	Ok(Json(explain(&web.stats, raw).map_err(Error::bad)?))
 }
 
-// spikes in the range and what changed most against the previous one
 pub fn explain(stats: &Stats, raw: Value) -> Result<Value, String> {
 	let ask: Ask = serde_json::from_value(raw).map_err(|err| format!("#: {err}"))?;
 	let change = match &ask.previous {

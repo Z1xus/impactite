@@ -45,7 +45,6 @@ pub struct Tracked {
 }
 
 impl Tracked {
-	// tracker modules the pageview answer asks for
 	pub fn modules(&self) -> Vec<&'static str> {
 		[
 			("vitals", "vitals"),

@@ -274,7 +274,6 @@ async fn properties(web: &Web, site: u64) -> anyhow::Result<Vec<String>> {
 		.collect())
 }
 
-// calls google with a fresh access token from the stored refresh token
 async fn google(
 	web: &Web,
 	site: u64,

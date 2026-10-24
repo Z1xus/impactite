@@ -13,7 +13,6 @@ import {
 import { incidentsPath } from "#lib/uptime/site.svelte.ts";
 import { PANELS } from "./panels.ts";
 
-// starts the requests the dashboard makes first, for the view a url describes
 export function warm(
 	domain: string,
 	timezone: string,

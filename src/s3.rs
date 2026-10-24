@@ -61,7 +61,6 @@ impl Bucket {
 		format!("bucket {}{}", self.host, self.path)
 	}
 
-	// uploads with an aws signature v4
 	pub async fn put(
 		&self,
 		http: &reqwest::Client,

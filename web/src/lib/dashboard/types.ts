@@ -13,7 +13,6 @@ export type Dates = {
 export type Funnel = { id: number; name: string };
 export type Note = { id: number; day: string; text: string };
 
-// what every part of a dashboard needs to ask the same question
 export type Context = {
 	domain: string;
 	combined: boolean;

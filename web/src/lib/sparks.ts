@@ -3,7 +3,6 @@ import { shift, today } from "./period.ts";
 import { teamTimezone } from "./session.svelte.ts";
 import { cached } from "./stats.ts";
 
-// the visitors of the last 28 days for each site of a team, and for the team as a whole
 export async function sparks(team: Team) {
 	const targets = [
 		...(team.sites.length > 1
