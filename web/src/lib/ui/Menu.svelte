@@ -93,9 +93,9 @@
 	<button
 		bind:this={trigger}
 		type="button"
-		class="flex h-control items-center gap-2 rounded-px whitespace-nowrap text-fg {iconOnly
+		class="flex h-control max-w-full min-w-0 items-center gap-2 rounded-px whitespace-nowrap text-fg {iconOnly
 			? 'w-control justify-center'
-			: 'px-3'} {plain
+			: 'px-2.5 sm:px-3'} {plain
 			? 'font-sans text-body hover:bg-raised'
 			: 'border border-edge font-sans text-body hover:border-dim'} {data
 			? 'tracking-normal normal-case'
@@ -111,7 +111,7 @@
 			<Icon svg={icon} size={12} class="text-dim" />
 		{/if}
 		{#if !iconOnly}
-			<span class="max-w-32 truncate sm:max-w-56 {avatar ? 'hidden sm:inline' : ''}"
+			<span class="max-w-32 min-w-0 truncate sm:max-w-56 {avatar ? 'hidden sm:inline' : ''}"
 				>{data ? label : sentence(label)}</span
 			>
 			<Icon svg={chevron} size={12} class="text-dim" />

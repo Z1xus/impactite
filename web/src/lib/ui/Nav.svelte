@@ -11,7 +11,7 @@
 		<a
 			href={item.href}
 			aria-current={item.current ? "page" : undefined}
-			class="flex items-center px-2.5 font-sans text-body sm:px-3 {item.current
+			class="flex items-center px-2 font-sans text-body sm:px-3 {item.current
 				? 'text-fg shadow-[inset_0_-2px_0_var(--color-cyan)]'
 				: 'text-dim hover:text-fg'}">{item.label}</a
 		>
