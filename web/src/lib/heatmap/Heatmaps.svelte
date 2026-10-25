@@ -26,6 +26,7 @@
 	type Screen = "desktop" | "tablet" | "mobile";
 	type Layer = "clicks" | "scrolling";
 	type Size = { width: number; height: number; updated_at: number };
+	type Click = [number, number, number] | [number, number, number, number, number, string];
 
 	const view = $derived(parse(page.url.searchParams, timezone));
 	const range = $derived(view ? current(view) : "28d");
@@ -41,7 +42,7 @@
 	);
 
 	let pages = $state.raw<{ key: string; label: string }[] | null>(null);
-	let clicks = $state.raw<number[][]>([]);
+	let clicks = $state.raw<Click[]>([]);
 	let elements = $state.raw<[string, number][]>([]);
 	let reach = $state.raw<number[]>([]);
 	let size = $state.raw<Size | null>(null);
@@ -114,6 +115,18 @@
 			extra: total ? `${Math.round((count / total) * 100)}%` : undefined
 		}))
 	);
+	const placed = $derived(
+		clicks.map(([x, y, count, fx, fy, path]) => {
+			const box = path === undefined ? null : find(path)?.getBoundingClientRect();
+			return box?.width && size && fx !== undefined && fy !== undefined
+				? [
+						box.left + (box.width * fx) / 1000 - size.width / 2,
+						box.top + (box.height * fy) / 1000,
+						count
+					]
+				: [x, y, count];
+		})
+	);
 	const outline = $derived.by(() => {
 		const rect = hovered ? find(hovered)?.getBoundingClientRect() : null;
 		return rect?.width ? rect : null;
@@ -168,7 +181,7 @@
 		failed = false;
 		untrack(() => {
 			api<{
-				clicks: number[][];
+				clicks: Click[];
 				elements: [string, number][];
 				reach: number[];
 				snapshot: Size | null;
@@ -208,7 +221,7 @@
 		void theme.style;
 		void theme.shown;
 		if (!ctx || !size || !canvas) return;
-		const heat = density(clicks, size.width, size.height);
+		const heat = density(placed, size.width, size.height);
 		canvas.width = heat.columns;
 		canvas.height = heat.rows;
 		if (layer === "clicks") paint(ctx, heat, theme.style === "plain");

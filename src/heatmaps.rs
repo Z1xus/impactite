@@ -53,7 +53,8 @@ pub fn class(width: f64) -> &'static str {
 }
 
 // where a click landed: pixels from the middle of the page, so centered layouts line up
-// across screen sizes, and pixels from the top, both rounded to keep the values few
+// across screen sizes, and pixels from the top, both rounded to keep the values few.
+// newer trackers add the spot inside the clicked element, which holds on any layout
 pub fn props(raw: &Value) -> Vec<(String, String)> {
 	let number = |key: &str| raw[key].as_f64().filter(|value| value.is_finite());
 	let (Some(x), Some(y), Some(width)) = (number("x"), number("y"), number("w")) else {
@@ -61,16 +62,23 @@ pub fn props(raw: &Value) -> Vec<(String, String)> {
 	};
 	let x = ((x / 4.0).round() * 4.0).clamp(-3000.0, 3000.0);
 	let y = ((y / 8.0).round() * 8.0).clamp(0.0, 50_000.0);
-	let mut props = vec![
-		("~xy".into(), format!("{x}:{y}")),
-		("~w".into(), class(width).into()),
-	];
-	if let Some(path) = raw["s"].as_str().filter(|path| {
+	let path = raw["s"].as_str().filter(|path| {
 		path.len() <= 500
 			&& path
 				.bytes()
 				.all(|byte| byte.is_ascii_alphanumeric() || b"#>:()-_".contains(&byte))
-	}) {
+	});
+	let share = |key: &str| number(key).map(|value| (value / 10.0).round() * 10.0);
+	let point = match (path, share("fx"), share("fy")) {
+		(Some(path), Some(fx), Some(fy))
+			if (0.0..=1000.0).contains(&fx) && (0.0..=1000.0).contains(&fy) =>
+		{
+			format!("{x}:{y}:{fx}:{fy}:{path}")
+		}
+		_ => format!("{x}:{y}"),
+	};
+	let mut props = vec![("~xy".into(), point), ("~w".into(), class(width).into())];
+	if let Some(path) = path {
 		props.push(("~el".into(), path.into()));
 	}
 	props
@@ -253,12 +261,13 @@ async fn clicks(State(web): State<Arc<Web>>, viewer: Viewer, Json(ask): Json<Ask
 		.into_iter()
 		.flatten()
 		.filter_map(|row| {
-			let (x, y) = row["dimensions"][0].as_str()?.split_once(':')?;
-			Some(json!([
-				x.parse::<f64>().ok()?,
-				y.parse::<f64>().ok()?,
-				row["metrics"][0]
-			]))
+			let parts: Vec<&str> = row["dimensions"][0].as_str()?.splitn(5, ':').collect();
+			let number = |at: usize| parts.get(at)?.parse::<f64>().ok();
+			let (x, y, count) = (number(0)?, number(1)?, &row["metrics"][0]);
+			Some(match (number(2), number(3), parts.get(4)) {
+				(Some(fx), Some(fy), Some(path)) => json!([x, y, count, fx, fy, path]),
+				_ => json!([x, y, count]),
+			})
 		})
 		.collect();
 	let elements: Vec<Value> = count("event:props:~el", 50)?["results"]

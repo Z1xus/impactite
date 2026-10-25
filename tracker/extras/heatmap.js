@@ -21,12 +21,18 @@ addEventListener(
 	"click",
 	(event) => {
 		if (t.key() != page || ++clicks > 50) return;
+		const target = event.target.closest("a,button,input,select,textarea,label,summary,[role=button]") ?? event.target;
+		const box = target.getBoundingClientRect();
+		// the spot inside the element in thousandths, so layouts at other sizes still line up
+		const share = (at, start, size) => (size ? Math.round(((at - start) / size) * 1000) : 500);
 		t.send("~click", {
 			props: {
 				x: Math.round(event.clientX - document.documentElement.clientWidth / 2),
 				y: Math.round(event.pageY),
 				w: innerWidth,
-				s: path(event.target.closest("a,button,input,select,textarea,label,summary,[role=button]") ?? event.target),
+				s: path(target),
+				fx: share(event.clientX, box.left, box.width),
+				fy: share(event.clientY, box.top, box.height),
 			},
 			interactive: false,
 		});
