@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.3
+- Fix: Heatmap clicks line up with the page on every screen size
+
 ## 0.4.2
 - New: Retake heatmap snapshots
 - Improved: Replays show fonts, images and video
