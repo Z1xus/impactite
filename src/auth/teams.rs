@@ -352,8 +352,9 @@ async fn invitation(State(web): State<Arc<Web>>, Path(token): Path<String>) -> R
 		.app
 		.open_invite(&token)?
 		.ok_or_else(|| Error::not_found(EXPIRED))?;
+	let account = web.app.user_by_email(&invite.email)?.is_some();
 	Ok(Json(
-		json!({ "place": invite.place, "email": invite.email }),
+		json!({ "place": invite.place, "email": invite.email, "account": account }),
 	))
 }
 
@@ -375,7 +376,14 @@ async fn accept(
 		.ok_or_else(|| Error::not_found(EXPIRED))?;
 	let signed = cookie(&headers).and_then(|token| web.app.session_user(&token).ok().flatten());
 	let user = match (signed, &body.name) {
-		(Some(user), _) => user,
+		(Some(user), _) => {
+			if !web.app.user_contact(user)?.0.eq_ignore_ascii_case(&email) {
+				return Err(Error::forbidden(format!(
+					"This invite is for {email}. Sign in with that account to join."
+				)));
+			}
+			user
+		}
 		(None, Some(name)) => new_account(
 			&web,
 			&headers,

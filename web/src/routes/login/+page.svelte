@@ -47,7 +47,8 @@
 		const { me } = await promise;
 		if (panel) await absorb(panel);
 		adopt(me);
-		await goto(resolve("/"));
+		const invite = page.url.searchParams.get("invite");
+		await goto(invite ? resolve("/invite/[token]", { token: invite }) : resolve("/"));
 	}
 
 	async function withPasskey() {

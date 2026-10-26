@@ -20,13 +20,16 @@
 	let password = $state("");
 	let place = $state("");
 	let email = $state("");
+	let account = $state(false);
 	let failed = $state("");
 
 	onMount(async () => {
 		try {
-			({ place, email } = await api<{ place: string; email: string }>(
-				`/api/app/invites/${token}`
-			));
+			({ place, email, account } = await api<{
+				place: string;
+				email: string;
+				account: boolean;
+			}>(`/api/app/invites/${token}`));
 		} catch (err) {
 			failed = err instanceof Error ? err.message : "Something went wrong.";
 		}
@@ -65,29 +68,43 @@
 			<Note>
 				You're invited to <span class="text-fg">{place}</span>.
 			</Note>
-			{#if session.me}
-				<Note>Joining as <span class="text-fg">{session.me.email}</span>.</Note>
-			{/if}
-			<Form block action={session.me || usePassword ? "Join" : "Join with passkey"} {submit}>
-				{#if !session.me}
-					<Field label="name" bind:value={name} autocomplete="name" required />
-					{#if usePassword}
-						<Username value={email} />
-						<Field
-							label="password"
-							type="password"
-							bind:value={password}
-							autocomplete="new-password"
-							minlength={10}
-							required
-						/>
-					{/if}
+			{#if !session.me && account}
+				<Button href={`${resolve("/login")}?invite=${token}`} class="w-full"
+					>Sign in to join</Button
+				>
+			{:else}
+				{#if session.me}
+					<Note>Joining as <span class="text-fg">{session.me.email}</span>.</Note>
 				{/if}
-			</Form>
-			{#if !session.me}
-				<Button variant="plain" type="button" onclick={() => (usePassword = !usePassword)}>
-					{usePassword ? "Use a passkey" : "Use a password instead"}
-				</Button>
+				<Form
+					block
+					action={session.me || usePassword ? "Join" : "Join with passkey"}
+					{submit}
+				>
+					{#if !session.me}
+						<Field label="name" bind:value={name} autocomplete="name" required />
+						{#if usePassword}
+							<Username value={email} />
+							<Field
+								label="password"
+								type="password"
+								bind:value={password}
+								autocomplete="new-password"
+								minlength={10}
+								required
+							/>
+						{/if}
+					{/if}
+				</Form>
+				{#if !session.me}
+					<Button
+						variant="plain"
+						type="button"
+						onclick={() => (usePassword = !usePassword)}
+					>
+						{usePassword ? "Use a passkey" : "Use a password instead"}
+					</Button>
+				{/if}
 			{/if}
 		</div>
 	{/if}
