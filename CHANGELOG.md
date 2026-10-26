@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.4
+- Fix: Invites work for people who already have an account
+- Fix: Invites only work for the invited email
+- Fix: The workspace menu no longer covers the navigation on small screens
+
 ## 0.4.3
 - Fix: Heatmap clicks line up with the page on every screen size
 
